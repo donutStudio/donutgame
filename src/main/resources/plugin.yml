@@ -1,0 +1,7 @@
+name: Donutgame
+version: 0.0
+main: com.donutsforlife11.donutgame.Donutgame
+api-version: '1.21.11'
+description: Donutsforlife11's base for creating minigames
+author: Donutsforlife11
+load: STARTUP
