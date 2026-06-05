@@ -5,16 +5,18 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
+import java.util.function.Function;
 
 public class ModuleManager {
     private Map<Integer, GameModule> activeGames = new HashMap<>();
+    private Map<Integer, GameContext> contexts = new HashMap<>();
 
     private int nextId = 0;
     private final Queue<Integer> freeIndexes = new LinkedList<>();
-    private final GameContext context;
+    private final Function<Integer, GameContext> contextFactory;
 
-    public ModuleManager(GameContext context) {
-        this.context = context;
+    public ModuleManager(Function<Integer, GameContext> contextFactory) {
+        this.contextFactory = contextFactory;
     }
 
     public int loadModule(GameModule module) {
@@ -26,7 +28,10 @@ public class ModuleManager {
             id = nextId++;
         }
 
+        GameContext context = contextFactory.apply(id);
+
         activeGames.put(id, module);
+        contexts.put(id, context);
         module.onLoad(context);
 
         return id;
@@ -34,10 +39,14 @@ public class ModuleManager {
 
     public void unloadModule(int moduleIndex) {
         GameModule module = activeGames.remove(moduleIndex);
+        GameContext context = contexts.remove(moduleIndex);
 
         if (module != null) {
-            freeIndexes.offer(moduleIndex);
             module.onUnload();
+            if (context != null) {
+                context.teamManager().clear();
+            }
+            freeIndexes.offer(moduleIndex);
         }
     }
 

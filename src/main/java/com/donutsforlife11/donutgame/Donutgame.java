@@ -16,9 +16,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import com.donutsforlife11.donutgame.api.ModuleApi;
+import com.donutsforlife11.donutgame.api.teams.TeamManager;
 import com.donutsforlife11.donutgame.commands.MinigameCommand;
 import com.donutsforlife11.donutgame.commands.WorldTeleportCommand;
-import com.donutsforlife11.donutgame.game.GameContext;
 import com.donutsforlife11.donutgame.game.GameModule;
 import com.donutsforlife11.donutgame.game.ModuleManager;
 import com.donutsforlife11.donutgame.player.PlayerStateStore;
@@ -39,7 +39,6 @@ public final class Donutgame extends JavaPlugin {
     private PlayerEvents playerEvents;
     private Map<String, Class<? extends GameModule>> gameModuleClasses = new HashMap<>();
 
-    private GameContext context;
     private ModuleManager moduleManager;
     private WorldManager worldManager;
 
@@ -50,8 +49,10 @@ public final class Donutgame extends JavaPlugin {
         playerEvents = new PlayerEvents(playerStateStore);
         worldManager = new WorldManager(this, worldsFolder);
 
-        context = new ModuleApi(this);
-        moduleManager = new ModuleManager(context);
+        moduleManager = new ModuleManager(gameId -> {
+            TeamManager teamManager = new TeamManager();
+            return new ModuleApi(this, teamManager);
+        });
 
         for (File module : FileManager.getFolderContentsRecursive(modulesFolder, ".jar")) {
             try {
