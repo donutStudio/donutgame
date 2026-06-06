@@ -12,6 +12,8 @@ public interface GameContext {
 
     public Logger getLogger();
 
+    public GameMap createMap(String mapPath);
+
     public CompletableFuture<GameMap> initializeMap(String mapPath);
 
     public TeamManager teamManager();

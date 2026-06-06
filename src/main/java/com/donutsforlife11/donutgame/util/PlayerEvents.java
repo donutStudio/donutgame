@@ -3,6 +3,7 @@ package com.donutsforlife11.donutgame.util;
 import java.util.ArrayList;
 
 import org.bukkit.GameMode;
+import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Player;
@@ -20,17 +21,19 @@ import com.donutsforlife11.donutgame.player.WorldPlayerState;
 
 public class PlayerEvents implements Listener {
     private final PlayerStateStore stateStore;
+    private final WorldManager worldManager;
 
-    public PlayerEvents(PlayerStateStore stateStore) {
+    public PlayerEvents(PlayerStateStore stateStore, WorldManager worldManager) {
         this.stateStore = stateStore;
+        this.worldManager = worldManager;
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void playerChangedWorld(PlayerChangedWorldEvent event) {
         Player player = event.getPlayer();
 
-        String fromWorldName = event.getFrom().getName();
-        String toWorldName = player.getWorld().getName();
+        String fromWorldName = getWorldStateId(event.getFrom());
+        String toWorldName = getWorldStateId(player.getWorld());
 
         if (fromWorldName.equals(toWorldName)) {
             return;
@@ -51,9 +54,13 @@ public class PlayerEvents implements Listener {
     @EventHandler
     public void playerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
-        String worldId = player.getWorld().getName();
+        String worldId = getWorldStateId(player.getWorld());
 
         stateStore.save(player.getUniqueId(), worldId, savePlayerState(player));
+    }
+
+    private String getWorldStateId(World world) {
+        return worldManager.getPlayerStateId(world);
     }
 
     public WorldPlayerState savePlayerState(Player player) {

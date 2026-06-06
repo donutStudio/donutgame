@@ -1,6 +1,7 @@
 package com.donutsforlife11.donutgame.player;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
 
@@ -26,5 +27,18 @@ public class PlayerStateStore {
     public boolean has(UUID uuid, String worldId) {
         Map<String, WorldPlayerState> playerStates = states.get(uuid);
         return playerStates != null && playerStates.containsKey(worldId);
+    }
+
+    public void clearWorld(String worldId) {
+        Iterator<Map.Entry<UUID, Map<String, WorldPlayerState>>> iterator = states.entrySet().iterator();
+
+        while (iterator.hasNext()) {
+            Map<String, WorldPlayerState> playerStates = iterator.next().getValue();
+            playerStates.remove(worldId);
+
+            if (playerStates.isEmpty()) {
+                iterator.remove();
+            }
+        }
     }
 }

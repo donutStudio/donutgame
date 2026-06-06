@@ -27,9 +27,12 @@ public class ModuleApi implements GameContext {
         return plugin.getLogger();
     }
 
+    public GameMap createMap(String mapPath) {
+        return new GameMap(plugin, new File(plugin.getMapsFolder(), mapPath));
+    }
+
     public CompletableFuture<GameMap> initializeMap(String mapPath) {
-        GameMap map = new GameMap(plugin, new File(plugin.getMapsFolder(), mapPath));
-        return map.loadWorld();
+        return createMap(mapPath).loadWorld();
     }
 
     public TeamManager teamManager() {

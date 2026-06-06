@@ -1,6 +1,11 @@
 package com.donutsforlife11.donutgame.util;
 
 import java.io.File;
+import java.util.ArrayDeque;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Queue;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import org.bukkit.Bukkit;
@@ -19,17 +24,21 @@ import net.kyori.adventure.text.Component;
 
 public class WorldManager {
     private final AdvancedSlimePaperAPI asp = AdvancedSlimePaperAPI.instance();
-    private SlimeLoader loader;
+    private final SlimeLoader loader;
     private final Donutgame plugin;
-    private int worldIndex = 0;
+    private final Map<String, Integer> nextTemplateSlots = new HashMap<>();
+    private final Map<String, Queue<Integer>> freeTemplateSlots = new HashMap<>();
+    private final Map<String, WorldSession> worldsByName = new HashMap<>();
 
     public WorldManager(Donutgame plugin, File worldDirectory) {
         this.plugin = plugin;
         this.loader = new FileLoader(worldDirectory);
     }
 
-    public CompletableFuture<SlimeWorldInstance> loadSlimeWorld(String templateWorldName, String instanceWorldName) {
-        CompletableFuture<SlimeWorldInstance> future = new CompletableFuture<>();
+    public CompletableFuture<WorldSession> loadSlimeWorld(String templateWorldName) {
+        int slot = allocateSlot(templateWorldName);
+        String instanceWorldName = templateWorldName + "_" + slot;
+        CompletableFuture<WorldSession> future = new CompletableFuture<>();
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
@@ -41,12 +50,23 @@ public class WorldManager {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     try {
                         SlimeWorldInstance instance = asp.loadWorld(instanceWorld, true);
-                        future.complete(instance);
+                        WorldSession session = new WorldSession(
+                            templateWorldName,
+                            instanceWorldName,
+                            slot,
+                            UUID.randomUUID().toString(),
+                            instance
+                        );
+
+                        worldsByName.put(instanceWorldName, session);
+                        future.complete(session);
                     } catch (Throwable t) {
+                        releaseSlot(templateWorldName, slot);
                         future.completeExceptionally(t);
                     }
                 });
             } catch (Throwable t) {
+                releaseSlot(templateWorldName, slot);
                 future.completeExceptionally(t);
             }
         });
@@ -64,11 +84,43 @@ public class WorldManager {
         player.teleportAsync(world.getSpawnLocation());
     }
 
-    public int incrementWorldIndex() {
-        return worldIndex++;
+    public String getPlayerStateId(World world) {
+        WorldSession session = worldsByName.get(world.getName());
+        return session == null ? world.getName() : session.playerStateId();
     }
 
-    public int decrementWorldIndex() {
-        return worldIndex--;
+    public WorldSession releaseWorld(String instanceWorldName) {
+        WorldSession session = worldsByName.remove(instanceWorldName);
+
+        if (session != null) {
+            releaseSlot(session.templateWorldName(), session.slot());
+        }
+
+        return session;
+    }
+
+    private int allocateSlot(String templateWorldName) {
+        Queue<Integer> freeSlots = freeTemplateSlots.computeIfAbsent(templateWorldName, ignored -> new ArrayDeque<>());
+
+        if (!freeSlots.isEmpty()) {
+            return freeSlots.poll();
+        }
+
+        int nextSlot = nextTemplateSlots.getOrDefault(templateWorldName, 0);
+        nextTemplateSlots.put(templateWorldName, nextSlot + 1);
+        return nextSlot;
+    }
+
+    private void releaseSlot(String templateWorldName, int slot) {
+        freeTemplateSlots.computeIfAbsent(templateWorldName, ignored -> new ArrayDeque<>()).offer(slot);
+    }
+
+    public record WorldSession(
+        String templateWorldName,
+        String instanceWorldName,
+        int slot,
+        String playerStateId,
+        SlimeWorldInstance worldInstance
+    ) {
     }
 }

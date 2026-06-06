@@ -46,8 +46,8 @@ public final class Donutgame extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        playerEvents = new PlayerEvents(playerStateStore);
         worldManager = new WorldManager(this, worldsFolder);
+        playerEvents = new PlayerEvents(playerStateStore, worldManager);
 
         moduleManager = new ModuleManager(gameId -> {
             TeamManager teamManager = new TeamManager();
@@ -75,13 +75,20 @@ public final class Donutgame extends JavaPlugin {
     public void onDisable() {
         getLogger();
         try {
-            loader.close();
+            if (loader != null) {
+                loader.close();
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
 
         for (Player player : Bukkit.getOnlinePlayers()) {
-            playerStateStore.save(player.getUniqueId(), player.getWorld().getName(), playerEvents.savePlayerState(player));
+            String worldStateId = worldManager.getPlayerStateId(player.getWorld());
+            playerStateStore.save(player.getUniqueId(), worldStateId, playerEvents.savePlayerState(player));
+        }
+
+        for (int gameIndex : List.copyOf(moduleManager.getActiveGames().keySet())) {
+            moduleManager.unloadModule(gameIndex);
         }
 
         for (SlimeWorldInstance instance : asp.getLoadedWorlds()) {
@@ -92,10 +99,6 @@ public final class Donutgame extends JavaPlugin {
             }
 
             Bukkit.unloadWorld(instance.getBukkitWorld(), false);
-        }
-
-        for (int gameIndex : moduleManager.getActiveGames().keySet()) {
-            moduleManager.unloadModule(gameIndex);
         }
     }
 
@@ -133,6 +136,10 @@ public final class Donutgame extends JavaPlugin {
 
     public WorldManager getWorldManager() {
         return worldManager;
+    }
+
+    public PlayerStateStore getPlayerStateStore() {
+        return playerStateStore;
     }
 
     public File getMapsFolder() {

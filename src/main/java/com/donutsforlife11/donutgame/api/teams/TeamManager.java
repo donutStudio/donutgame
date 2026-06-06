@@ -31,6 +31,15 @@ public class TeamManager {
         return team;
     }
 
+    public GameTeam createTeam(String id) {
+        if (teams.containsKey(id)) {
+            throw new IllegalStateException("Team " + id + " already exists!");
+        }
+        GameTeam team = new GameTeam(id, scoreboard, new TeamProperties());
+        teams.put(id, team);
+        return team;
+    }
+
     public GameTeam getTeam(String id) {
         return teams.get(id);
     }
@@ -72,17 +81,6 @@ public class TeamManager {
 
         team.removePlayer(player);
         return true;
-    }
-
-    public boolean areTeammates(Player a, Player b) {
-        GameTeam team = getPlayerTeam(a);
-        return team != null && team == getPlayerTeam(b);
-    }
-
-    public boolean areEnemies(Player a, Player b) {
-        return playerHasTeam(a)
-                && playerHasTeam(b)
-                && !areTeammates(a, b);
     }
 
     public void clear() {

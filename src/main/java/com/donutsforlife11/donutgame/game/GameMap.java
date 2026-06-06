@@ -17,11 +17,11 @@ import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.util.WorldManager;
 
 public class GameMap {
-    private YamlConfiguration mapFile;
+    private final YamlConfiguration mapFile;
     private final Donutgame plugin;
+    private final WorldManager worldManager;
     private String templateWorldName;
-    private String instanceWorldName;
-    private WorldManager worldManager;
+    private WorldManager.WorldSession activeSession;
 
     public GameMap(Donutgame plugin, File mapFile) {
         this.mapFile = YamlConfiguration.loadConfiguration(mapFile);
@@ -30,42 +30,69 @@ public class GameMap {
     }
 
     public CompletableFuture<GameMap> loadWorld() {
+        if (activeSession != null) {
+            return CompletableFuture.completedFuture(this);
+        }
+
         ConfigurationSection world = mapFile.getConfigurationSection("world");
+
+        if (world == null) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Map is missing a world section."));
+        }
 
         if (world.getString("source").equals("filesystem")) {
             if (world.getString("format").equals("slime")) {
                 templateWorldName = world.getString("id");
-                instanceWorldName = templateWorldName + "_" + worldManager.incrementWorldIndex();
 
                 return worldManager
-                    .loadSlimeWorld(templateWorldName, instanceWorldName)
-                    .thenApply(instance -> this);
+                    .loadSlimeWorld(templateWorldName)
+                    .thenApply(session -> {
+                        activeSession = session;
+                        return this;
+                    });
             }
         }
 
         return CompletableFuture.failedFuture(new IllegalStateException("world didnt load idk"));
     }
 
-    public void unloadWorld() {
-        World world = Bukkit.getWorld(instanceWorldName);
+    public CompletableFuture<GameMap> resetWorld() {
+        unloadWorld();
+        return loadWorld();
+    }
 
-        if (world == null) {
+    public void unloadWorld() {
+        if (activeSession == null) {
             return;
         }
 
-        for (Player player : world.getPlayers()) {
-            player.teleport(Bukkit.getWorlds().get(0).getSpawnLocation());
+        String instanceWorldName = activeSession.instanceWorldName();
+        World world = Bukkit.getWorld(instanceWorldName);
+
+        if (world != null) {
+            for (Player player : world.getPlayers()) {
+                player.teleport(Bukkit.getWorlds().get(0).getSpawnLocation());
+            }
+
+            Bukkit.unloadWorld(world, false);
         }
 
-        Bukkit.unloadWorld(world, false);
-        worldManager.decrementWorldIndex();
+        WorldManager.WorldSession releasedSession = worldManager.releaseWorld(instanceWorldName);
+        if (releasedSession != null) {
+            plugin.getPlayerStateStore().clearWorld(releasedSession.playerStateId());
+        }
+
+        activeSession = null;
     }
 
     public List<Location> getPoints(String pointType) {
         List<Location> locationList = new ArrayList<>();
         ConfigurationSection pointTypes = mapFile.getConfigurationSection("points");
+        World world = getWorld();
 
-        if (pointTypes == null) return locationList;
+        if (pointTypes == null || world == null) {
+            return locationList;
+        }
         
         List<?> objectList = pointTypes.getList(pointType);
 
@@ -78,7 +105,7 @@ public class GameMap {
                         double y = Double.parseDouble(coords.get("y").toString());
                         double z = Double.parseDouble(coords.get("z").toString());
                         
-                        locationList.add(new Location(Bukkit.getWorld(instanceWorldName), x, y, z)); 
+                        locationList.add(new Location(world, x, y, z)); 
                     } catch (NullPointerException | NumberFormatException e) {
                         System.out.println("Invalid coordinate format under: " + pointType);
                     }
@@ -87,5 +114,21 @@ public class GameMap {
         }
 
         return locationList;
+    }
+
+    public World getWorld() {
+        return activeSession == null ? null : Bukkit.getWorld(activeSession.instanceWorldName());
+    }
+
+    public String getInstanceWorldName() {
+        return activeSession == null ? null : activeSession.instanceWorldName();
+    }
+
+    public String getTemplateWorldName() {
+        return templateWorldName;
+    }
+
+    public boolean isLoaded() {
+        return activeSession != null;
     }
 }
