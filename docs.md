@@ -66,15 +66,19 @@ GameTimer createStopwatch(int time) // Creates timer that continously counts up 
 ```
 **GameTimer**
 ```java
+GameTimer start() // Starts the timer; used for initially starting after creating timer
+boolean isStarted() // Returns whether or not the timer is started
 int getElapsedTicks() // Returns number of ticks since timer started
 int getElapsedSeconds() // Returns number of seconds since timer started, rounded to nearest integer
 int getRemainingTicks() // Returns number of ticks remaining in timer, returns -1 if timer is counting upwards indefinitely
 int getRemainingSeconds() // Returns number of seconds remaining in timer, rounded to nearest integer, returns -1 if timer is counting upwards indefinitely
 boolean isFinished() // Returns whether or not the timer is finished
-void toggleRunning() // Toggles running timer to paused, paused timer to running
-void toggleRunning(boolean running) // Pauses timer if running is false, and resumes if running is true
+GameTimer toggleRunning() // Toggles running timer to paused, paused timer to running
+GameTimer setRunning(boolean running) // Pauses timer if running is false, and resumes if running is true
+GameTimer pause() // Pauses timer, equivalent to setRunning(false)
+GameTimer resume() // Resumes timer, equivalent to setRunning(true)
 boolean isRunning() // Returns false if timer is paused and true if running
-void cancel() // Cancels timer early
+GameTimer cancel() // Cancels timer early
 GameTimer whileRunning(Consumer<GameTimer> action) // Runs specified action every 1 tick while the timer is running
 GameTimer whileRunning(int interval, Consumer<GameTimer> action) // Runs specified action every interval ticks while the timer is running
 GameTimer onEnd(Consumer<GameTimer> action) // Runs specified action when timer finishes
