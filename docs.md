@@ -9,9 +9,9 @@ Logger getLogger() // Returns base Donutgame plugin’s logger
 GameMap createMap(String mapPath) // Creates GameMap object based on YAML filepath
 CompletableFuture<GameMap> initializeMap(String mapPath) // Loads world from GameMap YAML
 TeamManager teamManager() // Returns context TeamManager
+TimeManager timeManager() // Returns context TimeManager
 
 // TO BE IMPLEMENTED
-TimeManager timeManager() // Returns context TimeManager
 PlayerManager playerManager() // Returns context PlayerManager
 BorderManager borderManager() // Returns context BorderManager
 ```
@@ -55,8 +55,6 @@ Team getBukkitTeam() // Returns the Bukkit/vanilla team
 void unregister() // Unregisters team from Bukkit scoreboard teams service
 ```
 
-Everything below is yet to be implemented:
-
 ## TIME MANAGEMENT
 **TimeManager**
 ```java
@@ -87,6 +85,8 @@ GameTimer onToggleRunning(boolean running, Consumer<GameTimer> action) // Runs s
 GameTimer whilePaused(Consumer<GameTimer> action) // Runs specified action every 1 tick while the timer is paused
 GameTimer whilePaused(int interval, Consumer<GameTimer> action) // Runs specified action every interval ticks while the timer is paused
 ```
+
+Everything below is yet to be implemented:
 
 ## PLAYER MANAGEMENT
 **PlayerManager**

@@ -4,7 +4,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 
 import org.bukkit.plugin.Plugin;
+import org.bukkit.configuration.file.YamlConfiguration;
 
+import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.teams.TeamManager;
 
@@ -20,4 +22,12 @@ public interface GameContext {
     public TeamManager teamManager();
 
     public TimeManager timeManager();
+
+    public PlayerManager playerManager();
+
+    public YamlConfiguration getConfig();
+
+    public int getGameIndex();
+
+    public String getGameId();
 }
