@@ -7,7 +7,7 @@ group = "com.donutsforlife11"
 version = "1.0.0"
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
 
     // Provided by the AdvancedSlimePaper server jar.
     compileOnly("com.infernalsuite.asp:api:4.0.0-SNAPSHOT")

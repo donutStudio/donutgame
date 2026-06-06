@@ -176,7 +176,7 @@ public class PlayerEvents implements Listener {
     }
 
     private double getMaxHealth(Player player) {
-        AttributeInstance attribute = player.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        AttributeInstance attribute = player.getAttribute(Attribute.MAX_HEALTH);
 
         if (attribute == null) {
             return 20.0;

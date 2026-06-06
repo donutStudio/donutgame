@@ -60,9 +60,8 @@ Everything below is yet to be implemented:
 ## TIME MANAGEMENT
 **TimeManager**
 ```java
-GameTimer createTimer(int time) // Creates timer that continously counts down to 0 starting from specified time in ticks
-GameTimer createStopwatch() // Creates timer that continously counts up infinitely starting from 0
-GameTimer createStopwatch(int time) // Creates timer that continously counts up to specified time in ticks starting from 0
+GameTimer createTimer(int time) // Creates timer that continously counts up to a time limit starting from specified time in ticks
+GameTimer createTimer() // Creates timer that continously counts up infinitely starting from 0
 ```
 **GameTimer**
 ```java

@@ -6,6 +6,7 @@ import java.util.logging.Logger;
 import org.bukkit.plugin.Plugin;
 
 import com.donutsforlife11.donutgame.Donutgame;
+import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.teams.TeamManager;
 import com.donutsforlife11.donutgame.game.GameContext;
 import com.donutsforlife11.donutgame.game.GameMap;
@@ -13,10 +14,12 @@ import com.donutsforlife11.donutgame.game.GameMap;
 public class ModuleApi implements GameContext {
     private final Donutgame plugin;
     private final TeamManager teamManager;
+    private final TimeManager timeManager;
 
-    public ModuleApi(Donutgame plugin, TeamManager teamManager) {
+    public ModuleApi(Donutgame plugin, TeamManager teamManager, TimeManager timeManager) {
         this.plugin = plugin;
         this.teamManager = teamManager;
+        this.timeManager = timeManager;
     }
 
     public Plugin getPlugin() {
@@ -37,5 +40,14 @@ public class ModuleApi implements GameContext {
 
     public TeamManager teamManager() {
         return teamManager;
+    }
+
+    public TimeManager timeManager() {
+        return timeManager;
+    }
+
+    public void shutdown() {
+        timeManager.shutdown();
+        teamManager.clear();
     }
 }

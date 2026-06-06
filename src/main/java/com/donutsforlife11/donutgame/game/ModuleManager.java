@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.function.Function;
 
+import com.donutsforlife11.donutgame.api.ModuleApi;
+
 public class ModuleManager {
     private Map<Integer, GameModule> activeGames = new HashMap<>();
     private Map<Integer, GameContext> contexts = new HashMap<>();
@@ -44,7 +46,11 @@ public class ModuleManager {
         if (module != null) {
             module.onUnload();
             if (context != null) {
-                context.teamManager().clear();
+                if (context instanceof ModuleApi api) {
+                    api.shutdown();
+                } else {
+                    context.teamManager().clear();
+                }
             }
             freeIndexes.offer(moduleIndex);
         }

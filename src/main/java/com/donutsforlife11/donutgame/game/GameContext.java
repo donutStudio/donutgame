@@ -5,6 +5,7 @@ import java.util.logging.Logger;
 
 import org.bukkit.plugin.Plugin;
 
+import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.teams.TeamManager;
 
 public interface GameContext {
@@ -17,4 +18,6 @@ public interface GameContext {
     public CompletableFuture<GameMap> initializeMap(String mapPath);
 
     public TeamManager teamManager();
+
+    public TimeManager timeManager();
 }

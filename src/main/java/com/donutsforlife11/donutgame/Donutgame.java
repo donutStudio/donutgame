@@ -16,6 +16,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import com.donutsforlife11.donutgame.api.ModuleApi;
+import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.teams.TeamManager;
 import com.donutsforlife11.donutgame.commands.MinigameCommand;
 import com.donutsforlife11.donutgame.commands.WorldTeleportCommand;
@@ -51,7 +52,8 @@ public final class Donutgame extends JavaPlugin {
 
         moduleManager = new ModuleManager(gameId -> {
             TeamManager teamManager = new TeamManager();
-            return new ModuleApi(this, teamManager);
+            TimeManager timeManager = new TimeManager(this);
+            return new ModuleApi(this, teamManager, timeManager);
         });
 
         for (File module : FileManager.getFolderContentsRecursive(modulesFolder, ".jar")) {
