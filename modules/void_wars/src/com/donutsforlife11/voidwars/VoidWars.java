@@ -29,6 +29,7 @@ public class VoidWars extends GameModule {
                 player.teleportAsync(map.getPoints("spawn").get(0));
             }
         });
+        // context.initializeMap("void_wars/sky_meadows.yml", map.getPoints("spawn").get(0));
 
         playerService.playerEvents();
         timeManager.createTimer(200).whileRunning(5, timer -> {

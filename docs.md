@@ -86,13 +86,12 @@ GameTimer whilePaused(Consumer<GameTimer> action) // Runs specified action every
 GameTimer whilePaused(int interval, Consumer<GameTimer> action) // Runs specified action every interval ticks while the timer is paused
 ```
 
-Everything below is yet to be implemented:
-
 ## PLAYER MANAGEMENT
 **PlayerManager**
 ```java
 Collection<Player> getPlayers() // Returns all players in the game
 void setSpectator(Player player) // Sets specified player to a spectator (not spectator mode, the plugins implementation of spectators)
+void setNonSpectator(Player player) // Makes specified player a non spectator 
 Collection<Player> getSpectators() // Returns all spectators
 Collection<Player> getNonSpectators() // Returns all players in game who are not spectators
 void setPlayerSpawn(Player player, Location location) // Sets spawnpoint/respawn location of specified player
@@ -102,19 +101,56 @@ void respawnPlayer(Player player, int time) // Respawns specified player after g
 void cancelRespawn(Player player) // Cancels active respawn timers on the player
 ```
 
+Everything below is yet to be implemented:
+
+## USER INTERFACE
+**UIManager**
+```java
+void title(Audience audience, Component title) // Sends a title to specified audience
+void subtitle(Audience audience, Component subtitle) // Sends subtitle to audience, regardless of currently shown title
+void actionbar(Audience audience, Component actionbar) // Sends actionbar to audience
+void chat(Audience audience, Component message) // Sends chat message to specified audience
+GameSidebar createSidebar() // Creates a sidebar but does not display it yet
+GameBossbar createBossbar() // Creates a bossbar but does not display it yet
+void clearUi(Audience audience) // Clears all UI elements for a specified audience
+```
+**GameSidebar**
+```java
+Audience audience() // Returns audience that can see the sidebar
+GameSidebar setAudience(Audience audience) // Sets audience of sidebar
+GameSidebar show() // Shows sidebar to be visible
+GameSidebar hide() // Hides sidebar making it not visible
+boolean isVisible() // Returns whether or not the sidebar is visible
+GameSidebar update() // Updates/refreshes sidebar contents for all viewers
+ArrayList<ValueDisplay> lines() // Returns list of lines
+```
+**ValueDisplay**
+```java
+enum ValueType {NONE, INTEGER, DECIMAL, TIME, FRACTION, PERCENT, STRING, PLAYERLIST} // The types of values that can be displayed by a ValueDisplay
+ValueDisplay none(String fieldName) // Line that does not display a value
+ValueDisplay integer(String fieldName, ToIntFunction<Player> number) // Line that displays single integer
+ValueDisplay decimal(String fieldName, ToDoubleFunction<Player> number) // Line that displays single double
+ValueDisplay time(String fieldName, ToIntFunction<Player> time) // Line that displays a time (mm:ss)
+ValueDisplay fraction(String fieldName, ToIntFunction<Player> numerator, ToIntFunction<Player> denominator) // Line that displays single fraction (n/d)
+ValueDisplay percent(String fieldName, ToDoubleFunction<Player> percent) // Line that displays single percent (0.xx -> xx%)
+ValueDisplay string(String fieldName, Function<Player, String> string) // Line that displays single string
+ValueDisplay playerList(String fieldName, Collection<Player> playerList, boolean indicateSpectators) // Line that displays 1 or more player head icons, and optionally crosses out spectators
+```
+**GameBossbar**
+```java
+
+```
+
 ## BORDERS
 **BorderManager**
 ```java
+enum BorderShape {CUBOID, CYLINDROID, ELLIPSOID} // The available 3D geometric border shapes
 GameBorder createBorder(BorderShape shape, Location center, Vector dimensions) // Creates cuboid border with specified center and dimensions
-```
-**BorderShape** (Enum)
-```java
-BorderShape.CUBOID, BorderShape.CYLINDROID, BorderShape.ELLIPSOID // The three available border shapes
 ```
 **GameBorder**
 ```java
 Location getCenter() // Returns center location of border
-Vector getDimensions() // Returns dimensions of border
+Vector getDimensions() // Returns current dimensions of border
 BorderShape getShape() // Returns 3D shape of border
 void setDimensions(Vector dimensions) // Changes dimensions of border instantaneously
 void setDimensions(Vector dimensions, int time) // Changes dimensions of border over specified time in ticks

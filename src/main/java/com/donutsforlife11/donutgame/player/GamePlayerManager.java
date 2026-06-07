@@ -52,6 +52,18 @@ public class GamePlayerManager implements PlayerManager {
     }
 
     @Override
+    public void setNonSpectator(Player player) {
+        requireRegistered(player);
+        spectators.remove(player.getUniqueId());
+        player.setGameMode(GameMode.ADVENTURE);
+    }
+
+    @Override
+    public boolean isSpectator(Player player) {
+        return spectators.contains(player.getUniqueId());
+    }
+
+    @Override
     public Collection<Player> getSpectators() {
         return getOnlinePlayers(spectators);
     }

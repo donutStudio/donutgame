@@ -44,6 +44,7 @@ public class ModuleManager {
         applyConfigOverrides(config, configOverrides);
 
         GamePlayerManager playerManager = new GamePlayerManager(plugin);
+        // GameMap map = new GameMap(plugin, null);
         ModuleApi context = new ModuleApi(
             plugin,
             id,
@@ -52,6 +53,7 @@ public class ModuleManager {
             new TeamManager(),
             new TimeManager(plugin),
             playerManager
+            // map
         );
         GameModule module = descriptor.moduleClass().getDeclaredConstructor().newInstance();
         ActiveGame activeGame = new ActiveGame(module, context);
