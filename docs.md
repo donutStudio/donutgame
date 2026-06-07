@@ -109,6 +109,7 @@ Everything below is yet to be implemented:
 ```java
 void title(Audience audience, Component title) // Sends a title to specified audience
 void subtitle(Audience audience, Component subtitle) // Sends subtitle to audience, regardless of currently shown title
+void subtitle(Audience audience, Component subtitle, Title.Times times) // Sends subtitle with a times
 void actionbar(Audience audience, Component message) // Sends actionbar to specified audience
 void chat(Audience audience, Component message) // Sends chat message to specified audience
 GameSidebar createSidebar() // Creates a sidebar but does not display it yet

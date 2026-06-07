@@ -5,22 +5,27 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.time.Duration;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
+import com.donutsforlife11.donutgame.api.ui.title.TitlePacketTracker;
+
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.audience.ForwardingAudience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.title.TitlePart;
+import net.kyori.adventure.title.Title;
 
 public class UIManager {
     private final Plugin plugin;
     private final UITheme theme = new UITheme();
     private final Set<GameSidebar> sidebars = ConcurrentHashMap.newKeySet();
     private final Set<GameBossbar> bossbars = ConcurrentHashMap.newKeySet();
+    private final TitlePacketTracker titlePacketTracker;
 
     private final Object taskLock = new Object();
 
@@ -30,6 +35,7 @@ public class UIManager {
 
     public UIManager(Plugin plugin) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
+        this.titlePacketTracker = new TitlePacketTracker(plugin);
     }
 
     public void title(Audience audience, Component title) {
@@ -38,9 +44,36 @@ public class UIManager {
     }
 
     public void subtitle(Audience audience, Component subtitle) {
+        subtitle(audience, subtitle, Title.Times.times(
+                Duration.ofMillis(250),
+                Duration.ofSeconds(2),
+                Duration.ofMillis(250)
+        ));
+    }
+
+    public void subtitle(Audience audience, Component subtitle, Title.Times times) {
         requireActive();
-        audience.sendTitlePart(TitlePart.TITLE, Component.empty());
-        audience.sendTitlePart(TitlePart.SUBTITLE, requireComponent(subtitle));
+
+        Component safeSubtitle = requireComponent(subtitle);
+        Set<Player> players = resolvePlayers(audience);
+
+        if (players.isEmpty()) {
+            audience.sendTitlePart(TitlePart.SUBTITLE, safeSubtitle);
+            return;
+        }
+
+        for (Player player : players) {
+            if (!titlePacketTracker.available()) {
+                player.sendTitlePart(TitlePart.SUBTITLE, safeSubtitle);
+                continue;
+            }
+
+            if (titlePacketTracker.hasActiveTitle(player)) {
+                player.sendTitlePart(TitlePart.SUBTITLE, safeSubtitle);
+            } else {
+                player.showTitle(Title.title(Component.empty(), safeSubtitle, times));
+            }
+        }
     }
 
     public void actionbar(Audience audience, Component message) {
@@ -74,6 +107,7 @@ public class UIManager {
         audience.sendActionBar(Component.empty());
 
         Set<Player> players = resolvePlayers(audience);
+        players.forEach(titlePacketTracker::forget);
         if (players.isEmpty()) {
             return;
         }
