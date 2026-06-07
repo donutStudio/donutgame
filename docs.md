@@ -10,10 +10,10 @@ GameMap createMap(String mapPath) // Creates GameMap object based on YAML filepa
 CompletableFuture<GameMap> initializeMap(String mapPath) // Loads world from GameMap YAML
 TeamManager teamManager() // Returns context TeamManager
 TimeManager timeManager() // Returns context TimeManager
+PlayerManager playerManager() // Returns context PlayerManager
 UIManager uiManager() // Returns context UIManager
 
 // TO BE IMPLEMENTED
-PlayerManager playerManager() // Returns context PlayerManager
 BorderManager borderManager() // Returns context BorderManager
 ```
 
@@ -100,9 +100,11 @@ Location getPlayerSpawn(Player player) // Returns player spawn location
 void respawnPlayer(Player player) // Respawns specified player instantaneously
 void respawnPlayer(Player player, int time) // Respawns specified player after given time duration in ticks
 void cancelRespawn(Player player) // Cancels active respawn timers on the player
+PlayerManager onPlayerRegistered(Consumer<Player> action) // Runs action on player registered into game
+PlayerManager onPlayerDeath(Consumer<Player> action) // Runs action on player death
+PlayerManager onPlayerDisconnect(Consumer<Player> action) // Runs action on player disconnect
+PlayerManager onPlayerKill(BiConsumer<Player, Player> action) // Runs action on player death
 ```
-
-Everything below is yet to be implemented:
 
 ## USER INTERFACE
 **UIManager**
@@ -192,6 +194,8 @@ Component getDisplay(Player player) // Returns formatted display component for s
 String getValue() // Returns formatted value as a string if it is global or static
 String getValue(Player player) // Returns formatted value as a string for specified player
 ```
+
+Everything below is yet to be implemented:
 
 ## BORDERS
 **BorderManager**

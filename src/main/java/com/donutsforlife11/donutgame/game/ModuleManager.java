@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
 
+import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -66,10 +67,23 @@ public class ModuleManager {
         RegistrationSummary initialRegistration = new RegistrationSummary(0, 0, 0, 0);
 
         try {
-            module.onLoad(context);
+            module.context = context;
+            module.playerManager = context.playerManager();
+            module.timeManager = context.timeManager();
+            module.uiManager = context.uiManager();
             if (initialPlayers != null && !initialPlayers.isEmpty()) {
                 initialRegistration = registerPlayers(id, initialPlayers, false);
             }
+            // Remember to implement new map system later, temporarily hardcoding void_wars/sky_meadows.yml rn
+            module.context.initializeMap("void_wars/sky_meadows.yml").thenAccept(map -> {
+                module.map = map;
+                module.onLoad(context);
+                for (Player player : module.playerManager.getPlayers()) {
+                    Location worldSpawn = map.getWorld().getSpawnLocation();
+                    player.teleportAsync(worldSpawn);
+                    player.setRespawnLocation(worldSpawn);
+                }
+            });
         } catch (Exception e) {
             activeGames.remove(id);
             context.shutdown();

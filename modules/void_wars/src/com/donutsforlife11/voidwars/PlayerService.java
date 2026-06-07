@@ -8,20 +8,25 @@ public class PlayerService {
     private VoidWars game;
     private PlayerManager playerManager;
 
-    public PlayerService(VoidWars game, PlayerManager playerManager) {
+    public PlayerService(VoidWars game) {
         this.game = game;
-        this.playerManager = playerManager;
+        this.playerManager = game.playerManager();
     }
 
     public void playerEvents() {
         playerManager.onPlayerRegistered(player -> {
-            player.teleportAsync(this.game.getMap().getPoints("spawn").get(0));
+            player.teleportAsync(this.game.map().getPoints("spawn").get(0));
             if (this.game.gameStarted()) {
                 playerManager.setSpectator(player);
-                game.getContext().getLogger().info("sahur the goat");
+                game.context().getLogger().info("sahur the goat");
             }
             game.uiManager().chat(player, Component.text("tung tung sahur"));
             game.uiManager().subtitle(player, Component.text("monkey corn"));
+        });
+
+        playerManager.onPlayerDeath(player -> {
+            playerManager.setSpectator(player);
+
         });
     }
 }

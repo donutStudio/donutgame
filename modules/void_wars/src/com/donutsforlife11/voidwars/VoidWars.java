@@ -7,15 +7,11 @@ import java.util.UUID;
 
 import org.bukkit.entity.Player;
 
-import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.time.GameTimer;
-import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.ui.GameBossbar;
 import com.donutsforlife11.donutgame.api.ui.GameSidebar;
-import com.donutsforlife11.donutgame.api.ui.UIManager;
 import com.donutsforlife11.donutgame.api.ui.Values;
 import com.donutsforlife11.donutgame.game.GameContext;
-import com.donutsforlife11.donutgame.game.GameMap;
 import com.donutsforlife11.donutgame.game.GameModule;
 
 import net.kyori.adventure.audience.Audience;
@@ -23,29 +19,12 @@ import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 
 public class VoidWars extends GameModule {
-    private GameContext context;
-    private GameMap map;
-    private TimeManager timeManager;
-    private PlayerManager playerManager;
-    private UIManager uiManager;
-
     private boolean gameStarted = false;
     private PlayerService playerService;
 
     @Override
     public void onLoad(GameContext context) {
-        this.context = context;
-        this.playerManager = context.playerManager();
-        this.timeManager = context.timeManager();
-        this.uiManager = context.uiManager();
-        this.playerService = new PlayerService(this, this.playerManager);
-        context.initializeMap("void_wars/sky_meadows.yml").thenAccept(map -> {
-            this.map = map;
-            for (Player player : playerManager.getPlayers()) {
-                player.teleportAsync(map.getPoints("spawn").get(0));
-            }
-        });
-        // context.initializeMap("void_wars/sky_meadows.yml", map.getPoints("spawn").get(0));
+        this.playerService = new PlayerService(this);
 
         playerService.playerEvents();
         timeManager.createTimer(80).whileRunning(5, timer -> {
@@ -105,17 +84,5 @@ public class VoidWars extends GameModule {
 
     public boolean gameStarted() {
         return this.gameStarted;
-    }
-
-    public GameMap getMap() {
-        return this.map;
-    }
-
-    public GameContext getContext() {
-        return this.context;
-    }
-
-    public UIManager uiManager() {
-        return this.uiManager;
     }
 }
