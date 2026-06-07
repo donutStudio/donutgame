@@ -10,6 +10,7 @@ GameMap createMap(String mapPath) // Creates GameMap object based on YAML filepa
 CompletableFuture<GameMap> initializeMap(String mapPath) // Loads world from GameMap YAML
 TeamManager teamManager() // Returns context TeamManager
 TimeManager timeManager() // Returns context TimeManager
+UIManager uiManager() // Returns context UIManager
 
 // TO BE IMPLEMENTED
 PlayerManager playerManager() // Returns context PlayerManager

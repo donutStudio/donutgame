@@ -9,6 +9,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.teams.TeamManager;
+import com.donutsforlife11.donutgame.api.ui.UIManager;
 
 public interface GameContext {
     public Plugin getPlugin();
@@ -24,6 +25,8 @@ public interface GameContext {
     public TimeManager timeManager();
 
     public PlayerManager playerManager();
+
+    public UIManager uiManager();
 
     public YamlConfiguration getConfig();
 

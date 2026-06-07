@@ -10,6 +10,7 @@ import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.teams.TeamManager;
+import com.donutsforlife11.donutgame.api.ui.UIManager;
 import com.donutsforlife11.donutgame.game.GameContext;
 import com.donutsforlife11.donutgame.game.GameMap;
 
@@ -21,6 +22,7 @@ public class ModuleApi implements GameContext {
     private final TeamManager teamManager;
     private final TimeManager timeManager;
     private final PlayerManager playerManager;
+    private final UIManager uiManager;
 
     public ModuleApi(
         Donutgame plugin,
@@ -29,7 +31,8 @@ public class ModuleApi implements GameContext {
         YamlConfiguration config,
         TeamManager teamManager,
         TimeManager timeManager,
-        PlayerManager playerManager
+        PlayerManager playerManager,
+        UIManager uiManager
     ) {
         this.plugin = plugin;
         this.gameIndex = gameIndex;
@@ -38,6 +41,7 @@ public class ModuleApi implements GameContext {
         this.teamManager = teamManager;
         this.timeManager = timeManager;
         this.playerManager = playerManager;
+        this.uiManager = uiManager;
     }
 
     public Plugin getPlugin() {
@@ -68,6 +72,10 @@ public class ModuleApi implements GameContext {
         return playerManager;
     }
 
+    public UIManager uiManager() {
+        return uiManager;
+    }
+
     public YamlConfiguration getConfig() {
         return config;
     }
@@ -85,6 +93,7 @@ public class ModuleApi implements GameContext {
     }
 
     public void shutdown() {
+        uiManager.shutdown();
         playerManager.shutdown();
         timeManager.shutdown();
         teamManager.clear();

@@ -18,6 +18,7 @@ import com.donutsforlife11.donutgame.api.ModuleApi;
 import com.donutsforlife11.donutgame.api.teams.TeamManager;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
+import com.donutsforlife11.donutgame.api.ui.UIManager;
 
 public class ModuleManager {
     private final Donutgame plugin;
@@ -44,6 +45,7 @@ public class ModuleManager {
         applyConfigOverrides(config, configOverrides);
 
         PlayerManager playerManager = new PlayerManager(plugin);
+        UIManager uiManager = new UIManager(plugin);
         // GameMap map = new GameMap(plugin, null);
         ModuleApi context = new ModuleApi(
             plugin,
@@ -52,7 +54,8 @@ public class ModuleManager {
             config,
             new TeamManager(),
             new TimeManager(plugin),
-            playerManager
+            playerManager,
+            uiManager
             // map
         );
         GameModule module = descriptor.moduleClass().getDeclaredConstructor().newInstance();
