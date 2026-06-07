@@ -13,11 +13,10 @@ public class PlayerService {
 
     public void playerEvents() {
         playerManager.onPlayerRegistered(player -> {
+            player.teleportAsync(this.game.getMap().getPoints("spawn").get(0));
             if (this.game.gameStarted()) {
                 playerManager.setSpectator(player);
                 game.getContext().getLogger().info("sahur the goat");
-            } else {
-                player.teleportAsync(this.game.getMap().getPoints("spawn").get(0));
             }
         });
     }

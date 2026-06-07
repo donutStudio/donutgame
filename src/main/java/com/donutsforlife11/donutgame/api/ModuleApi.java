@@ -12,7 +12,6 @@ import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.teams.TeamManager;
 import com.donutsforlife11.donutgame.game.GameContext;
 import com.donutsforlife11.donutgame.game.GameMap;
-import com.donutsforlife11.donutgame.player.GamePlayerManager;
 
 public class ModuleApi implements GameContext {
     private final Donutgame plugin;
@@ -21,7 +20,7 @@ public class ModuleApi implements GameContext {
     private final YamlConfiguration config;
     private final TeamManager teamManager;
     private final TimeManager timeManager;
-    private final GamePlayerManager playerManager;
+    private final PlayerManager playerManager;
 
     public ModuleApi(
         Donutgame plugin,
@@ -30,7 +29,7 @@ public class ModuleApi implements GameContext {
         YamlConfiguration config,
         TeamManager teamManager,
         TimeManager timeManager,
-        GamePlayerManager playerManager
+        PlayerManager playerManager
     ) {
         this.plugin = plugin;
         this.gameIndex = gameIndex;
@@ -81,7 +80,7 @@ public class ModuleApi implements GameContext {
         return gameId;
     }
 
-    public GamePlayerManager getInternalPlayerManager() {
+    public PlayerManager getInternalPlayerManager() {
         return playerManager;
     }
 
