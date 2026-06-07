@@ -118,27 +118,41 @@ void clearUi(Audience audience) // Clears all UI elements for a specified audien
 ```java
 Audience audience() // Returns audience that can see the sidebar
 GameSidebar setAudience(Audience audience) // Sets audience of sidebar
-GameSidebar show() // Shows sidebar to be visible
-GameSidebar hide() // Hides sidebar making it not visible
+GameSidebar setVisibility(boolean visible) // Shows sidebar to be visible or not
 boolean isVisible() // Returns whether or not the sidebar is visible
-GameSidebar update() // Updates/refreshes sidebar contents for all viewers
 ArrayList<ValueDisplay> lines() // Returns list of lines
-```
-**ValueDisplay**
-```java
-enum ValueType {NONE, INTEGER, DECIMAL, TIME, FRACTION, PERCENT, STRING, PLAYERLIST} // The types of values that can be displayed by a ValueDisplay
-ValueDisplay none(String fieldName) // Line that does not display a value
-ValueDisplay integer(String fieldName, ToIntFunction<Player> number) // Line that displays single integer
-ValueDisplay decimal(String fieldName, ToDoubleFunction<Player> number) // Line that displays single double
-ValueDisplay time(String fieldName, ToIntFunction<Player> time) // Line that displays a time (mm:ss)
-ValueDisplay fraction(String fieldName, ToIntFunction<Player> numerator, ToIntFunction<Player> denominator) // Line that displays single fraction (n/d)
-ValueDisplay percent(String fieldName, ToDoubleFunction<Player> percent) // Line that displays single percent (0.xx -> xx%)
-ValueDisplay string(String fieldName, Function<Player, String> string) // Line that displays single string
-ValueDisplay playerList(String fieldName, Collection<Player> playerList, boolean indicateSpectators) // Line that displays 1 or more player head icons, and optionally crosses out spectators
+void remove() // Deletes and hides the sidebar
 ```
 **GameBossbar**
 ```java
-
+Audience audience() // Returns audience that can see the bossbar
+GameBossbar setAudience(Audience audience) // Sets the audience of bossbar
+GameBossbar setVisibility(boolean visible) // Shows bossbar to be visible or not
+boolean isVisible() // Returns whether or not the bossbar is visible
+GameBossbar setTitle(Component name) // Sets title of bossbar
+Component getTitle() // Returns bossbar title
+GameBossbar setValue(int value) // Sets value of bossbar
+int getValue() // Returns bossbar value
+GameBossbar setMax(int value) // Sets max of bossbar
+int getMax() // Returns bossbar max
+GameBossbar setStyle(BossBar.Overlay style) // Sets style of bossbar
+BossBar.Overlay getStyle() // Returns style of bossbar
+GameBossbar setColor(BossBar.Color color) // Sets color of bossbar
+BossBar.Color getColor() // Returns color of bossbar
+```
+**ValueDisplay**
+```java
+enum ValueType {NONE, INTEGER, DECIMAL, TIME, FRACTION, PERCENT, COMPONENT} // The types of values that can be displayed by a ValueDisplay
+ValueType getType() // Returns type of value display
+Component getLabel() // Returns label of value display
+ValueDisplay getValue() // Returns value of value display
+ValueDisplay none(String label) // Line that does not display a value
+ValueDisplay integer(String label, ToIntFunction<Player> number) // Line that displays single integer
+ValueDisplay decimal(String label, ToDoubleFunction<Player> number) // Line that displays single double
+ValueDisplay time(String label, ToIntFunction<Player> time) // Line that displays a time (mm:ss)
+ValueDisplay fraction(String label, ToIntFunction<Player> numerator, ToIntFunction<Player> denominator) // Line that displays single fraction (n/d)
+ValueDisplay percent(String label, ToDoubleFunction<Player> percent) // Line that displays single percent (0.xx -> xx%)
+ValueDisplay component(String label, Function<Player, Component> Component) // Line that displays single component
 ```
 
 ## BORDERS
