@@ -1,9 +1,13 @@
 package com.donutsforlife11.donutgame.api;
 
 import java.io.File;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.event.HandlerList;
+import org.bukkit.event.Listener;
 import org.bukkit.plugin.Plugin;
 
 import com.donutsforlife11.donutgame.Donutgame;
@@ -23,6 +27,7 @@ public class ModuleApi implements GameContext {
     private final TimeManager timeManager;
     private final PlayerManager playerManager;
     private final UIManager uiManager;
+    private final Set<Listener> registeredListeners = new LinkedHashSet<>();
 
     public ModuleApi(
         Donutgame plugin,
@@ -76,6 +81,22 @@ public class ModuleApi implements GameContext {
         return uiManager;
     }
 
+    public void registerEvents(Listener listener) {
+        if (listener == null) {
+            throw new IllegalArgumentException("Listener cannot be null.");
+        }
+
+        if (registeredListeners.add(listener)) {
+            plugin.getServer().getPluginManager().registerEvents(listener, plugin);
+        }
+    }
+
+    public void unregisterEvents(Listener listener) {
+        if (listener != null && registeredListeners.remove(listener)) {
+            HandlerList.unregisterAll(listener);
+        }
+    }
+
     public YamlConfiguration getConfig() {
         return config;
     }
@@ -93,6 +114,10 @@ public class ModuleApi implements GameContext {
     }
 
     public void shutdown() {
+        for (Listener listener : Set.copyOf(registeredListeners)) {
+            HandlerList.unregisterAll(listener);
+        }
+        registeredListeners.clear();
         uiManager.shutdown();
         playerManager.shutdown();
         timeManager.shutdown();

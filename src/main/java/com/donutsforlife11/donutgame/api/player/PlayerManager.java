@@ -9,7 +9,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import org.bukkit.Bukkit;
@@ -19,8 +18,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
-import com.donutsforlife11.donutgame.api.player.PlayerManager;
-
 public class PlayerManager {
     private final Plugin plugin;
     private final Set<UUID> players = new LinkedHashSet<>();
@@ -29,9 +26,6 @@ public class PlayerManager {
     private final Map<UUID, BukkitTask> respawnTasks = new ConcurrentHashMap<>();
 
     private final List<Consumer<Player>> onRegisteredActions = new CopyOnWriteArrayList<>();
-    private final List<Consumer<Player>> onDeathActions = new CopyOnWriteArrayList<>();
-    private final List<Consumer<Player>> onDisconnectActions = new CopyOnWriteArrayList<>();
-    private final List<BiConsumer<Player, Player>> onKillActions = new CopyOnWriteArrayList<>();
 
     private volatile boolean shutdown;
 
@@ -159,21 +153,6 @@ public class PlayerManager {
         return this;
     }
 
-    public PlayerManager onPlayerDeath(Consumer<Player> action) {
-        onDeathActions.add(Objects.requireNonNull(action, "action"));
-        return this;
-    }
-
-    public PlayerManager onPlayerDisconnect(Consumer<Player> action) {
-        onDisconnectActions.add(Objects.requireNonNull(action, "action"));
-        return this;
-    }
-
-    public PlayerManager onPlayerKill(BiConsumer<Player, Player> action) {
-        onKillActions.add(Objects.requireNonNull(action, "action"));
-        return this;
-    }
-
     public boolean register(Player player, boolean runCallbacks) {
         ensureActive();
 
@@ -204,35 +183,12 @@ public class PlayerManager {
         return players.contains(player.getUniqueId());
     }
 
-    public void handleDeath(Player player) {
-        if (!isRegistered(player)) {
-            return;
-        }
-
-        runPlayerCallbacks(onDeathActions, player, "onPlayerDeath");
-    }
-
     public void handleDisconnect(Player player) {
         if (!isRegistered(player)) {
             return;
         }
 
-        runPlayerCallbacks(onDisconnectActions, player, "onPlayerDisconnect");
         unregister(player);
-    }
-
-    public void handleKill(Player attacker, Player victim) {
-        if (!isRegistered(attacker) || !isRegistered(victim)) {
-            return;
-        }
-
-        for (BiConsumer<Player, Player> action : onKillActions) {
-            try {
-                action.accept(attacker, victim);
-            } catch (Throwable throwable) {
-                logCallbackFailure("onPlayerKill", throwable);
-            }
-        }
     }
 
     public void applyRespawnLocation(Player player, org.bukkit.event.player.PlayerRespawnEvent event) {

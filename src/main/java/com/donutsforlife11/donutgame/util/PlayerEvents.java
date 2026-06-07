@@ -99,11 +99,6 @@ public class PlayerEvents implements Listener {
         inv.clear();
         inv.setStorageContents(state.inventory);
         inv.setArmorContents(state.armor);
-
-        // if (state.offhand != null) {
-        //     inv.setItemInOffHand(state.offhand);
-        // }
-
         inv.setItemInOffHand(state.offhand);
 
         player.getEnderChest().clear();

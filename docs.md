@@ -101,9 +101,6 @@ void respawnPlayer(Player player) // Respawns specified player instantaneously
 void respawnPlayer(Player player, int time) // Respawns specified player after given time duration in ticks
 void cancelRespawn(Player player) // Cancels active respawn timers on the player
 PlayerManager onPlayerRegistered(Consumer<Player> action) // Runs action on player registered into game
-PlayerManager onPlayerDeath(Consumer<Player> action) // Runs action on player death
-PlayerManager onPlayerDisconnect(Consumer<Player> action) // Runs action on player disconnect
-PlayerManager onPlayerKill(BiConsumer<Player, Player> action) // Runs action on player death
 ```
 
 ## USER INTERFACE

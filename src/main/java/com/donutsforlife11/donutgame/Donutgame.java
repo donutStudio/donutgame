@@ -72,7 +72,6 @@ public final class Donutgame extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        getLogger();
         try {
             for (URLClassLoader loader : moduleLoaders) {
                 loader.close();

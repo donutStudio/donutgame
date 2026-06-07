@@ -22,8 +22,6 @@ import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.ui.UIManager;
 
-import net.kyori.adventure.text.Component;
-
 public class ModuleManager {
     private final Donutgame plugin;
     private final Map<Integer, ActiveGame> activeGames = new HashMap<>();
@@ -37,13 +35,7 @@ public class ModuleManager {
     }
 
     public CompletableFuture<LoadResult> loadModule(GameModuleDescriptor descriptor, ConfigurationSection configOverrides, List<Player> initialPlayers) throws Exception {
-        int id;
-
-        if (!freeIndexes.isEmpty()) {
-            id = freeIndexes.poll();
-        } else {
-            id = nextId++;
-        }
+        int id = allocateGameIndex();
 
         YamlConfiguration config = descriptor.createConfig();
         applyConfigOverrides(config, configOverrides);
@@ -68,44 +60,25 @@ public class ModuleManager {
         activeGames.put(id, activeGame);
 
         try {
-            module.context = context;
-            module.playerManager = context.playerManager();
-            module.timeManager = context.timeManager();
-            module.uiManager = context.uiManager();
+            initializeModule(module, context, descriptor);
 
             // Remember to implement new map system later, temporarily hardcoding void_wars/sky_meadows.yml rn
             return module.context.initializeMap("void_wars/sky_meadows.yml").thenApply(map -> {
                 module.map = map;
 
-                RegistrationSummary registration = new RegistrationSummary(0, 0, 0, 0);
-
-                if (initialPlayers != null && !initialPlayers.isEmpty()) {
-                    registration = registerPlayers(id, initialPlayers, false);
-                }
-
-                Location worldSpawn = map.getWorld().getSpawnLocation();
-
-                for (Player player : module.playerManager.getPlayers()) {
-                    player.sendMessage(Component.text("tung gung hur"));
-                    player.teleportAsync(worldSpawn);
-                    module.playerManager().setPlayerSpawn(player, worldSpawn);
-                    module.playerManager.setPlayerSpawn(player, worldSpawn);
-                }
-
-                module.onLoad(context);
+                RegistrationSummary registration = registerInitialPlayers(id, initialPlayers);
+                spawnRegisteredPlayers(module, map.getWorld().getSpawnLocation());
+                context.registerEvents(module);
+                module.startLoadSequence();
 
                 return new LoadResult(id, registration);
             }).whenComplete((result, error) -> {
                 if (error != null) {
-                    activeGames.remove(id);
-                    context.shutdown();
-                    freeIndexes.offer(id);
+                    cleanupFailedLoad(id, context);
                 }
             });
         } catch (Exception e) {
-            activeGames.remove(id);
-            context.shutdown();
-            freeIndexes.offer(id);
+            cleanupFailedLoad(id, context);
             throw e;
         }
     }
@@ -115,6 +88,7 @@ public class ModuleManager {
 
         if (activeGame != null) {
             activeGame.module().onUnload();
+            activeGame.module().map().unloadWorld();
             unregisterGamePlayers(moduleIndex);
             activeGame.context().shutdown();
             freeIndexes.offer(moduleIndex);
@@ -134,29 +108,6 @@ public class ModuleManager {
 
     public RegistrationSummary registerPlayers(int gameIndex, List<Player> players) {
         return registerPlayers(gameIndex, players, true);
-    }
-
-    public void handlePlayerDeath(Player player) {
-        ActiveGame activeGame = getActiveGame(player);
-
-        if (activeGame != null) {
-            activeGame.context().getInternalPlayerManager().handleDeath(player);
-        }
-    }
-
-    public void handlePlayerKill(Player attacker, Player victim) {
-        Integer attackerGame = playerGames.get(attacker.getUniqueId());
-        Integer victimGame = playerGames.get(victim.getUniqueId());
-
-        if (attackerGame == null || !attackerGame.equals(victimGame)) {
-            return;
-        }
-
-        ActiveGame activeGame = activeGames.get(attackerGame);
-
-        if (activeGame != null) {
-            activeGame.context().getInternalPlayerManager().handleKill(attacker, victim);
-        }
     }
 
     public void handlePlayerDisconnect(Player player) {
@@ -215,8 +166,43 @@ public class ModuleManager {
         return gameIndex == null ? null : activeGames.get(gameIndex);
     }
 
+    private int allocateGameIndex() {
+        return freeIndexes.isEmpty() ? nextId++ : freeIndexes.poll();
+    }
+
+    private void initializeModule(GameModule module, ModuleApi context, GameModuleDescriptor descriptor) {
+        module.context = context;
+        module.playerManager = context.playerManager();
+        module.timeManager = context.timeManager();
+        module.uiManager = context.uiManager();
+
+        module.gameId = descriptor.id();
+        module.setGameName(descriptor.name());
+    }
+
+    private RegistrationSummary registerInitialPlayers(int gameIndex, List<Player> initialPlayers) {
+        if (initialPlayers == null || initialPlayers.isEmpty()) {
+            return new RegistrationSummary(0, 0, 0, 0);
+        }
+
+        return registerPlayers(gameIndex, initialPlayers, false);
+    }
+
+    private void spawnRegisteredPlayers(GameModule module, Location worldSpawn) {
+        for (Player player : module.playerManager.getPlayers()) {
+            player.teleportAsync(worldSpawn);
+            module.playerManager.setPlayerSpawn(player, worldSpawn);
+        }
+    }
+
     private void unregisterGamePlayers(int gameIndex) {
         playerGames.entrySet().removeIf(entry -> entry.getValue() == gameIndex);
+    }
+
+    private void cleanupFailedLoad(int gameIndex, ModuleApi context) {
+        activeGames.remove(gameIndex);
+        context.shutdown();
+        freeIndexes.offer(gameIndex);
     }
 
     private void applyConfigOverrides(YamlConfiguration config, ConfigurationSection configOverrides) {
