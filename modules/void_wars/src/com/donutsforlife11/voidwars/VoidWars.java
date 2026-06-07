@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
 
 import com.donutsforlife11.donutgame.api.time.GameTimer;
 import com.donutsforlife11.donutgame.api.ui.GameBossbar;
