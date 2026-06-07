@@ -73,6 +73,7 @@ public class PlayerManager {
 
     public void setPlayerSpawn(Player player, Location location) {
         requireRegistered(player);
+        player.setRespawnLocation(location, true);
         spawns.put(player.getUniqueId(), requireLocation(location));
     }
 
@@ -142,7 +143,19 @@ public class PlayerManager {
     }
 
     public PlayerManager onPlayerRegistered(Consumer<Player> action) {
-        onRegisteredActions.add(Objects.requireNonNull(action, "action"));
+        ensureActive();
+
+        Consumer<Player> checkedAction = Objects.requireNonNull(action, "action");
+        onRegisteredActions.add(checkedAction);
+
+        for (Player player : getPlayers()) {
+            try {
+                checkedAction.accept(player);
+            } catch (Throwable throwable) {
+                logCallbackFailure("onPlayerRegistered", throwable);
+            }
+        }
+
         return this;
     }
 

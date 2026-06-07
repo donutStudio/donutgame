@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
@@ -21,6 +22,8 @@ import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.ui.UIManager;
 
+import net.kyori.adventure.text.Component;
+
 public class ModuleManager {
     private final Donutgame plugin;
     private final Map<Integer, ActiveGame> activeGames = new HashMap<>();
@@ -33,7 +36,7 @@ public class ModuleManager {
         this.plugin = plugin;
     }
 
-    public LoadResult loadModule(GameModuleDescriptor descriptor, ConfigurationSection configOverrides, List<Player> initialPlayers) throws Exception {
+    public CompletableFuture<LoadResult> loadModule(GameModuleDescriptor descriptor, ConfigurationSection configOverrides, List<Player> initialPlayers) throws Exception {
         int id;
 
         if (!freeIndexes.isEmpty()) {
@@ -47,7 +50,7 @@ public class ModuleManager {
 
         PlayerManager playerManager = new PlayerManager(plugin);
         UIManager uiManager = new UIManager(plugin);
-        // GameMap map = new GameMap(plugin, null);
+
         ModuleApi context = new ModuleApi(
             plugin,
             id,
@@ -57,31 +60,46 @@ public class ModuleManager {
             new TimeManager(plugin),
             playerManager,
             uiManager
-            // map
         );
+
         GameModule module = descriptor.moduleClass().getDeclaredConstructor().newInstance();
         ActiveGame activeGame = new ActiveGame(module, context);
 
         activeGames.put(id, activeGame);
-
-        RegistrationSummary initialRegistration = new RegistrationSummary(0, 0, 0, 0);
 
         try {
             module.context = context;
             module.playerManager = context.playerManager();
             module.timeManager = context.timeManager();
             module.uiManager = context.uiManager();
-            if (initialPlayers != null && !initialPlayers.isEmpty()) {
-                initialRegistration = registerPlayers(id, initialPlayers, false);
-            }
+
             // Remember to implement new map system later, temporarily hardcoding void_wars/sky_meadows.yml rn
-            module.context.initializeMap("void_wars/sky_meadows.yml").thenAccept(map -> {
+            return module.context.initializeMap("void_wars/sky_meadows.yml").thenApply(map -> {
                 module.map = map;
-                module.onLoad(context);
+
+                RegistrationSummary registration = new RegistrationSummary(0, 0, 0, 0);
+
+                if (initialPlayers != null && !initialPlayers.isEmpty()) {
+                    registration = registerPlayers(id, initialPlayers, false);
+                }
+
+                Location worldSpawn = map.getWorld().getSpawnLocation();
+
                 for (Player player : module.playerManager.getPlayers()) {
-                    Location worldSpawn = map.getWorld().getSpawnLocation();
+                    player.sendMessage(Component.text("tung gung hur"));
                     player.teleportAsync(worldSpawn);
-                    player.setRespawnLocation(worldSpawn);
+                    module.playerManager().setPlayerSpawn(player, worldSpawn);
+                    module.playerManager.setPlayerSpawn(player, worldSpawn);
+                }
+
+                module.onLoad(context);
+
+                return new LoadResult(id, registration);
+            }).whenComplete((result, error) -> {
+                if (error != null) {
+                    activeGames.remove(id);
+                    context.shutdown();
+                    freeIndexes.offer(id);
                 }
             });
         } catch (Exception e) {
@@ -90,8 +108,6 @@ public class ModuleManager {
             freeIndexes.offer(id);
             throw e;
         }
-
-        return new LoadResult(id, initialRegistration);
     }
 
     public void unloadModule(int moduleIndex) {

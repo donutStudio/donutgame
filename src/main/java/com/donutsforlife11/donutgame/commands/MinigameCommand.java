@@ -181,9 +181,14 @@ public final class MinigameCommand implements PluginCommand {
         }
 
         try {
-            ModuleManager.LoadResult result = moduleManager.loadModule(descriptor, configOverrides, initialPlayers);
-            sender.sendMessage(Component.text("Loaded " + descriptor.id() + " as game " + result.gameIndex() + "."));
-            sendRegistrationSummary(sender, result.gameIndex(), result.registrationSummary());
+            moduleManager.loadModule(descriptor, configOverrides, initialPlayers).thenAccept(result -> {
+                sender.sendMessage(Component.text("Loaded " + descriptor.id() + " as game " + result.gameIndex() + "."));
+                sendRegistrationSummary(sender, result.gameIndex(), result.registrationSummary());
+            }).exceptionally(error -> {
+                sender.sendMessage(Component.text("Failed to load game " + gameId + ". See console for details."));
+                error.printStackTrace();
+                return null;
+            });
         } catch (IllegalArgumentException e) {
             sender.sendMessage(Component.text(e.getMessage()));
         } catch (Exception e) {

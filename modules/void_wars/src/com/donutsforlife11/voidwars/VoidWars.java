@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
 import com.donutsforlife11.donutgame.api.time.GameTimer;
@@ -20,19 +21,33 @@ import net.kyori.adventure.text.Component;
 
 public class VoidWars extends GameModule {
     private boolean gameStarted = false;
-    private PlayerService playerService;
 
     @Override
     public void onLoad(GameContext context) {
-        this.playerService = new PlayerService(this);
-
-        playerService.playerEvents();
+        playerManager.onPlayerRegistered(player -> {
+            setupPlayer(player);
+        });
         timeManager.createTimer(80).whileRunning(5, timer -> {
             context.getLogger().info("Ticks left: " + timer.getRemainingTicks());
         }).onEnd(timer -> {
             uiManager.title(Audience.audience(playerManager.getPlayers()), Component.text("phonk"));
             UiTest();
         }).start();
+    }
+
+    private void setupPlayer(Player player) {
+        Location spawnPoint = map.getPoints("spawn").get(0); 
+        player.teleportAsync(spawnPoint);
+        playerManager.setPlayerSpawn(player, spawnPoint);
+        playerManager.setPlayerSpawn(player, spawnPoint);
+
+        if (gameStarted()) {
+            playerManager.setSpectator(player);
+            context.getLogger().info("sahur the goat");
+        }
+
+        uiManager.chat(player, Component.text("tung tung sahur"));
+        uiManager.subtitle(player, Component.text("monkey corn"));
     }
 
     private void UiTest() {
