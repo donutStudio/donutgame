@@ -108,7 +108,7 @@ Everything below is yet to be implemented:
 ```java
 void title(Audience audience, Component title) // Sends a title to specified audience
 void subtitle(Audience audience, Component subtitle) // Sends subtitle to audience, regardless of currently shown title
-void actionbar(Audience audience, Component actionbar) // Sends actionbar to audience
+void actionbar(Audience audience, Component message) // Sends actionbar to specified audience
 void chat(Audience audience, Component message) // Sends chat message to specified audience
 GameSidebar createSidebar() // Creates a sidebar but does not display it yet
 GameBossbar createBossbar() // Creates a bossbar but does not display it yet
@@ -118,41 +118,77 @@ void clearUi(Audience audience) // Clears all UI elements for a specified audien
 ```java
 Audience audience() // Returns audience that can see the sidebar
 GameSidebar setAudience(Audience audience) // Sets audience of sidebar
+GameSidebar addLine(Component line) // Adds static component line to end of sidebar
+GameSidebar addLine(ValueDisplay display) // Adds formatted value display line to end of sidebar
+GameSidebar removeLine(int index) // Removes specified line number
+GameSidebar clearLines() // Removes all lines from sidebar
+List<Object> getLines() // Returns immutable list of sidebar lines
+GameSidebar setUpdateInterval(int interval) // Sets how often dynamic sidebar lines update in ticks
+int getUpdateInterval() // Returns how often dynamic sidebar lines update in ticks
 GameSidebar setVisibility(boolean visible) // Shows sidebar to be visible or not
 boolean isVisible() // Returns whether or not the sidebar is visible
-ArrayList<ValueDisplay> lines() // Returns list of lines
+GameSidebar refresh() // Immediately refreshes visible sidebar lines
 void remove() // Deletes and hides the sidebar
 ```
 **GameBossbar**
 ```java
 Audience audience() // Returns audience that can see the bossbar
 GameBossbar setAudience(Audience audience) // Sets the audience of bossbar
-GameBossbar setVisibility(boolean visible) // Shows bossbar to be visible or not
-boolean isVisible() // Returns whether or not the bossbar is visible
-GameBossbar setTitle(Component name) // Sets title of bossbar
 Component getTitle() // Returns bossbar title
-GameBossbar setValue(int value) // Sets value of bossbar
+GameBossbar setTitle(Component title) // Sets static title of bossbar
+GameBossbar setTitle(ValueDisplay display) // Sets formatted value display as bossbar title
 int getValue() // Returns bossbar value
-GameBossbar setMax(int value) // Sets max of bossbar
+GameBossbar setValue(int value) // Sets static value for bossbar
+GameBossbar setValue(ValueDisplay value) // Sets value for bossbar based on a value display
 int getMax() // Returns bossbar max
+GameBossbar setMax(int max) // Sets static max for bossbar
+GameBossbar setMax(ValueDisplay max) // Sets max for bossbar based on a value display
+GameBossbar setUpdateInterval(int interval) // Sets how often dynamic bossbar values update in ticks
+int getUpdateInterval() // Returns how often dynamic bossbar values update in ticks
 GameBossbar setStyle(BossBar.Overlay style) // Sets style of bossbar
 BossBar.Overlay getStyle() // Returns style of bossbar
 GameBossbar setColor(BossBar.Color color) // Sets color of bossbar
 BossBar.Color getColor() // Returns color of bossbar
+GameBossbar setVisibility(boolean visible) // Shows bossbar to be visible or not
+boolean isVisible() // Returns whether or not the bossbar is visible
+GameBossbar refresh() // Immediately refreshes visible bossbar
+void remove() // Deletes and hides the bossbar
+```
+**Values**
+```java
+// Using an empty string for a label omits the label to create a value only display
+ValueDisplay integer(String label, int value) // Creates static global integer display
+ValueDisplay integer(String label, IntSupplier value) // Creates global live integer display
+ValueDisplay integer(String label, ToIntFunction<Player> value) // Creates player-specific live integer display
+ValueDisplay decimal(String label, double value) // Creates static global decimal display
+ValueDisplay decimal(String label, DoubleSupplier value) // Creates global live decimal display
+ValueDisplay decimal(String label, ToDoubleFunction<Player> value) // Creates player-specific live decimal display
+ValueDisplay time(String label, int time) // Creates static global time display in seconds
+ValueDisplay time(String label, IntSupplier time) // Creates global live time display in seconds
+ValueDisplay time(String label, ToIntFunction<Player> time) // Creates player-specific live time display in seconds
+ValueDisplay fraction(String label, int numerator, int denominator) // Creates static global fraction display
+ValueDisplay fraction(String label, IntSupplier numerator, IntSupplier denominator) // Creates global live fraction display
+ValueDisplay fraction(String label, ToIntFunction<Player> numerator, ToIntFunction<Player> denominator) // Creates player-specific live fraction display
+ValueDisplay percent(String label, double percent) // Creates static global percent display where 0.5 displays as 50%
+ValueDisplay percent(String label, DoubleSupplier percent) // Creates global live percent display where 0.5 displays as 50%
+ValueDisplay percent(String label, ToDoubleFunction<Player> percent) // Creates player-specific live percent display where 0.5 displays as 50%
+ValueDisplay component(String label, Component value) // Creates static global component text display
+ValueDisplay component(String label, Supplier<Component> value) // Creates global live component text display
+ValueDisplay component(String label, Function<Player, Component> value) // Creates player-specific live component text display
 ```
 **ValueDisplay**
 ```java
-enum ValueType {NONE, INTEGER, DECIMAL, TIME, FRACTION, PERCENT, COMPONENT} // The types of values that can be displayed by a ValueDisplay
+enum ValueType {INTEGER, DECIMAL, TIME, FRACTION, PERCENT, COMPONENT} // The types of values that can be displayed by a ValueDisplay
+enum ValueScope {STATIC, GLOBAL, PLAYER} // Whether value is static, live and shared, or live and different per player
 ValueType getType() // Returns type of value display
-Component getLabel() // Returns label of value display
-ValueDisplay getValue() // Returns value of value display
-ValueDisplay none(String label) // Line that does not display a value
-ValueDisplay integer(String label, ToIntFunction<Player> number) // Line that displays single integer
-ValueDisplay decimal(String label, ToDoubleFunction<Player> number) // Line that displays single double
-ValueDisplay time(String label, ToIntFunction<Player> time) // Line that displays a time (mm:ss)
-ValueDisplay fraction(String label, ToIntFunction<Player> numerator, ToIntFunction<Player> denominator) // Line that displays single fraction (n/d)
-ValueDisplay percent(String label, ToDoubleFunction<Player> percent) // Line that displays single percent (0.xx -> xx%)
-ValueDisplay component(String label, Function<Player, Component> Component) // Line that displays single component
+ValueScope getScope() // Returns scope of value display
+String getLabel() // Returns label of value display
+boolean isDynamic() // Returns whether or not the value display updates after creation
+boolean isGlobal() // Returns whether or not the value display scope is global
+Component getDisplay() // Returns formatted display component if it is global or static
+Component getDisplay(Player player) // Returns formatted display component for specified player
+String getValue() // Returns formatted value as a string if it is global or static
+String getValue(Player player) // Returns formatted value as a string for specified player
 ```
 
 ## BORDERS
