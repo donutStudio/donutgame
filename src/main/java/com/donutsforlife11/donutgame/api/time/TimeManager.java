@@ -54,7 +54,7 @@ public class TimeManager {
             }
             colorIndex = Math.min(colorIndex, countdownColors.length - 1);
 
-            Component formattedNumber = Component.text(countdown.getRemainingSeconds() + 1, countdownColors[colorIndex]).decorate(TextDecoration.BOLD);
+            Component formattedNumber = Component.text(countdown.getRemainingSeconds(), countdownColors[colorIndex]).decorate(TextDecoration.BOLD);
             action.accept(formattedNumber);
         });
 

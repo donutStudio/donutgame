@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Difficulty;
+import org.bukkit.GameRules;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
@@ -48,6 +50,12 @@ public class GameMap {
                     .loadSlimeWorld(templateWorldName)
                     .thenApply(session -> {
                         activeSession = session;
+
+                        World bukkitWorld = Bukkit.getWorld(session.instanceWorldName());
+                        if (bukkitWorld != null) {
+                            configureWorld(bukkitWorld);
+                        }
+
                         return this;
                     });
             }
@@ -130,5 +138,20 @@ public class GameMap {
 
     public boolean isLoaded() {
         return activeSession != null;
+    }
+
+    private void configureWorld(World world) {
+        world.setGameRule(GameRules.ADVANCE_TIME, false);
+        world.setGameRule(GameRules.ADVANCE_WEATHER, false);
+        world.setGameRule(GameRules.PVP, false);
+        world.setGameRule(GameRules.SPAWN_MOBS, false);
+        world.setGameRule(GameRules.SHOW_ADVANCEMENT_MESSAGES, false);
+        world.setGameRule(GameRules.LOCATOR_BAR, false);
+        world.setGameRule(GameRules.IMMEDIATE_RESPAWN, true);
+        world.setGameRule(GameRules.PLAYERS_SLEEPING_PERCENTAGE, 101);
+        world.setGameRule(GameRules.RESPAWN_RADIUS, 0);
+        world.setGameRule(GameRules.SPECTATORS_GENERATE_CHUNKS, false);
+        world.setDifficulty(Difficulty.HARD);
+        world.setTime(1000);
     }
 }

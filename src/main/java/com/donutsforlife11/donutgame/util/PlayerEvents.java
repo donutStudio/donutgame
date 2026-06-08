@@ -152,7 +152,7 @@ public class PlayerEvents implements Listener {
         state.exp = 0.0f;
         state.totalExperience = 0;
 
-        state.gameMode = GameMode.SURVIVAL;
+        state.gameMode = GameMode.ADVENTURE;
         state.potionEffects = new ArrayList<>();
 
         state.lastLocation = player.getLocation().clone();

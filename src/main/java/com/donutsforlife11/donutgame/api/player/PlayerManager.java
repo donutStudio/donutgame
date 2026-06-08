@@ -98,6 +98,7 @@ public class PlayerManager {
 
     public void respawnPlayer(Player player, int time) {
         requireRegistered(player);
+        setSpectator(player);
 
         if (time < 0) {
             throw new IllegalArgumentException("Respawn time cannot be negative.");

@@ -1,7 +1,10 @@
 package com.donutsforlife11.voidwars;
 
+import org.bukkit.Difficulty;
 import org.bukkit.GameMode;
+import org.bukkit.GameRules;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 import com.donutsforlife11.donutgame.game.GameContext;
@@ -9,12 +12,24 @@ import com.donutsforlife11.donutgame.game.GameModule;
 
 public class VoidWars extends GameModule {
     public boolean gameStarted = false;
+    World world;
 
     @Override
     public void onLoad(GameContext context) {
         playerManager.onPlayerRegistered(player -> {
             setupPlayer(player);
         });
+
+        this.world = map.getWorld();
+
+        world.setGameRule(GameRules.ADVANCE_TIME, false);
+        world.setTime(1000);
+        world.setGameRule(GameRules.ADVANCE_WEATHER, false);
+        world.setGameRule(GameRules.PVP, false);
+        world.setGameRule(GameRules.SPAWN_MOBS, false);
+        world.setDifficulty(Difficulty.HARD);
+
+        registerEvents(new VoidWarsEvents(this));
     }
 
     @Override
@@ -28,6 +43,10 @@ public class VoidWars extends GameModule {
     @Override
     public void onUnload() {
         context.getLogger().info("ruhas gnut gnut gnut");
+    }
+
+    public boolean gameStarted() {
+        return gameStarted;
     }
 
     private void setupPlayer(Player player) {
