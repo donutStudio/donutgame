@@ -17,19 +17,6 @@ UIManager uiManager() // Returns context UIManager
 BorderManager borderManager() // Returns context BorderManager
 ```
 
-## MAPS
-**GameMap**
-```java
-CompletableFuture<GameMap> loadWorld() // Loads world specified in map yaml
-void unloadWorld() // Unloads map world
-CompletableFuture<GameMap> resetWorld() // Unloads map world and loads a new one immediately
-List<Location> getPoints(String pointType) // Returns list of points of specified point name
-World getWorld() // Returns active Bukkit world
-String getInstanceWorldName() // Return world name of specific loaded world instance
-String getTemplateWorldName() // Returns name of source world that the instance copied from
-boolean isLoaded() // Returns whether or not the map is fully loaded
-```
-
 ## TEAMS
 **TeamManager**
 ```java
@@ -158,24 +145,24 @@ void remove() // Deletes and hides the bossbar
 **Values**
 ```java
 // Using an empty string for a label omits the label to create a value only display
-ValueDisplay integer(String label, int value) // Creates static global integer display
-ValueDisplay integer(String label, IntSupplier value) // Creates global live integer display
-ValueDisplay integer(String label, ToIntFunction<Player> value) // Creates player-specific live integer display
-ValueDisplay decimal(String label, double value) // Creates static global decimal display
-ValueDisplay decimal(String label, DoubleSupplier value) // Creates global live decimal display
-ValueDisplay decimal(String label, ToDoubleFunction<Player> value) // Creates player-specific live decimal display
-ValueDisplay time(String label, int time) // Creates static global time display in seconds
-ValueDisplay time(String label, IntSupplier time) // Creates global live time display in seconds
-ValueDisplay time(String label, ToIntFunction<Player> time) // Creates player-specific live time display in seconds
-ValueDisplay fraction(String label, int numerator, int denominator) // Creates static global fraction display
-ValueDisplay fraction(String label, IntSupplier numerator, IntSupplier denominator) // Creates global live fraction display
-ValueDisplay fraction(String label, ToIntFunction<Player> numerator, ToIntFunction<Player> denominator) // Creates player-specific live fraction display
-ValueDisplay percent(String label, double percent) // Creates static global percent display where 0.5 displays as 50%
-ValueDisplay percent(String label, DoubleSupplier percent) // Creates global live percent display where 0.5 displays as 50%
-ValueDisplay percent(String label, ToDoubleFunction<Player> percent) // Creates player-specific live percent display where 0.5 displays as 50%
-ValueDisplay component(String label, Component value) // Creates static global component text display
-ValueDisplay component(String label, Supplier<Component> value) // Creates global live component text display
-ValueDisplay component(String label, Function<Player, Component> value) // Creates player-specific live component text display
+static ValueDisplay integer(String label, int value) // Creates static global integer display
+static ValueDisplay integer(String label, IntSupplier value) // Creates global live integer display
+static ValueDisplay integer(String label, ToIntFunction<Player> value) // Creates player-specific live integer display
+static ValueDisplay decimal(String label, double value) // Creates static global decimal display
+static ValueDisplay decimal(String label, DoubleSupplier value) // Creates global live decimal display
+static ValueDisplay decimal(String label, ToDoubleFunction<Player> value) // Creates player-specific live decimal display
+static ValueDisplay time(String label, int time) // Creates static global time display in seconds
+static ValueDisplay time(String label, IntSupplier time) // Creates global live time display in seconds
+static ValueDisplay time(String label, ToIntFunction<Player> time) // Creates player-specific live time display in seconds
+static ValueDisplay fraction(String label, int numerator, int denominator) // Creates static global fraction display
+static ValueDisplay fraction(String label, IntSupplier numerator, IntSupplier denominator) // Creates global live fraction display
+static ValueDisplay fraction(String label, ToIntFunction<Player> numerator, ToIntFunction<Player> denominator) // Creates player-specific live fraction display
+static ValueDisplay percent(String label, double percent) // Creates static global percent display where 0.5 displays as 50%
+static ValueDisplay percent(String label, DoubleSupplier percent) // Creates global live percent display where 0.5 displays as 50%
+static ValueDisplay percent(String label, ToDoubleFunction<Player> percent) // Creates player-specific live percent display where 0.5 displays as 50%
+static ValueDisplay component(String label, Component value) // Creates static global component text display
+static ValueDisplay component(String label, Supplier<Component> value) // Creates global live component text display
+static ValueDisplay component(String label, Function<Player, Component> value) // Creates player-specific live component text display
 ```
 **ValueDisplay**
 ```java
@@ -193,6 +180,40 @@ String getValue(Player player) // Returns formatted value as a string for specif
 ```
 
 Everything below is yet to be implemented:
+
+## MAP AND WORLD MANAGEMENT
+**GameWorld**
+```java
+World getBukkitWorld() // Returns the bukkit world of the GameWorld
+CompletableFuture<Void> replaceMap(GameMap map) // Replaces the entire existing map with a new map in a new world
+CompletableFuture<Void> placeMap(GameMap map, Location loc) // Places a map at specified world location (does not take into account submaps)
+CompletableFuture<Void> placeMap(GameMap map, Location loc, MapRotation rot) // Same as above but lets you place map in certain orientation along the y axis of placed location
+CompletableFuture<Void> resetWorld() // Resets world back to initial state it was placed in
+List<Location> getPoints(String pointName) // Returns list of locations based of specified point name
+double distanceToPoint(Location loc, String pointName) // Returns closest distance of a specified location to an instance of a specified point
+void addPoint(Location loc, String pointName) // Adds point of specified name to a certain location
+int removePoint(Location loc, String pointName) // Removes all points of specified point name at specified location (returns number removed)
+List<BoundingBox> getRegions(String regionName) // Returns list of cuboid regions based of specified region name
+boolean posInRegion(Location loc, String regionName) // Returns whether or not a location is inside an instance of a specified region
+void addRegion(BoundingBox box, String regionName) // Adds region of specified name covering bounding box of coordinates
+int removeRegion(BoundingBox box, String regionName) // Removes all regions that cover exactly the specified bounding box with a certain name (returns number removed)
+void onEntityEnterRegion(String regionName, Consumer<Entity> action) // Runs action when an entity enters a region
+void onEntityExitRegion(String regionName, Consumer<Entity> action) // Runs action when an entity exits a region
+CompletableFuture<Void> clearArea(BoundingBox box) // Deletes blocks/entities/everything else in a bounding box that does not necessarily have to be a region
+```
+**GameMap**
+```java
+String getId() // Returns map id
+String getName() // Returns map name
+List<String> getTags() // Returns list of tags the map has
+boolean hasTag(String tag) // Returns whether or not the map has a certain tag
+List<GameMap> getSubmaps(String... tags) // Returns list of direct submaps of the map, and optionally provide one or more tags to filter by
+```
+enum **MapRotation**:
+```java
+enum MapRotation {DEG_0, DEG_90, DEG_180, DEG_270} // The four possible rotations of the map along y axis, counterclockwise
+static MapRotation fromDegrees(int degrees) // Returns a MapRotation which rotates map by either 0, 90, 180, or 270 degrees
+```
 
 ## BORDERS
 **BorderManager**

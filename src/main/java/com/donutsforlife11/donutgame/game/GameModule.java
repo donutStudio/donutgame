@@ -9,6 +9,8 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 
+import java.util.concurrent.CompletableFuture;
+
 import org.bukkit.event.Listener;
 
 public abstract class GameModule implements Listener {
