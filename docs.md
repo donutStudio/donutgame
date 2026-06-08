@@ -14,6 +14,7 @@ PlayerManager playerManager() // Returns context PlayerManager
 UIManager uiManager() // Returns context UIManager
 
 // TO BE IMPLEMENTED
+MapManager mapManager() // Returns context MapManager
 BorderManager borderManager() // Returns context BorderManager
 ```
 
@@ -182,13 +183,16 @@ String getValue(Player player) // Returns formatted value as a string for specif
 Everything below is yet to be implemented:
 
 ## MAP AND WORLD MANAGEMENT
+**MapManager**
+```java
+CompletableFuture<GameMap> setMap(GameMap map) // Sets/replaces the current map and makes a new world with the new map, teleports players to it, and discards the previous world without ending or unloading the game and keeping the world name/index/game index the same throughout
+CompletableFuture<Void> placeMap(GameMap map, Location loc) // Places a map directly into world at a location instead of loading a new world (does not take into account submaps)
+CompletableFuture<Void> placeMap(GameMap map, Location loc, MapRotation rot) // Same as above but lets you place map in certain orientation along the y axis of placed location
+CompletableFuture<Void> resetWorld() // Resets world/GameWorld back to initial state it was first loaded in
+```
 **GameWorld**
 ```java
 World getBukkitWorld() // Returns the bukkit world of the GameWorld
-CompletableFuture<Void> replaceMap(GameMap map) // Replaces the entire existing map with a new map in a new world
-CompletableFuture<Void> placeMap(GameMap map, Location loc) // Places a map at specified world location (does not take into account submaps)
-CompletableFuture<Void> placeMap(GameMap map, Location loc, MapRotation rot) // Same as above but lets you place map in certain orientation along the y axis of placed location
-CompletableFuture<Void> resetWorld() // Resets world back to initial state it was placed in
 List<Location> getPoints(String pointName) // Returns list of locations based of specified point name
 double distanceToPoint(Location loc, String pointName) // Returns closest distance of a specified location to an instance of a specified point
 void addPoint(Location loc, String pointName) // Adds point of specified name to a certain location
