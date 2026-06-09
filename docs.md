@@ -186,10 +186,8 @@ Everything below is yet to be implemented:
 **MapManager**
 ```java
 CompletableFuture<GameMap> setMap(GameMap map) // Sets/replaces the current map and makes a new world with the new map, teleports players to it, and discards the previous world without ending or unloading the game and keeping the world name/index/game index the same throughout
-CompletableFuture<Void> placeMap(GameMap map, Location loc) // Places a map directly into world at a location instead of loading a new world (does not take into account submaps)
+CompletableFuture<Void> placeMap(GameMap map, Location loc) // Places a map directly into the game world at a location instead of loading a new world
 CompletableFuture<Void> placeMap(GameMap map, Location loc, MapRotation rot) // Same as above but lets you place map in certain orientation along the y axis of placed location
-CompletableFuture<Void> resetWorld() // Resets world/GameWorld back to initial state it was first loaded in
-```
 **GameWorld**
 ```java
 World getBukkitWorld() // Returns the bukkit world of the GameWorld

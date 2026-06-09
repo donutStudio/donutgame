@@ -1,8 +1,6 @@
 package com.donutsforlife11.voidwars;
 
-import org.bukkit.Difficulty;
 import org.bukkit.GameMode;
-import org.bukkit.GameRules;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -21,13 +19,6 @@ public class VoidWars extends GameModule {
         });
 
         this.world = map.getWorld();
-
-        world.setGameRule(GameRules.ADVANCE_TIME, false);
-        world.setTime(1000);
-        world.setGameRule(GameRules.ADVANCE_WEATHER, false);
-        world.setGameRule(GameRules.PVP, false);
-        world.setGameRule(GameRules.SPAWN_MOBS, false);
-        world.setDifficulty(Difficulty.HARD);
 
         registerEvents(new VoidWarsEvents(this));
     }
