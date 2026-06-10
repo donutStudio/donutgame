@@ -9,7 +9,6 @@ import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -19,6 +18,7 @@ import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.ModuleApi;
 import com.donutsforlife11.donutgame.api.teams.TeamManager;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
+import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.ui.UIManager;
 
@@ -61,18 +61,10 @@ public class ModuleManager {
 
         try {
             initializeModule(module, context, descriptor);
+            RegistrationSummary registration = registerInitialPlayers(id, initialPlayers);
+            context.registerEvents(module);
 
-            // Remember to implement new map system later, temporarily hardcoding void_wars/sky_meadows.yml rn
-            return module.context.initializeMap("void_wars/sky_meadows.yml").thenApply(map -> {
-                module.map = map;
-
-                RegistrationSummary registration = registerInitialPlayers(id, initialPlayers);
-                spawnRegisteredPlayers(module, map.getWorld().getSpawnLocation());
-                context.registerEvents(module);
-                module.startLoadSequence();
-
-                return new LoadResult(id, registration);
-            }).whenComplete((result, error) -> {
+            return module.startLoadSequence().thenApply(ignored -> new LoadResult(id, registration)).whenComplete((result, error) -> {
                 if (error != null) {
                     cleanupFailedLoad(id, context);
                 }
@@ -83,16 +75,17 @@ public class ModuleManager {
         }
     }
 
-    public void unloadModule(int moduleIndex) {
+    public CompletableFuture<Void> unloadModule(int moduleIndex) {
         ActiveGame activeGame = activeGames.remove(moduleIndex);
 
-        if (activeGame != null) {
-            activeGame.module().onUnload();
-            activeGame.module().map().unloadWorld();
-            unregisterGamePlayers(moduleIndex);
-            activeGame.context().shutdown();
-            freeIndexes.offer(moduleIndex);
+        if (activeGame == null) {
+            return CompletableFuture.completedFuture(null);
         }
+
+        activeGame.module().onUnload();
+        unregisterGamePlayers(moduleIndex);
+
+        return activeGame.context().shutdown().whenComplete((ignored, error) -> freeIndexes.offer(moduleIndex));
     }
 
     public Map<Integer, GameModule> getActiveGames() {
@@ -129,6 +122,21 @@ public class ModuleManager {
         }
     }
 
+    public void handlePlayerWorldChange(Player player, org.bukkit.World toWorld) {
+        ActiveGame activeGame = getActiveGame(player);
+
+        if (activeGame == null || activeGame.module().world == null) {
+            return;
+        }
+
+        if (activeGame.module().world.getBukkitWorld().equals(toWorld)) {
+            activeGame.context().getInternalPlayerManager().notifyPlayerEnteredWorld(player);
+            return;
+        }
+
+        activeGame.context().getInternalPlayerManager().notifyPlayerLeftWorld(player);
+    }
+
     private RegistrationSummary registerPlayers(int gameIndex, List<Player> players, boolean runCallbacks) {
         ActiveGame activeGame = activeGames.get(gameIndex);
 
@@ -155,6 +163,14 @@ public class ModuleManager {
             if (activeGame.context().getInternalPlayerManager().register(player, runCallbacks)) {
                 playerGames.put(player.getUniqueId(), gameIndex);
                 added++;
+
+                GameWorld gameWorld = activeGame.module().world;
+                if (gameWorld != null) {
+                    activeGame.context().mapManager().teleportPlayerToSpawn(player).exceptionally(error -> {
+                        logLifecycleFailure("Failed to teleport player " + player.getName() + " into game " + gameIndex, error);
+                        return false;
+                    });
+                }
             }
         }
 
@@ -172,9 +188,14 @@ public class ModuleManager {
 
     private void initializeModule(GameModule module, ModuleApi context, GameModuleDescriptor descriptor) {
         module.context = context;
+        module.mapManager = context.mapManager();
         module.playerManager = context.playerManager();
         module.timeManager = context.timeManager();
         module.uiManager = context.uiManager();
+        module.mapManager.onMapChanged((map, world) -> {
+            module.map = map;
+            module.world = world;
+        });
 
         module.gameId = descriptor.id();
         module.setGameName(descriptor.name());
@@ -187,22 +208,19 @@ public class ModuleManager {
 
         return registerPlayers(gameIndex, initialPlayers, false);
     }
-
-    private void spawnRegisteredPlayers(GameModule module, Location worldSpawn) {
-        for (Player player : module.playerManager.getPlayers()) {
-            player.teleportAsync(worldSpawn);
-            module.playerManager.setPlayerSpawn(player, worldSpawn);
-        }
-    }
-
     private void unregisterGamePlayers(int gameIndex) {
         playerGames.entrySet().removeIf(entry -> entry.getValue() == gameIndex);
     }
 
     private void cleanupFailedLoad(int gameIndex, ModuleApi context) {
         activeGames.remove(gameIndex);
-        context.shutdown();
+        context.shutdown().join();
         freeIndexes.offer(gameIndex);
+    }
+
+    private void logLifecycleFailure(String message, Throwable error) {
+        plugin.getLogger().severe(message);
+        error.printStackTrace();
     }
 
     private void applyConfigOverrides(YamlConfiguration config, ConfigurationSection configOverrides) {

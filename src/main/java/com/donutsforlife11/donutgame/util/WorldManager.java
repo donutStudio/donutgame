@@ -1,81 +1,187 @@
 package com.donutsforlife11.donutgame.util;
 
-import java.io.File;
-import java.util.ArrayDeque;
-import java.util.HashMap;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
-import java.util.Queue;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Difficulty;
+import org.bukkit.GameRules;
+import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.bukkit.util.BoundingBox;
 
 import com.donutsforlife11.donutgame.Donutgame;
+import com.donutsforlife11.donutgame.api.map.MapRotation;
 import com.infernalsuite.asp.api.AdvancedSlimePaperAPI;
 import com.infernalsuite.asp.api.loaders.SlimeLoader;
 import com.infernalsuite.asp.api.world.SlimeWorld;
 import com.infernalsuite.asp.api.world.SlimeWorldInstance;
 import com.infernalsuite.asp.api.world.properties.SlimePropertyMap;
 import com.infernalsuite.asp.loaders.file.FileLoader;
+import com.sk89q.worldedit.EditSession;
+import com.sk89q.worldedit.WorldEdit;
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.extent.clipboard.Clipboard;
+import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats;
+import com.sk89q.worldedit.extent.clipboard.io.ClipboardReader;
+import com.sk89q.worldedit.function.operation.Operation;
+import com.sk89q.worldedit.function.operation.Operations;
+import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldedit.math.transform.AffineTransform;
+import com.sk89q.worldedit.regions.CuboidRegion;
+import com.sk89q.worldedit.session.ClipboardHolder;
 
 import net.kyori.adventure.text.Component;
 
 public class WorldManager {
     private final AdvancedSlimePaperAPI asp = AdvancedSlimePaperAPI.instance();
-    private final SlimeLoader loader;
     private final Donutgame plugin;
-    private final Map<String, Integer> nextTemplateSlots = new HashMap<>();
-    private final Map<String, Queue<Integer>> freeTemplateSlots = new HashMap<>();
-    private final Map<String, WorldSession> worldsByName = new HashMap<>();
+    private final Map<String, WorldSession> worldsByName = new ConcurrentHashMap<>();
+    private final Map<Path, CachedClipboard> clipboardCache = new ConcurrentHashMap<>();
 
-    public WorldManager(Donutgame plugin, File worldDirectory) {
+    public WorldManager(Donutgame plugin) {
         this.plugin = plugin;
-        this.loader = new FileLoader(worldDirectory);
     }
 
-    public CompletableFuture<WorldSession> loadSlimeWorld(String templateWorldName) {
-        int slot = allocateSlot(templateWorldName);
-        String instanceWorldName = templateWorldName + "_" + slot;
-        CompletableFuture<WorldSession> future = new CompletableFuture<>();
+    public CompletableFuture<World> loadSlimeWorld(Path slimeFile, String templateWorldName, String instanceWorldName) {
+        Objects.requireNonNull(slimeFile, "slimeFile");
 
+        CompletableFuture<World> future = new CompletableFuture<>();
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
+                SlimeLoader loader = new FileLoader(slimeFile.getParent().toFile());
                 SlimePropertyMap properties = new SlimePropertyMap();
+                String storedWorldName = stripExtension(slimeFile.getFileName().toString());
 
-                SlimeWorld template = asp.readWorld(loader, templateWorldName, true, properties);
+                SlimeWorld template = asp.readWorld(loader, storedWorldName, true, properties);
                 SlimeWorld instanceWorld = template.clone(instanceWorldName);
 
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    try {
-                        SlimeWorldInstance instance = asp.loadWorld(instanceWorld, true);
-                        WorldSession session = new WorldSession(
-                            templateWorldName,
-                            instanceWorldName,
-                            slot,
-                            UUID.randomUUID().toString(),
-                            instance
-                        );
+                runSync(() -> {
+                    SlimeWorldInstance instance = asp.loadWorld(instanceWorld, true);
+                    World world = instance.getBukkitWorld();
+                    configureWorld(world);
 
-                        worldsByName.put(instanceWorldName, session);
-                        future.complete(session);
-                    } catch (Throwable t) {
-                        releaseSlot(templateWorldName, slot);
-                        future.completeExceptionally(t);
-                    }
-                });
-            } catch (Throwable t) {
-                releaseSlot(templateWorldName, slot);
-                future.completeExceptionally(t);
+                    worldsByName.put(world.getName(), new WorldSession(
+                        UUID.randomUUID().toString(),
+                        instance
+                    ));
+
+                    future.complete(world);
+                    return null;
+                }, future);
+            } catch (Throwable throwable) {
+                future.completeExceptionally(throwable);
             }
         });
 
         return future;
     }
 
+    public CompletableFuture<SchematicMetadata> pasteSchematic(Path schematicFile, World world, Location minimumCorner, MapRotation rotation) {
+        Objects.requireNonNull(schematicFile, "schematicFile");
+        Objects.requireNonNull(world, "world");
+        Objects.requireNonNull(minimumCorner, "minimumCorner");
+        Objects.requireNonNull(rotation, "rotation");
+
+        CompletableFuture<SchematicMetadata> future = new CompletableFuture<>();
+        runSync(() -> {
+            try {
+                CachedClipboard cachedClipboard = loadClipboard(schematicFile);
+                ClipboardHolder holder = new ClipboardHolder(cachedClipboard.clipboard());
+
+                if (rotation != MapRotation.DEG_0) {
+                    holder.setTransform(holder.getTransform().combine(new AffineTransform().rotateY(rotation.degrees())));
+                }
+
+                BlockVector3 target = adjustedPastePosition(minimumCorner, rotation, cachedClipboard.metadata());
+                try (EditSession editSession = WorldEdit.getInstance().newEditSession(BukkitAdapter.adapt(world))) {
+                    Operation operation = holder.createPaste(editSession)
+                        .to(target)
+                        .ignoreAirBlocks(false)
+                        .build();
+                    Operations.complete(operation);
+                    // editSession.flushSession();
+                }
+
+                future.complete(cachedClipboard.metadata());
+            } catch (Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+            return null;
+        }, future);
+
+        return future;
+    }
+
+    public SchematicMetadata getSchematicMetadata(Path schematicFile) {
+        return loadClipboard(schematicFile).metadata();
+    }
+
+    public CompletableFuture<Void> clearArea(World world, BoundingBox box) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        runSync(() -> {
+            try {
+                for (var entity : world.getNearbyEntities(box)) {
+                    entity.remove();
+                }
+
+                BlockVector3 min = BlockVector3.at(box.getMinX(), box.getMinY(), box.getMinZ());
+                BlockVector3 max = BlockVector3.at(box.getMaxX(), box.getMaxY(), box.getMaxZ());
+
+                try (EditSession editSession = WorldEdit.getInstance().newEditSession(BukkitAdapter.adapt(world))) {
+                    editSession.setBlocks(new CuboidRegion(min, max), com.sk89q.worldedit.world.block.BlockTypes.AIR.getDefaultState());
+                    // editSession.flushSession();
+                }
+
+                future.complete(null);
+            } catch (Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+            return null;
+        }, future);
+
+        return future;
+    }
+
+    public CompletableFuture<Void> unloadWorld(String worldName) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        runSync(() -> {
+            try {
+                WorldSession releasedSession = worldsByName.remove(worldName);
+                World world = Bukkit.getWorld(worldName);
+
+                if (world != null) {
+                    for (Player player : world.getPlayers()) {
+                        player.teleport(Bukkit.getWorlds().getFirst().getSpawnLocation());
+                    }
+
+                    Bukkit.unloadWorld(world, false);
+                }
+
+                if (releasedSession != null) {
+                    plugin.getPlayerStateStore().clearWorld(releasedSession.playerStateId());
+                    deleteWorldFolder(worldName);
+                }
+
+                future.complete(null);
+            } catch (Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+            return null;
+        }, future);
+
+        return future;
+    }
+
     public void sendPlayerToWorld(Player player, World world) {
-        
         if (world == null) {
             player.sendMessage(Component.text("World not found."));
             return;
@@ -89,38 +195,128 @@ public class WorldManager {
         return session == null ? world.getName() : session.playerStateId();
     }
 
-    public WorldSession releaseWorld(String instanceWorldName) {
-        WorldSession session = worldsByName.remove(instanceWorldName);
+    private CachedClipboard loadClipboard(Path schematicFile) {
+        try {
+            Path normalizedPath = schematicFile.toAbsolutePath().normalize();
+            long lastModified = java.nio.file.Files.getLastModifiedTime(normalizedPath).toMillis();
+            CachedClipboard cachedClipboard = clipboardCache.get(normalizedPath);
 
-        if (session != null) {
-            releaseSlot(session.templateWorldName(), session.slot());
+            if (cachedClipboard != null && cachedClipboard.lastModified() == lastModified) {
+                return cachedClipboard;
+            }
+
+            Clipboard clipboard;
+            var format = ClipboardFormats.findByFile(normalizedPath.toFile());
+            if (format == null) {
+                throw new IllegalStateException("Unknown schematic format for " + normalizedPath);
+            }
+
+            try (ClipboardReader reader = format.getReader(new FileInputStream(normalizedPath.toFile()))) {
+                clipboard = reader.read();
+            }
+
+            BlockVector3 minimum = clipboard.getRegion().getMinimumPoint();
+            BlockVector3 maximum = clipboard.getRegion().getMaximumPoint();
+            clipboard.setOrigin(minimum);
+
+            SchematicMetadata metadata = new SchematicMetadata(
+                maximum.x() - minimum.x() + 1,
+                maximum.y() - minimum.y() + 1,
+                maximum.z() - minimum.z() + 1
+            );
+
+            CachedClipboard newClipboard = new CachedClipboard(lastModified, clipboard, metadata);
+            clipboardCache.put(normalizedPath, newClipboard);
+            return newClipboard;
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to load schematic " + schematicFile, e);
+        }
+    }
+
+    private BlockVector3 adjustedPastePosition(Location minimumCorner, MapRotation rotation, SchematicMetadata metadata) {
+        int width = metadata.width();
+        int depth = metadata.depth();
+
+        int x = minimumCorner.getBlockX();
+        int y = minimumCorner.getBlockY();
+        int z = minimumCorner.getBlockZ();
+
+        return switch (rotation) {
+            case DEG_0 -> BlockVector3.at(x, y, z);
+            case DEG_90 -> BlockVector3.at(x, y, z + (width - 1));
+            case DEG_180 -> BlockVector3.at(x + (width - 1), y, z + (depth - 1));
+            case DEG_270 -> BlockVector3.at(x + (depth - 1), y, z);
+        };
+    }
+
+    private void configureWorld(World world) {
+        world.setGameRule(GameRules.ADVANCE_TIME, false);
+        world.setGameRule(GameRules.ADVANCE_WEATHER, false);
+        world.setGameRule(GameRules.PVP, false);
+        world.setGameRule(GameRules.SPAWN_MOBS, false);
+        world.setGameRule(GameRules.SHOW_ADVANCEMENT_MESSAGES, false);
+        world.setGameRule(GameRules.LOCATOR_BAR, false);
+        world.setGameRule(GameRules.IMMEDIATE_RESPAWN, true);
+        world.setGameRule(GameRules.PLAYERS_SLEEPING_PERCENTAGE, 101);
+        world.setGameRule(GameRules.RESPAWN_RADIUS, 0);
+        world.setGameRule(GameRules.SPECTATORS_GENERATE_CHUNKS, false);
+        world.setDifficulty(Difficulty.HARD);
+        world.setTime(1000);
+    }
+
+    private String stripExtension(String fileName) {
+        int extensionIndex = fileName.lastIndexOf('.');
+        return extensionIndex == -1 ? fileName : fileName.substring(0, extensionIndex);
+    }
+
+    private <T> void runSync(ThrowingSupplier<T> action, CompletableFuture<?> future) {
+        Runnable task = () -> {
+            try {
+                action.get();
+            } catch (Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        };
+
+        if (Bukkit.isPrimaryThread()) {
+            task.run();
+            return;
         }
 
-        return session;
+        Bukkit.getScheduler().runTask(plugin, task);
     }
 
-    private int allocateSlot(String templateWorldName) {
-        Queue<Integer> freeSlots = freeTemplateSlots.computeIfAbsent(templateWorldName, ignored -> new ArrayDeque<>());
+    private void deleteWorldFolder(String worldName) throws IOException {
+        Path worldFolder = Bukkit.getWorldContainer().toPath().resolve(worldName);
+        deleteRecursively(worldFolder);
+    }
 
-        if (!freeSlots.isEmpty()) {
-            return freeSlots.poll();
+    private void deleteRecursively(Path path) throws IOException {
+        if (!Files.exists(path)) {
+            return;
         }
 
-        int nextSlot = nextTemplateSlots.getOrDefault(templateWorldName, 0);
-        nextTemplateSlots.put(templateWorldName, nextSlot + 1);
-        return nextSlot;
+        try (var walk = Files.walk(path)) {
+            for (Path currentPath : walk.sorted((left, right) -> right.getNameCount() - left.getNameCount()).toList()) {
+                Files.deleteIfExists(currentPath);
+            }
+        }
     }
 
-    private void releaseSlot(String templateWorldName, int slot) {
-        freeTemplateSlots.computeIfAbsent(templateWorldName, ignored -> new ArrayDeque<>()).offer(slot);
+    private record CachedClipboard(long lastModified, Clipboard clipboard, SchematicMetadata metadata) {
     }
 
-    public record WorldSession(
-        String templateWorldName,
-        String instanceWorldName,
-        int slot,
+    private record WorldSession(
         String playerStateId,
         SlimeWorldInstance worldInstance
     ) {
+    }
+
+    @FunctionalInterface
+    private interface ThrowingSupplier<T> {
+        T get() throws Exception;
+    }
+
+    public record SchematicMetadata(int width, int height, int depth) {
     }
 }

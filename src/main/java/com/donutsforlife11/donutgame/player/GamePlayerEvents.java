@@ -2,6 +2,7 @@ package com.donutsforlife11.donutgame.player;
 
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 
@@ -22,5 +23,10 @@ public class GamePlayerEvents implements Listener {
     @EventHandler
     public void playerQuit(PlayerQuitEvent event) {
         moduleManager.handlePlayerDisconnect(event.getPlayer());
+    }
+
+    @EventHandler
+    public void playerChangedWorld(PlayerChangedWorldEvent event) {
+        moduleManager.handlePlayerWorldChange(event.getPlayer(), event.getPlayer().getWorld());
     }
 }

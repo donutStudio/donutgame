@@ -1,6 +1,5 @@
 package com.donutsforlife11.donutgame.api;
 
-import java.io.File;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -12,11 +11,12 @@ import org.bukkit.plugin.Plugin;
 
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
+import com.donutsforlife11.donutgame.api.map.GameMap;
+import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.teams.TeamManager;
 import com.donutsforlife11.donutgame.api.ui.UIManager;
 import com.donutsforlife11.donutgame.game.GameContext;
-import com.donutsforlife11.donutgame.game.GameMap;
 
 public class ModuleApi implements GameContext {
     private final Donutgame plugin;
@@ -27,6 +27,7 @@ public class ModuleApi implements GameContext {
     private final TimeManager timeManager;
     private final PlayerManager playerManager;
     private final UIManager uiManager;
+    private final MapManager mapManager;
     private final Set<Listener> registeredListeners = new LinkedHashSet<>();
 
     public ModuleApi(
@@ -47,6 +48,7 @@ public class ModuleApi implements GameContext {
         this.timeManager = timeManager;
         this.playerManager = playerManager;
         this.uiManager = uiManager;
+        this.mapManager = new MapManager(plugin, gameIndex, gameId, playerManager, plugin.getMapRepository(), plugin.getWorldManager());
     }
 
     public Plugin getPlugin() {
@@ -58,11 +60,15 @@ public class ModuleApi implements GameContext {
     }
 
     public GameMap createMap(String mapPath) {
-        return new GameMap(plugin, new File(plugin.getMapsFolder(), mapPath));
+        return GameMap.fromPath(mapPath);
     }
 
     public CompletableFuture<GameMap> initializeMap(String mapPath) {
-        return createMap(mapPath).loadWorld();
+        return mapManager.setMap(createMap(mapPath));
+    }
+
+    public MapManager mapManager() {
+        return mapManager;
     }
 
     public TeamManager teamManager() {
@@ -113,7 +119,7 @@ public class ModuleApi implements GameContext {
         return playerManager;
     }
 
-    public void shutdown() {
+    public CompletableFuture<Void> shutdown() {
         for (Listener listener : Set.copyOf(registeredListeners)) {
             HandlerList.unregisterAll(listener);
         }
@@ -122,5 +128,6 @@ public class ModuleApi implements GameContext {
         playerManager.shutdown();
         timeManager.shutdown();
         teamManager.clear();
+        return mapManager.shutdown();
     }
 }

@@ -21,11 +21,13 @@ import org.bukkit.scheduler.BukkitTask;
 public class PlayerManager {
     private final Plugin plugin;
     private final Set<UUID> players = new LinkedHashSet<>();
+    private final Set<UUID> playersInWorld = ConcurrentHashMap.newKeySet();
     private final Set<UUID> spectators = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Location> spawns = new ConcurrentHashMap<>();
     private final Map<UUID, BukkitTask> respawnTasks = new ConcurrentHashMap<>();
 
     private final List<Consumer<Player>> onRegisteredActions = new CopyOnWriteArrayList<>();
+    private final List<Consumer<Player>> onEnteredWorldActions = new CopyOnWriteArrayList<>();
 
     private volatile boolean shutdown;
 
@@ -154,6 +156,22 @@ public class PlayerManager {
         return this;
     }
 
+    public PlayerManager onPlayerEnteredWorld(Consumer<Player> action) {
+        ensureActive();
+        Consumer<Player> checkedAction = Objects.requireNonNull(action, "action");
+        onEnteredWorldActions.add(checkedAction);
+
+        for (Player player : getOnlinePlayers(playersInWorld)) {
+            try {
+                checkedAction.accept(player);
+            } catch (Throwable throwable) {
+                logCallbackFailure("onPlayerEnteredWorld", throwable);
+            }
+        }
+
+        return this;
+    }
+
     public boolean register(Player player, boolean runCallbacks) {
         ensureActive();
 
@@ -175,6 +193,7 @@ public class PlayerManager {
             return;
         }
 
+        playersInWorld.remove(uuid);
         spectators.remove(uuid);
         spawns.remove(uuid);
         cancelRespawn(player);
@@ -210,8 +229,22 @@ public class PlayerManager {
         List.copyOf(respawnTasks.values()).forEach(BukkitTask::cancel);
         respawnTasks.clear();
         players.clear();
+        playersInWorld.clear();
         spectators.clear();
         spawns.clear();
+    }
+
+    public void notifyPlayerEnteredWorld(Player player) {
+        if (!isRegistered(player)) {
+            return;
+        }
+
+        playersInWorld.add(player.getUniqueId());
+        runPlayerCallbacks(onEnteredWorldActions, player, "onPlayerEnteredWorld");
+    }
+
+    public void notifyPlayerLeftWorld(Player player) {
+        playersInWorld.remove(player.getUniqueId());
     }
 
     private void ensureActive() {

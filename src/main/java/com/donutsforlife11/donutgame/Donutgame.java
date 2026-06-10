@@ -19,6 +19,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import com.donutsforlife11.donutgame.commands.MinigameCommand;
 import com.donutsforlife11.donutgame.commands.WorldTeleportCommand;
+import com.donutsforlife11.donutgame.api.map.MapRepository;
 import com.donutsforlife11.donutgame.game.GameModuleDescriptor;
 import com.donutsforlife11.donutgame.game.GameModule;
 import com.donutsforlife11.donutgame.game.ModuleManager;
@@ -35,7 +36,7 @@ public final class Donutgame extends JavaPlugin {
     
     protected final File modulesFolder = new File(getDataFolder(), "modules");
     protected final File mapsFolder = new File(getDataFolder(), "maps");
-    protected final File worldsFolder = new File(getDataFolder(), "worlds");
+    protected final File runtimeFolder = new File(getDataFolder(), ".runtime");
     private final AdvancedSlimePaperAPI asp = AdvancedSlimePaperAPI.instance();
     private PlayerStateStore playerStateStore = new PlayerStateStore();
     private PlayerEvents playerEvents;
@@ -44,10 +45,13 @@ public final class Donutgame extends JavaPlugin {
 
     private ModuleManager moduleManager;
     private WorldManager worldManager;
+    private MapRepository mapRepository;
 
     @Override
     public void onEnable() {
-        worldManager = new WorldManager(this, worldsFolder);
+        runtimeFolder.mkdirs();
+        worldManager = new WorldManager(this);
+        mapRepository = new MapRepository(mapsFolder.toPath(), runtimeFolder.toPath().resolve("maps"));
         playerEvents = new PlayerEvents(playerStateStore, worldManager);
 
         moduleManager = new ModuleManager(this);
@@ -86,7 +90,7 @@ public final class Donutgame extends JavaPlugin {
         }
 
         for (int gameIndex : List.copyOf(moduleManager.getActiveGames().keySet())) {
-            moduleManager.unloadModule(gameIndex);
+            moduleManager.unloadModule(gameIndex).join();
         }
 
         for (SlimeWorldInstance instance : asp.getLoadedWorlds()) {
@@ -98,6 +102,8 @@ public final class Donutgame extends JavaPlugin {
 
             Bukkit.unloadWorld(instance.getBukkitWorld(), false);
         }
+
+        mapRepository.shutdown();
     }
 
     public GameModuleDescriptor extractGameData(File gameModule) throws Exception {
@@ -147,5 +153,9 @@ public final class Donutgame extends JavaPlugin {
 
     public File getMapsFolder() {
         return mapsFolder;
+    }
+
+    public MapRepository getMapRepository() {
+        return mapRepository;
     }
 }

@@ -7,6 +7,8 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Listener;
 
+import com.donutsforlife11.donutgame.api.map.GameMap;
+import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.teams.TeamManager;
@@ -20,6 +22,8 @@ public interface GameContext {
     public GameMap createMap(String mapPath);
 
     public CompletableFuture<GameMap> initializeMap(String mapPath);
+
+    public MapManager mapManager();
 
     public TeamManager teamManager();
 

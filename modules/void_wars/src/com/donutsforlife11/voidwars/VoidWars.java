@@ -2,23 +2,23 @@ package com.donutsforlife11.voidwars;
 
 import org.bukkit.GameMode;
 import org.bukkit.Location;
-import org.bukkit.World;
 import org.bukkit.entity.Player;
 
+import com.donutsforlife11.donutgame.api.map.GameMap;
 import com.donutsforlife11.donutgame.game.GameContext;
 import com.donutsforlife11.donutgame.game.GameModule;
 
 public class VoidWars extends GameModule {
     public boolean gameStarted = false;
-    World world;
+
+    @Override
+    public void beforeLoad(GameContext context) {
+        mapManager.setMap(GameMap.fromPath("void_wars/sky_meadows.dmap"));
+    }
 
     @Override
     public void onLoad(GameContext context) {
-        playerManager.onPlayerRegistered(player -> {
-            setupPlayer(player);
-        });
-
-        this.world = map.getWorld();
+        playerManager.onPlayerEnteredWorld(this::setupPlayer);
 
         registerEvents(new VoidWarsEvents(this));
     }
@@ -41,7 +41,7 @@ public class VoidWars extends GameModule {
     }
 
     private void setupPlayer(Player player) {
-        Location spawnPoint = map.getPoints("spawn").get(0); 
+        Location spawnPoint = world.getPoints("spawn").getFirst();
         player.teleportAsync(spawnPoint);
         playerManager.setPlayerSpawn(player, spawnPoint);
         if (gameStarted) {

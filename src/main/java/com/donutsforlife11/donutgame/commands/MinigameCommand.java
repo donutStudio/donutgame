@@ -144,8 +144,13 @@ public final class MinigameCommand implements PluginCommand {
                         return Command.SINGLE_SUCCESS;
                     }
 
-                    moduleManager.unloadModule(gameIndex);
-                    sender.sendMessage(Component.text("Unloaded game " + gameIndex + "."));
+                    moduleManager.unloadModule(gameIndex).thenRun(() ->
+                        sender.sendMessage(Component.text("Unloaded game " + gameIndex + "."))
+                    ).exceptionally(error -> {
+                        sender.sendMessage(Component.text("Failed to unload game " + gameIndex + ". See console for details."));
+                        error.printStackTrace();
+                        return null;
+                    });
                     return Command.SINGLE_SUCCESS;
                 })
             );

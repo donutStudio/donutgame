@@ -7,3 +7,5 @@ author: Donutsforlife11
 load: STARTUP
 softdepend:
   - ProtocolLib
+depend:
+  - WorldEdit
