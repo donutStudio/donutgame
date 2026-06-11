@@ -12,9 +12,9 @@ TeamManager teamManager() // Returns context TeamManager
 TimeManager timeManager() // Returns context TimeManager
 PlayerManager playerManager() // Returns context PlayerManager
 UIManager uiManager() // Returns context UIManager
-
-// TO BE IMPLEMENTED
 MapManager mapManager() // Returns context MapManager
+
+// TO BE IMPLEMENTED\
 BorderManager borderManager() // Returns context BorderManager
 ```
 
@@ -102,6 +102,10 @@ void chat(Audience audience, Component message) // Sends chat message to specifi
 GameSidebar createSidebar() // Creates a sidebar but does not display it yet
 GameBossbar createBossbar() // Creates a bossbar but does not display it yet
 void clearUi(Audience audience) // Clears all UI elements for a specified audience
+// TO BE IMPLEMENTED:
+void setGlowing(Entity entity, boolean glowing) // Sets whether or not an entity is glowing for all players
+void setGlowing(Entity entity, boolean glowing, Audience audience) // Same as above but entity only glows for a specified audience
+void setGlowColor(Entity entity, ChatColor color) // Sets glow color of an entity
 ```
 **GameSidebar**
 ```java

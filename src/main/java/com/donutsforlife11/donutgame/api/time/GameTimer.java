@@ -38,6 +38,7 @@ public class GameTimer {
 
     public GameTimer start() {
         boolean endedImmediately = false;
+        boolean shouldRunInitialActions = false;
 
         synchronized (stateLock) {
             if (started) {
@@ -51,13 +52,19 @@ public class GameTimer {
             }
 
             started = true;
+
             if (hasReachedTarget()) {
                 finished = true;
                 running = false;
                 endedImmediately = true;
             } else {
+                shouldRunInitialActions = running;
                 manager.activate(this);
             }
+        }
+
+        if (shouldRunInitialActions) {
+            runActions(whileRunningActions, 0);
         }
 
         if (endedImmediately) {

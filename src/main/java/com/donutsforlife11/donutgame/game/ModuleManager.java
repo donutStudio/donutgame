@@ -192,6 +192,8 @@ public class ModuleManager {
         module.playerManager = context.playerManager();
         module.timeManager = context.timeManager();
         module.uiManager = context.uiManager();
+        module.teamManager = context.teamManager();
+        module.config = context.getConfig();
         module.mapManager.onMapChanged((map, world) -> {
             module.map = map;
             module.world = world;

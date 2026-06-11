@@ -6,6 +6,7 @@ import com.donutsforlife11.donutgame.api.map.GameMap;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
+import com.donutsforlife11.donutgame.api.teams.TeamManager;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.ui.UIManager;
 
@@ -14,6 +15,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Listener;
 
 public abstract class GameModule implements Listener {
@@ -26,6 +28,8 @@ public abstract class GameModule implements Listener {
     protected TimeManager timeManager;
     protected PlayerManager playerManager;
     protected UIManager uiManager;
+    protected TeamManager teamManager;
+    protected YamlConfiguration config;
     protected String gameId;
     protected String gameName = gameId;
 
@@ -104,6 +108,12 @@ public abstract class GameModule implements Listener {
     }
     public UIManager uiManager() {
         return uiManager;
+    }
+    public TeamManager teamManager() {
+        return teamManager;
+    }
+    public YamlConfiguration config() {
+        return config;
     }
     public String gameId() {
         return gameId;
