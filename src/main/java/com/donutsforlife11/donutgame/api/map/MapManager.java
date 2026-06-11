@@ -82,7 +82,7 @@ public final class MapManager implements Listener {
             .thenCompose(ignored -> unloadCurrentWorld())
             .thenCompose(ignored -> worldManager.loadSlimeWorld(templateSourceMap.slimePath(), templateSourceMap.getId(), worldName))
             .thenCompose(world -> {
-                GameWorld gameWorld = new GameWorld(world, worldManager::clearArea);
+                GameWorld gameWorld = new GameWorld(world, worldManager::fillArea);
                 CompletableFuture<Void> loadMapFuture = CompletableFuture.completedFuture(null);
 
                 if (resolvedMap.isSchematicBacked()) {

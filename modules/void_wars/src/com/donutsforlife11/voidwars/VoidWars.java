@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.util.BoundingBox;
 
@@ -45,7 +46,7 @@ public class VoidWars extends GameModule {
             uiManager.actionbar(Audience.audience(playerManager.getPlayers()), Component.text("Ground collapses in ").append(formattedNumber));
         }).onEnd(timer -> {
             for (BoundingBox box : world.getRegions("spawn_platform")) {
-                world.clearArea(box);
+                world.fillArea(box, Material.AIR);
             }
         }).start();
     }

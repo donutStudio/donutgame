@@ -12,7 +12,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Entity;
 import org.bukkit.util.BoundingBox;
 
@@ -22,11 +24,11 @@ public final class GameWorld {
     private final Map<String, CopyOnWriteArrayList<BoundingBox>> regions = new ConcurrentHashMap<>();
     private final Map<String, CopyOnWriteArrayList<Consumer<Entity>>> enterActions = new ConcurrentHashMap<>();
     private final Map<String, CopyOnWriteArrayList<Consumer<Entity>>> exitActions = new ConcurrentHashMap<>();
-    private final RegionClearer regionClearer;
+    private final RegionFiller regionFiller;
 
-    public GameWorld(World bukkitWorld, RegionClearer regionClearer) {
+    public GameWorld(World bukkitWorld, RegionFiller regionFiller) {
         this.bukkitWorld = Objects.requireNonNull(bukkitWorld, "bukkitWorld");
-        this.regionClearer = Objects.requireNonNull(regionClearer, "regionClearer");
+        this.regionFiller = Objects.requireNonNull(regionFiller, "regionFiller");
     }
 
     public World getBukkitWorld() {
@@ -125,9 +127,15 @@ public final class GameWorld {
         exitActions.computeIfAbsent(regionName, ignored -> new CopyOnWriteArrayList<>()).add(action);
     }
 
-    public CompletableFuture<Void> clearArea(BoundingBox box) {
+    public CompletableFuture<Void> fillArea(BoundingBox box, Material material) {
+        Objects.requireNonNull(material, "material");
+        return fillArea(box, material.createBlockData());
+    }
+
+    public CompletableFuture<Void> fillArea(BoundingBox box, BlockData blockData) {
         requireRegion(box);
-        return regionClearer.clear(bukkitWorld, box);
+        Objects.requireNonNull(blockData, "blockData");
+        return regionFiller.fill(bukkitWorld, box, blockData);
     }
 
     public void handleRegionCheck(Entity entity, Location from, Location to) {
@@ -208,7 +216,7 @@ public final class GameWorld {
     }
 
     @FunctionalInterface
-    public interface RegionClearer {
-        CompletableFuture<Void> clear(World world, BoundingBox box);
+    public interface RegionFiller {
+        CompletableFuture<Void> fill(World world, BoundingBox box, BlockData blockData);
     }
 }

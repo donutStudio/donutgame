@@ -184,8 +184,6 @@ String getValue() // Returns formatted value as a string if it is global or stat
 String getValue(Player player) // Returns formatted value as a string for specified player
 ```
 
-Everything below is yet to be implemented:
-
 ## MAP AND WORLD MANAGEMENT
 **MapManager**
 ```java
@@ -220,6 +218,8 @@ enum **MapRotation**:
 enum MapRotation {DEG_0, DEG_90, DEG_180, DEG_270} // The four possible rotations of the map along y axis, counterclockwise
 static MapRotation fromDegrees(int degrees) // Returns a MapRotation which rotates map by either 0, 90, 180, or 270 degrees
 ```
+
+Everything below is yet to be implemented:
 
 ## BORDERS
 **BorderManager**

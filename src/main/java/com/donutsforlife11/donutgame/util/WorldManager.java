@@ -15,6 +15,7 @@ import org.bukkit.Difficulty;
 import org.bukkit.GameRules;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
 import org.bukkit.util.BoundingBox;
 
@@ -125,31 +126,42 @@ public class WorldManager {
         return loadClipboard(schematicFile).metadata();
     }
 
-    public CompletableFuture<Void> clearArea(World world, BoundingBox box) {
+    public CompletableFuture<Void> fillArea(World world, BoundingBox box, BlockData blockData) {
+        Objects.requireNonNull(world, "world");
+        Objects.requireNonNull(box, "box");
+        Objects.requireNonNull(blockData, "blockData");
+
         CompletableFuture<Void> future = new CompletableFuture<>();
-        runSync(() -> {
-            try {
-                for (var entity : world.getNearbyEntities(box)) {
-                    entity.remove();
+            runSync(() -> {
+                try {
+                    BlockVector3 min = BlockVector3.at(
+                        Math.floor(box.getMinX()),
+                        Math.floor(box.getMinY()),
+                        Math.floor(box.getMinZ())
+                    );
+
+                    BlockVector3 max = BlockVector3.at(
+                        Math.ceil(box.getMaxX()) - 1,
+                        Math.ceil(box.getMaxY()) - 1,
+                        Math.ceil(box.getMaxZ()) - 1
+                    );
+
+                    com.sk89q.worldedit.world.block.BlockState worldEditBlock =
+                        BukkitAdapter.adapt(blockData);
+
+                    try (EditSession editSession = WorldEdit.getInstance().newEditSession(BukkitAdapter.adapt(world))) {
+                        editSession.setBlocks(new CuboidRegion(min, max), worldEditBlock);
+                    }
+
+                    future.complete(null);
+                } catch (Throwable throwable) {
+                    future.completeExceptionally(throwable);
                 }
+                return null;
+            }, future);
 
-                BlockVector3 min = BlockVector3.at(box.getMinX(), box.getMinY(), box.getMinZ());
-                BlockVector3 max = BlockVector3.at(box.getMaxX(), box.getMaxY(), box.getMaxZ());
-
-                try (EditSession editSession = WorldEdit.getInstance().newEditSession(BukkitAdapter.adapt(world))) {
-                    editSession.setBlocks(new CuboidRegion(min, max), com.sk89q.worldedit.world.block.BlockTypes.AIR.getDefaultState());
-                    // editSession.flushSession();
-                }
-
-                future.complete(null);
-            } catch (Throwable throwable) {
-                future.completeExceptionally(throwable);
-            }
-            return null;
-        }, future);
-
-        return future;
-    }
+            return future;
+        }
 
     public CompletableFuture<Void> unloadWorld(String worldName) {
         CompletableFuture<Void> future = new CompletableFuture<>();
