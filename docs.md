@@ -78,11 +78,11 @@ GameTimer whilePaused(int interval, Consumer<GameTimer> action) // Runs specifie
 ## PLAYER MANAGEMENT
 **PlayerManager**
 ```java
-Collection<Player> getPlayers() // Returns all players in the game
+Collection<Player> getPlayers() // Returns all registered players in the game
 void setSpectator(Player player) // Sets specified player to a spectator (not spectator mode, the plugins implementation of spectators)
 void setNonSpectator(Player player) // Makes specified player a non spectator 
-Collection<Player> getSpectators() // Returns all spectators
-Collection<Player> getNonSpectators() // Returns all players in game who are not spectators
+Collection<Player> getSpectators() // Returns all registered spectators
+Collection<Player> getNonSpectators() // Returns all registered players in game who are not spectators
 void setPlayerSpawn(Player player, Location location) // Sets spawnpoint/respawn location of specified player
 Location getPlayerSpawn(Player player) // Returns player spawn location
 void respawnPlayer(Player player) // Respawns specified player instantaneously
@@ -226,15 +226,17 @@ Everything below is yet to be implemented:
 ```java
 enum BorderShape {CUBOID, CYLINDROID, ELLIPSOID} // The available 3D geometric border shapes
 GameBorder createBorder(BorderShape shape, Location center, Vector dimensions) // Creates cuboid border with specified center and dimensions
+List<GameBorder> getBorders() // Returns list of active borders
+boolean borderContainsPlayer(GameBorder border, Player player) // Returns whether or not specified player is inside specified border's bounds
 ```
 **GameBorder**
 ```java
 Location getCenter() // Returns center location of border
 Vector getDimensions() // Returns current dimensions of border
 BorderShape getShape() // Returns 3D shape of border
-void setDimensions(Vector dimensions) // Changes dimensions of border instantaneously
-void setDimensions(Vector dimensions, int time) // Changes dimensions of border over specified time in ticks
-void setCenter(Location center) // Moves center of border instantaneously
-void setCenter(Location center, int time) // Moves center of border over specified time in ticks
-void setDamage(double amount, int interval) // Sets how much damage to deal players outside the border every specified interval in ticks
+GameBorder setDimensions(Vector dimensions) // Changes dimensions of border instantaneously
+GameBorder setDimensions(Vector dimensions, int time) // Changes dimensions of border over specified time in ticks
+GameBorder setCenter(Location center) // Moves center of border instantaneously
+GameBorder setCenter(Location center, int time) // Moves center of border over specified time in ticks
+void deleteBorder() // Deletes the border
 ```
