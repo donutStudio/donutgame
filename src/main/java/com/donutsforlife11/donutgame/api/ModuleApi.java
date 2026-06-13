@@ -10,11 +10,12 @@ import org.bukkit.event.Listener;
 import org.bukkit.plugin.Plugin;
 
 import com.donutsforlife11.donutgame.Donutgame;
-import com.donutsforlife11.donutgame.api.player.PlayerManager;
+import com.donutsforlife11.donutgame.api.border.BorderManager;
 import com.donutsforlife11.donutgame.api.map.GameMap;
 import com.donutsforlife11.donutgame.api.map.MapManager;
-import com.donutsforlife11.donutgame.api.time.TimeManager;
+import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.teams.TeamManager;
+import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.ui.UIManager;
 import com.donutsforlife11.donutgame.game.GameContext;
 
@@ -28,6 +29,7 @@ public class ModuleApi implements GameContext {
     private final PlayerManager playerManager;
     private final UIManager uiManager;
     private final MapManager mapManager;
+    private final BorderManager borderManager;
     private final Set<Listener> registeredListeners = new LinkedHashSet<>();
 
     public ModuleApi(
@@ -49,6 +51,7 @@ public class ModuleApi implements GameContext {
         this.playerManager = playerManager;
         this.uiManager = uiManager;
         this.mapManager = new MapManager(plugin, gameIndex, gameId, playerManager, plugin.getMapRepository(), plugin.getWorldManager());
+        this.borderManager = new BorderManager(this, mapManager, playerManager, timeManager);
     }
 
     public Plugin getPlugin() {
@@ -85,6 +88,10 @@ public class ModuleApi implements GameContext {
 
     public UIManager uiManager() {
         return uiManager;
+    }
+
+    public BorderManager borderManager() {
+        return borderManager;
     }
 
     public void registerEvents(Listener listener) {
@@ -124,6 +131,7 @@ public class ModuleApi implements GameContext {
             HandlerList.unregisterAll(listener);
         }
         registeredListeners.clear();
+        borderManager.shutdown();
         uiManager.shutdown();
         playerManager.shutdown();
         timeManager.shutdown();

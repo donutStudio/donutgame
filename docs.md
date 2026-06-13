@@ -227,7 +227,8 @@ Everything below is yet to be implemented:
 enum BorderShape {CUBOID, CYLINDROID, ELLIPSOID} // The available 3D geometric border shapes
 GameBorder createBorder(BorderShape shape, Location center, Vector dimensions) // Creates cuboid border with specified center and dimensions
 List<GameBorder> getBorders() // Returns list of active borders
-boolean borderContainsPlayer(GameBorder border, Player player) // Returns whether or not specified player is inside specified border's bounds
+boolean borderContainsLocation(GameBorder border, Location location) // Returns whether or not specified location is inside specified border's bounds
+void setBorderDamage(double amount, int interval) // Sets the damage of all borders owned by the BorderDamage; it would apply the specified amount of damage to all players not standing in any border every interval ticks
 ```
 **GameBorder**
 ```java

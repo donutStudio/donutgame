@@ -9,7 +9,10 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.util.BoundingBox;
+import org.bukkit.util.Vector;
 
+import com.donutsforlife11.donutgame.api.border.GameBorder;
+import com.donutsforlife11.donutgame.api.border.BorderManager.BorderShape;
 import com.donutsforlife11.donutgame.api.map.GameMap;
 import com.donutsforlife11.donutgame.api.teams.GameTeam;
 import com.donutsforlife11.donutgame.game.GameContext;
@@ -48,6 +51,15 @@ public class VoidWars extends GameModule {
             for (BoundingBox box : world.getRegions("spawn_platform")) {
                 world.fillArea(box, Material.AIR);
             }
+        }).start();
+
+        GameBorder testBorder = borderManager.createBorder(BorderShape.CUBOID, new Location(world.getBukkitWorld(), 0, 0, 0), new Vector(70, 70, 70));
+        timeManager.createTimer(500).onEnd(timer -> {
+            testBorder.setDimensions(new Vector(20, 20, 20), 400);
+            timeManager.createTimer(100).onEnd(timer2 -> {
+                testBorder.setCenter(new Location(world.getBukkitWorld(), 7, 3, 5), 100);
+                testBorder.setDimensions(new Vector(20, 5, 30));
+            }).start();
         }).start();
     }
 

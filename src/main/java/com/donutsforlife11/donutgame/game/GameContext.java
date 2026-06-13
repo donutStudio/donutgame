@@ -7,6 +7,7 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Listener;
 
+import com.donutsforlife11.donutgame.api.border.BorderManager;
 import com.donutsforlife11.donutgame.api.map.GameMap;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
@@ -32,6 +33,8 @@ public interface GameContext {
     public PlayerManager playerManager();
 
     public UIManager uiManager();
+
+    public BorderManager borderManager();
 
     public void registerEvents(Listener listener);
 

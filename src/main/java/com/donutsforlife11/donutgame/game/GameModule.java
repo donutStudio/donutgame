@@ -2,6 +2,7 @@ package com.donutsforlife11.donutgame.game;
 
 import java.util.concurrent.CompletableFuture;
 
+import com.donutsforlife11.donutgame.api.border.BorderManager;
 import com.donutsforlife11.donutgame.api.map.GameMap;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.map.MapManager;
@@ -29,6 +30,7 @@ public abstract class GameModule implements Listener {
     protected PlayerManager playerManager;
     protected UIManager uiManager;
     protected TeamManager teamManager;
+    protected BorderManager borderManager;
     protected YamlConfiguration config;
     protected String gameId;
     protected String gameName = gameId;
@@ -111,6 +113,9 @@ public abstract class GameModule implements Listener {
     }
     public TeamManager teamManager() {
         return teamManager;
+    }
+    public BorderManager borderManager() {
+        return borderManager;
     }
     public YamlConfiguration config() {
         return config;
