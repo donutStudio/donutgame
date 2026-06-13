@@ -4,3 +4,4 @@ name: Void Wars
 team_size: 1
 ground_collapse_time: 15
 pvp_enablement_time: 20
+base_respawn_time: 20

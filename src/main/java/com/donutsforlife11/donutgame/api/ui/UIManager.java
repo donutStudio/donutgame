@@ -17,6 +17,8 @@ import com.donutsforlife11.donutgame.api.ui.title.TitlePacketTracker;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.audience.ForwardingAudience;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.title.TitlePart;
 import net.kyori.adventure.title.Title;
 
@@ -84,6 +86,12 @@ public class UIManager {
     public void chat(Audience audience, Component message) {
         requireActive();
         audience.sendMessage(requireComponent(message));
+    }
+
+    public void gameMessage(Audience audience, Component message) {
+        requireActive();
+        audience.sendMessage(Component.text("Game > ", NamedTextColor.GREEN).decorate(TextDecoration.BOLD)
+            .append(Component.empty().append(requireComponent(message))));
     }
 
     public GameSidebar createSidebar() {

@@ -38,6 +38,7 @@ TeamProperties getProperties() // Returns team properties
 void setProperties(TeamProperties properties) // Sets team properties to specified properties
 boolean hasPlayer(Player player) // Returns whether or not the team contains specified player
 int getSize() // Returns number of members on the team
+Collection<Player> getMembers() // Returns list of online players on the team
 void addPlayer(Player player) // Adds specified player to team
 void removePlayer(Player player) // Removes specified player to team
 Team getBukkitTeam() // Returns the Bukkit/vanilla team
@@ -99,6 +100,7 @@ void subtitle(Audience audience, Component subtitle) // Sends subtitle to audien
 void subtitle(Audience audience, Component subtitle, Title.Times times) // Sends subtitle with a times
 void actionbar(Audience audience, Component message) // Sends actionbar to specified audience
 void chat(Audience audience, Component message) // Sends chat message to specified audience
+void gameMessage(Audience audience, Component message) // Sends formatted game message to specified audience
 GameSidebar createSidebar() // Creates a sidebar but does not display it yet
 GameBossbar createBossbar() // Creates a bossbar but does not display it yet
 void clearUi(Audience audience) // Clears all UI elements for a specified audience

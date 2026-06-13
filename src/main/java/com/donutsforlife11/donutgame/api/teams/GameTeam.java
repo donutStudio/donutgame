@@ -1,5 +1,8 @@
 package com.donutsforlife11.donutgame.api.teams;
 
+import java.util.Collection;
+
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
@@ -40,6 +43,10 @@ public class GameTeam {
 
     public int getSize() {
         return bukkitTeam.getEntries().size();
+    }
+
+    public Collection<Player> getMembers() {
+        return bukkitTeam.getEntries().stream().map(Bukkit::getPlayerExact).filter(player -> player != null).toList();
     }
 
     public void addPlayer(Player player) {
