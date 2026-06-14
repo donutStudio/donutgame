@@ -114,6 +114,14 @@ public class ModuleManager {
         playerGames.remove(player.getUniqueId());
     }
 
+    public void handlePlayerDeath(Player player) {
+        ActiveGame activeGame = getActiveGame(player);
+
+        if (activeGame != null) {
+            activeGame.context().getInternalPlayerManager().handleDeath(player);
+        }
+    }
+
     public void handlePlayerRespawn(Player player, PlayerRespawnEvent event) {
         ActiveGame activeGame = getActiveGame(player);
 
@@ -233,12 +241,13 @@ public class ModuleManager {
 
         for (Map.Entry<String, Object> entry : configOverrides.getValues(true).entrySet()) {
             String key = entry.getKey();
+            Object value = entry.getValue();
 
-            if ("id".equals(key) || "main_class".equals(key)) {
+            if ("id".equals(key) || "main_class".equals(key) || value instanceof ConfigurationSection) {
                 continue;
             }
 
-            config.set(key, entry.getValue());
+            config.set(key, value);
         }
     }
 

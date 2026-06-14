@@ -3,7 +3,6 @@ package com.donutsforlife11.donutgame.player;
 import java.util.List;
 
 import org.bukkit.GameMode;
-import org.bukkit.Location;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
 
@@ -24,6 +23,4 @@ public class WorldPlayerState {
 
     public GameMode gameMode;
     public List<PotionEffect> potionEffects;
-
-    public Location lastLocation;
 }

@@ -19,7 +19,6 @@ public final class GameMap {
     private final BackingType backingType;
     private final Path schematicPath;
     private final Path slimePath;
-    private final String sourceName;
     private final String mapPath;
 
     GameMap(
@@ -32,7 +31,6 @@ public final class GameMap {
         BackingType backingType,
         Path schematicPath,
         Path slimePath,
-        String sourceName,
         String mapPath
     ) {
         this.id = id;
@@ -44,7 +42,6 @@ public final class GameMap {
         this.backingType = backingType;
         this.schematicPath = schematicPath;
         this.slimePath = slimePath;
-        this.sourceName = sourceName;
         this.mapPath = mapPath;
     }
 
@@ -62,7 +59,6 @@ public final class GameMap {
             Map.of(),
             List.of(),
             BackingType.NONE,
-            null,
             null,
             null,
             normalizedPath
@@ -138,10 +134,6 @@ public final class GameMap {
 
     Path slimePath() {
         return slimePath;
-    }
-
-    String sourceName() {
-        return sourceName;
     }
 
     boolean isReference() {

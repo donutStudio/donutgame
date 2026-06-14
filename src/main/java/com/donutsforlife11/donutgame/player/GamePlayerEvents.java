@@ -1,7 +1,9 @@
 package com.donutsforlife11.donutgame.player;
 
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
@@ -13,6 +15,11 @@ public class GamePlayerEvents implements Listener {
 
     public GamePlayerEvents(ModuleManager moduleManager) {
         this.moduleManager = moduleManager;
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void playerDeath(PlayerDeathEvent event) {
+        moduleManager.handlePlayerDeath(event.getPlayer());
     }
 
     @EventHandler

@@ -87,9 +87,6 @@ public class PlayerEvents implements Listener {
 
         state.gameMode = player.getGameMode();
         state.potionEffects = new ArrayList<>(player.getActivePotionEffects());
-
-        state.lastLocation = player.getLocation().clone();
-
         return state;
     }
 
@@ -154,9 +151,6 @@ public class PlayerEvents implements Listener {
 
         state.gameMode = GameMode.ADVENTURE;
         state.potionEffects = new ArrayList<>();
-
-        state.lastLocation = player.getLocation().clone();
-
         return state;
     }
 

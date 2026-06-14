@@ -2,6 +2,8 @@ package com.donutsforlife11.donutgame.commands;
 
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.concurrent.CompletableFuture;
 
 import org.bukkit.command.CommandSender;
@@ -227,25 +229,65 @@ public final class MinigameCommand implements PluginCommand {
             throw new IllegalArgumentException("Config overrides must use the {key:value} format.");
         }
 
-        YamlConfiguration parsed = YamlConfiguration.loadConfiguration(
-            new java.io.StringReader("root: " + rawConfig)
-        );
+        InlineConfigParser parser = new InlineConfigParser(rawConfig);
+        Map<String, Object> values = parser.parseObject();
+        parser.ensureFullyConsumed();
 
-        ConfigurationSection configSection = parsed.getConfigurationSection("root");
-
-        if (configSection == null) {
-            if ("{}".equals(rawConfig)) {
-                return parsed.createSection("root");
-            }
-
-            throw new IllegalArgumentException("Invalid config overrides: " + rawConfig);
-        }
-
-        if (configSection.contains("id") || configSection.contains("main_class")) {
+        if (values.containsKey("id") || values.containsKey("main_class")) {
             throw new IllegalArgumentException("The id and main_class config values cannot be overridden.");
         }
 
+        YamlConfiguration parsed = new YamlConfiguration();
+        ConfigurationSection configSection = parsed.createSection("root");
+        populateSection(configSection, values);
         return configSection;
+    }
+
+    private void populateSection(ConfigurationSection section, Map<String, Object> values) {
+        for (Map.Entry<String, Object> entry : values.entrySet()) {
+            Object value = entry.getValue();
+
+            if (value instanceof Map<?, ?> nestedMap) {
+                ConfigurationSection nestedSection = section.createSection(entry.getKey());
+                @SuppressWarnings("unchecked")
+                Map<String, Object> castMap = (Map<String, Object>) nestedMap;
+                populateSection(nestedSection, castMap);
+                continue;
+            }
+
+            if (value instanceof List<?> list) {
+                section.set(entry.getKey(), copyList(list));
+                continue;
+            }
+
+            section.set(entry.getKey(), value);
+        }
+    }
+
+    private List<Object> copyList(List<?> values) {
+        List<Object> copy = new ArrayList<>(values.size());
+
+        for (Object value : values) {
+            if (value instanceof Map<?, ?> nestedMap) {
+                Map<String, Object> converted = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> entry : nestedMap.entrySet()) {
+                    converted.put(String.valueOf(entry.getKey()), copyValue(entry.getValue()));
+                }
+                copy.add(converted);
+                continue;
+            }
+
+            copy.add(copyValue(value));
+        }
+
+        return copy;
+    }
+
+    private Object copyValue(Object value) {
+        if (value instanceof List<?> list) {
+            return copyList(list);
+        }
+        return value;
     }
 
     private List<Player> resolvePlayers(
@@ -367,6 +409,199 @@ public final class MinigameCommand implements PluginCommand {
             SuggestionsBuilder builder
         ) {
             return builder.buildFuture();
+        }
+    }
+
+    private static final class InlineConfigParser {
+        private final String input;
+        private int index;
+
+        private InlineConfigParser(String input) {
+            this.input = input;
+        }
+
+        private Map<String, Object> parseObject() {
+            skipWhitespace();
+            expect('{');
+
+            Map<String, Object> values = new LinkedHashMap<>();
+            skipWhitespace();
+
+            if (peek('}')) {
+                index++;
+                return values;
+            }
+
+            while (true) {
+                String key = parseKey();
+                skipWhitespace();
+                expect(':');
+                Object value = parseValue();
+                values.put(key, value);
+
+                skipWhitespace();
+                if (peek('}')) {
+                    index++;
+                    return values;
+                }
+
+                expect(',');
+            }
+        }
+
+        private List<Object> parseList() {
+            expect('[');
+            List<Object> values = new ArrayList<>();
+            skipWhitespace();
+
+            if (peek(']')) {
+                index++;
+                return values;
+            }
+
+            while (true) {
+                values.add(parseValue());
+                skipWhitespace();
+
+                if (peek(']')) {
+                    index++;
+                    return values;
+                }
+
+                expect(',');
+            }
+        }
+
+        private Object parseValue() {
+            skipWhitespace();
+
+            if (peek('{')) {
+                return parseObject();
+            }
+            if (peek('[')) {
+                return parseList();
+            }
+            if (peek('"') || peek('\'')) {
+                return parseQuotedString();
+            }
+
+            String token = parseBareToken();
+            if (token.isEmpty()) {
+                throw error("Expected a value.");
+            }
+
+            return coerceScalar(token);
+        }
+
+        private String parseKey() {
+            skipWhitespace();
+            if (peek('"') || peek('\'')) {
+                return parseQuotedString();
+            }
+
+            String key = parseBareToken();
+            if (key.isEmpty()) {
+                throw error("Expected a config key.");
+            }
+            return key;
+        }
+
+        private String parseQuotedString() {
+            char quote = input.charAt(index++);
+            StringBuilder builder = new StringBuilder();
+            boolean escaping = false;
+
+            while (index < input.length()) {
+                char c = input.charAt(index++);
+
+                if (escaping) {
+                    builder.append(switch (c) {
+                        case 'n' -> '\n';
+                        case 'r' -> '\r';
+                        case 't' -> '\t';
+                        default -> c;
+                    });
+                    escaping = false;
+                    continue;
+                }
+
+                if (c == '\\') {
+                    escaping = true;
+                    continue;
+                }
+
+                if (c == quote) {
+                    return builder.toString();
+                }
+
+                builder.append(c);
+            }
+
+            throw error("Unclosed quoted string.");
+        }
+
+        private String parseBareToken() {
+            int start = index;
+
+            while (index < input.length()) {
+                char c = input.charAt(index);
+                if (Character.isWhitespace(c) || c == ',' || c == ':' || c == '}' || c == ']') {
+                    break;
+                }
+                index++;
+            }
+
+            return input.substring(start, index);
+        }
+
+        private Object coerceScalar(String token) {
+            if ("true".equalsIgnoreCase(token)) {
+                return true;
+            }
+            if ("false".equalsIgnoreCase(token)) {
+                return false;
+            }
+            if ("null".equalsIgnoreCase(token)) {
+                return null;
+            }
+
+            try {
+                if (token.contains(".") || token.contains("e") || token.contains("E")) {
+                    return Double.parseDouble(token);
+                }
+                return Integer.parseInt(token);
+            } catch (NumberFormatException ignored) {
+                return token;
+            }
+        }
+
+        private void ensureFullyConsumed() {
+            skipWhitespace();
+            if (index != input.length()) {
+                throw error("Unexpected trailing config content.");
+            }
+        }
+
+        private void skipWhitespace() {
+            while (index < input.length() && Character.isWhitespace(input.charAt(index))) {
+                index++;
+            }
+        }
+
+        private void expect(char expected) {
+            skipWhitespace();
+            if (index >= input.length() || input.charAt(index) != expected) {
+                throw error("Expected '" + expected + "'.");
+            }
+            index++;
+        }
+
+        private boolean peek(char expected) {
+            return index < input.length() && input.charAt(index) == expected;
+        }
+
+        private IllegalArgumentException error(String message) {
+            return new IllegalArgumentException(message + " Near: " + input.substring(Math.min(index, input.length())));
         }
     }
 }

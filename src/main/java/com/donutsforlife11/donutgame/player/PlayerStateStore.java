@@ -24,11 +24,6 @@ public class PlayerStateStore {
         return playerStates.get(worldId);
     }
 
-    public boolean has(UUID uuid, String worldId) {
-        Map<String, WorldPlayerState> playerStates = states.get(uuid);
-        return playerStates != null && playerStates.containsKey(worldId);
-    }
-
     public void clearWorld(String worldId) {
         Iterator<Map.Entry<UUID, Map<String, WorldPlayerState>>> iterator = states.entrySet().iterator();
 

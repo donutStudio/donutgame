@@ -2,6 +2,7 @@ package com.donutsforlife11.donutgame.api.teams;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -45,15 +46,27 @@ public class TeamManager {
     }
 
     public GameTeam getPlayerTeam(Player player) {
-        return playerTeams.get(player.getUniqueId());
+        GameTeam team = playerTeams.get(player.getUniqueId());
+        if (team != null) {
+            return team;
+        }
+
+        for (GameTeam current : teams.values()) {
+            if (current.hasPlayer(player)) {
+                playerTeams.put(player.getUniqueId(), current);
+                return current;
+            }
+        }
+
+        return null;
     }
 
     public boolean playerHasTeam(Player player) {
-        return playerTeams.containsKey(player.getUniqueId());
+        return getPlayerTeam(player) != null;
     }
 
     public Collection<GameTeam> getTeams() {
-        return teams.values();
+        return List.copyOf(teams.values());
     }
 
     public boolean join(Player player, String teamId) {

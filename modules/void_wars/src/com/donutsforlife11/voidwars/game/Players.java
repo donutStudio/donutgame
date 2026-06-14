@@ -82,7 +82,7 @@ public class Players {
                 }
             }
         } else {
-            playerManager.respawnPlayer(player, respawnTime);
+            playerManager.respawnPlayer(player, respawnTime * 20);
         }
     }
 

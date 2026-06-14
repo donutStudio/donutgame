@@ -28,34 +28,12 @@ public class BorderManager {
     private static final int PARTICLE_INTERVAL = 4;
     private static final int STATIONARY_RENDER_MULTIPLIER = 2;
     private static final double SURFACE_HEIGHT_OFFSET = 0.02;
-
-    /*
-     * Smaller spacing = denser shell = more visible, but more particles.
-     *
-     * These values mean:
-     * - moving borders try to place particles around every 6 blocks
-     * - stationary borders try to place particles around every 8 blocks
-     *
-     * If a border is huge, the budget below will automatically loosen the spacing
-     * rather than allowing particle counts to explode.
-     */
     private static final double MOVING_PARTICLE_SPACING = 6.0;
     private static final double STATIONARY_PARTICLE_SPACING = 8.0;
-
-    /*
-     * Hard performance caps per border per render pass.
-     *
-     * Stationary borders render less often, but still get a lower budget because
-     * they do not need to communicate motion.
-     */
     private static final int MAX_MOVING_PARTICLES_PER_BORDER = 2500;
     private static final int MAX_STATIONARY_PARTICLES_PER_BORDER = 1600;
-
-    /*
-     * Per-axis caps prevent one enormous face from generating absurd grid sizes.
-     */
-    private static final int MAX_FACE_SAMPLES_PER_AXIS = 48;
-    private static final int MAX_EDGE_SAMPLES_PER_AXIS = 96;
+    private static final int MAX_GRID_LINES_PER_AXIS = 32;
+    private static final int MAX_LINE_SAMPLES_PER_AXIS = 96;
 
     private static final BorderParticle DEFAULT_STATIONARY_PARTICLE = BorderParticle.of(Particle.TRIAL_OMEN);
     private static final BorderParticle DEFAULT_MOVING_PARTICLE = BorderParticle.of(Particle.RAID_OMEN);
@@ -289,7 +267,7 @@ public class BorderManager {
             if (!world.equals(player.getWorld())) {
                 continue;
             }
-            if (!locationInAnyBorder(player.getLocation())) {
+            if (!isPlayerInsideAnyBorder(player)) {
                 player.damage(damageAmount);
             }
         }
@@ -346,61 +324,29 @@ public class BorderManager {
         LinkedHashSet<String> seen = new LinkedHashSet<>();
         List<Location> points = new ArrayList<>();
 
-        /*
-         * Face sampling.
-         *
-         * This preserves your current look: particles are spread over the faces,
-         * not just the outline.
-         */
         for (int axis = 0; axis < 3; axis++) {
             int axisA = (axis + 1) % 3;
             int axisB = (axis + 2) % 3;
 
-            int samplesA = samplesForAxis(radii, axisA, spacing, MAX_FACE_SAMPLES_PER_AXIS);
-            int samplesB = samplesForAxis(radii, axisB, spacing, MAX_FACE_SAMPLES_PER_AXIS);
+            int linesA = samplesForAxis(radii, axisA, spacing, MAX_GRID_LINES_PER_AXIS);
+            int linesB = samplesForAxis(radii, axisB, spacing, MAX_GRID_LINES_PER_AXIS);
+            int lineSamplesA = samplesForAxis(radii, axisA, spacing, MAX_LINE_SAMPLES_PER_AXIS);
+            int lineSamplesB = samplesForAxis(radii, axisB, spacing, MAX_LINE_SAMPLES_PER_AXIS);
 
             for (int sign : new int[] {-1, 1}) {
-                for (int u = 0; u <= samplesA; u++) {
-                    for (int v = 0; v <= samplesB; v++) {
-                        double a = lerp(-1.0, 1.0, u / (double) samplesA);
-                        double b = lerp(-1.0, 1.0, v / (double) samplesB);
-
-                        addSurfacePoint(
-                            points,
-                            seen,
-                            center,
-                            radii,
-                            shape,
-                            axisDirection(axis, sign, a, b)
-                        );
+                for (int line = 0; line <= linesA; line++) {
+                    double a = lerp(-1.0, 1.0, line / (double) linesA);
+                    for (int sample = 0; sample <= lineSamplesB; sample++) {
+                        double b = lerp(-1.0, 1.0, sample / (double) lineSamplesB);
+                        addSurfacePoint(points, seen, center, radii, shape, axisDirection(axis, sign, a, b));
                     }
                 }
-            }
-        }
 
-        /*
-         * Edge sampling.
-         *
-         * This makes the bounds easier to read from far away because the silhouette
-         * of the shape receives extra particles.
-         */
-        for (int varyingAxis = 0; varyingAxis < 3; varyingAxis++) {
-            int fixedAxisA = (varyingAxis + 1) % 3;
-            int fixedAxisB = (varyingAxis + 2) % 3;
-
-            int samples = samplesForAxis(radii, varyingAxis, spacing, MAX_EDGE_SAMPLES_PER_AXIS);
-
-            for (int signA : new int[] {-1, 1}) {
-                for (int signB : new int[] {-1, 1}) {
-                    for (int step = 0; step <= samples; step++) {
-                        double varying = lerp(-1.0, 1.0, step / (double) samples);
-
-                        Vector direction = new Vector();
-                        setAxis(direction, varyingAxis, varying);
-                        setAxis(direction, fixedAxisA, signA);
-                        setAxis(direction, fixedAxisB, signB);
-
-                        addSurfacePoint(points, seen, center, radii, shape, direction);
+                for (int line = 0; line <= linesB; line++) {
+                    double b = lerp(-1.0, 1.0, line / (double) linesB);
+                    for (int sample = 0; sample <= lineSamplesA; sample++) {
+                        double a = lerp(-1.0, 1.0, sample / (double) lineSamplesA);
+                        addSurfacePoint(points, seen, center, radii, shape, axisDirection(axis, sign, a, b));
                     }
                 }
             }
@@ -412,11 +358,6 @@ public class BorderManager {
     private double chooseSpacingForBudget(Vector radii, double targetSpacing, int maxPoints) {
         double spacing = Math.max(0.5, targetSpacing);
 
-        /*
-         * Increase spacing until the estimated number of samples is within budget.
-         * This keeps large borders symmetric instead of simply cutting off particles
-         * after maxPoints is reached.
-         */
         while (estimatePointCount(radii, spacing) > maxPoints) {
             spacing *= 1.2;
         }
@@ -431,15 +372,12 @@ public class BorderManager {
             int axisA = (axis + 1) % 3;
             int axisB = (axis + 2) % 3;
 
-            int samplesA = samplesForAxis(radii, axisA, spacing, MAX_FACE_SAMPLES_PER_AXIS);
-            int samplesB = samplesForAxis(radii, axisB, spacing, MAX_FACE_SAMPLES_PER_AXIS);
+            int linesA = samplesForAxis(radii, axisA, spacing, MAX_GRID_LINES_PER_AXIS);
+            int linesB = samplesForAxis(radii, axisB, spacing, MAX_GRID_LINES_PER_AXIS);
+            int lineSamplesA = samplesForAxis(radii, axisA, spacing, MAX_LINE_SAMPLES_PER_AXIS);
+            int lineSamplesB = samplesForAxis(radii, axisB, spacing, MAX_LINE_SAMPLES_PER_AXIS);
 
-            total += 2 * (samplesA + 1) * (samplesB + 1);
-        }
-
-        for (int varyingAxis = 0; varyingAxis < 3; varyingAxis++) {
-            int samples = samplesForAxis(radii, varyingAxis, spacing, MAX_EDGE_SAMPLES_PER_AXIS);
-            total += 4 * (samples + 1);
+            total += 2 * ((linesA + 1) * (lineSamplesB + 1) + (linesB + 1) * (lineSamplesA + 1));
         }
 
         return total;
@@ -499,12 +437,22 @@ public class BorderManager {
         };
     }
 
-    private void setAxis(Vector vector, int axis, double value) {
-        switch (axis) {
-            case 0 -> vector.setX(value);
-            case 1 -> vector.setY(value);
-            default -> vector.setZ(value);
+    private boolean isPlayerInsideAnyBorder(Player player) {
+        if (locationInAnyBorder(player.getLocation())) {
+            return true;
         }
+
+        org.bukkit.util.BoundingBox box = player.getBoundingBox();
+        World world = player.getWorld();
+
+        return locationInAnyBorder(new Location(world, box.getMinX(), box.getMinY(), box.getMinZ()))
+            || locationInAnyBorder(new Location(world, box.getMinX(), box.getMinY(), box.getMaxZ()))
+            || locationInAnyBorder(new Location(world, box.getMaxX(), box.getMinY(), box.getMinZ()))
+            || locationInAnyBorder(new Location(world, box.getMaxX(), box.getMinY(), box.getMaxZ()))
+            || locationInAnyBorder(new Location(world, box.getMinX(), box.getMaxY(), box.getMinZ()))
+            || locationInAnyBorder(new Location(world, box.getMinX(), box.getMaxY(), box.getMaxZ()))
+            || locationInAnyBorder(new Location(world, box.getMaxX(), box.getMaxY(), box.getMinZ()))
+            || locationInAnyBorder(new Location(world, box.getMaxX(), box.getMaxY(), box.getMaxZ()));
     }
 
     private static double lerp(double start, double end, double amount) {

@@ -7,8 +7,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 
-import net.kyori.adventure.text.Component;
-
 public class GameTeam {
     private final String id;
     private final Team bukkitTeam;
@@ -18,7 +16,6 @@ public class GameTeam {
     public GameTeam(String id, Scoreboard scoreboard, TeamProperties properties) {
         this.id = id;
         this.properties = properties;
-        properties.displayName = Component.text(id);
 
         this.bukkitTeam = scoreboard.registerNewTeam(id);
         applyProperties();

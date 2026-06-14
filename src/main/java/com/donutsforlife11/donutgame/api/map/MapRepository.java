@@ -178,7 +178,6 @@ public final class MapRepository {
             backingType,
             schematicPath,
             slimePath,
-            sourceName,
             null
         );
     }
