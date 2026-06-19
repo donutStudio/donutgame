@@ -41,7 +41,7 @@ public final class Donutgame extends JavaPlugin {
     private PlayerStateStore playerStateStore = new PlayerStateStore();
     private PlayerEvents playerEvents;
     private final List<URLClassLoader> moduleLoaders = new ArrayList<>();
-    private Map<String, GameModuleDescriptor> gameModules = new HashMap<>();
+    private final Map<String, GameModuleDescriptor> gameModules = new HashMap<>();
 
     private ModuleManager moduleManager;
     private WorldManager worldManager;
