@@ -14,6 +14,8 @@ import org.bukkit.scheduler.BukkitTask;
 
 import com.donutsforlife11.donutgame.api.ui.title.TitlePacketTracker;
 
+import fr.skytasul.glowingentities.GlowingBlocks;
+import fr.skytasul.glowingentities.GlowingEntities;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.audience.ForwardingAudience;
 import net.kyori.adventure.text.Component;
@@ -27,6 +29,7 @@ public class UIManager {
     private final UITheme theme = new UITheme();
     private final Set<GameSidebar> sidebars = ConcurrentHashMap.newKeySet();
     private final Set<GameBossbar> bossbars = ConcurrentHashMap.newKeySet();
+    private final Set<GameGlow> glows = ConcurrentHashMap.newKeySet();
     private final TitlePacketTracker titlePacketTracker;
 
     private final Object taskLock = new Object();
@@ -35,9 +38,14 @@ public class UIManager {
     private volatile boolean shutdown;
     private volatile long tick;
 
+    private GlowingEntities glowingEntities;
+    private GlowingBlocks glowingBlocks;
+
     public UIManager(Plugin plugin) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.titlePacketTracker = new TitlePacketTracker(plugin);
+        this.glowingEntities = new GlowingEntities(plugin);
+        this.glowingBlocks = new GlowingBlocks(plugin);
     }
 
     public void title(Audience audience, Component title) {
@@ -108,6 +116,13 @@ public class UIManager {
         return bossbar;
     }
 
+    public GameGlow createGlow() {
+        requireActive();
+        GameGlow glow = new GameGlow(this);
+        glows.add(glow);
+        return glow;
+    }
+
     public void clearUi(Audience audience) {
         requireActive();
 
@@ -122,6 +137,13 @@ public class UIManager {
 
         sidebars.forEach(sidebar -> sidebar.hidePlayers(players));
         bossbars.forEach(bossbar -> bossbar.hidePlayers(players));
+    }
+
+    protected GlowingEntities glowingEntities() {
+        return glowingEntities;
+    }
+    protected GlowingBlocks glowingBlocks() {
+        return glowingBlocks;
     }
 
     public UITheme theme() {
@@ -150,6 +172,11 @@ public class UIManager {
 
     void remove(GameBossbar bossbar) {
         bossbars.remove(bossbar);
+        stopTaskIfIdle();
+    }
+
+    void remove(GameGlow glow) {
+        glows.remove(glow);
         stopTaskIfIdle();
     }
 

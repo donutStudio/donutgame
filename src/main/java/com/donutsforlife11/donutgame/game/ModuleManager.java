@@ -40,8 +40,9 @@ public class ModuleManager {
         YamlConfiguration config = descriptor.createConfig();
         applyConfigOverrides(config, configOverrides);
 
-        PlayerManager playerManager = new PlayerManager(plugin);
+        TimeManager timeManager = new TimeManager(plugin);
         UIManager uiManager = new UIManager(plugin);
+        PlayerManager playerManager = new PlayerManager(plugin, timeManager, uiManager);
 
         ModuleApi context = new ModuleApi(
             plugin,
@@ -49,7 +50,7 @@ public class ModuleManager {
             descriptor.id(),
             config,
             new TeamManager(),
-            new TimeManager(plugin),
+            timeManager,
             playerManager,
             uiManager
         );

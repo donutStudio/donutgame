@@ -9,13 +9,16 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.Chest;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Entity;
+import org.bukkit.loot.LootTable;
 import org.bukkit.util.BoundingBox;
 
 public final class GameWorld {
@@ -127,6 +130,16 @@ public final class GameWorld {
         exitActions.computeIfAbsent(regionName, ignored -> new CopyOnWriteArrayList<>()).add(action);
     }
 
+    public void setBlock(Location loc, Material material) {
+        Objects.requireNonNull(material, "material");
+        setBlock(loc, material.createBlockData());
+    }
+
+    public void setBlock(Location loc, BlockData blockData) {
+        Objects.requireNonNull(blockData, "blockData");
+        loc.getBlock().setBlockData(blockData);
+    }
+
     public CompletableFuture<Void> fillArea(BoundingBox box, Material material) {
         Objects.requireNonNull(material, "material");
         return fillArea(box, material.createBlockData());
@@ -136,6 +149,15 @@ public final class GameWorld {
         requireRegion(box);
         Objects.requireNonNull(blockData, "blockData");
         return regionFiller.fill(bukkitWorld, box, blockData);
+    }
+
+    public void spawnLootChest(Location loc, LootTable lootTable) {
+        setBlock(loc, Material.CHEST);
+        if (loc.getBlock().getState() instanceof Chest chestBlock) {
+            chestBlock.getInventory().clear();
+            chestBlock.setLootTable(lootTable, ThreadLocalRandom.current().nextLong());
+            chestBlock.update(true);
+        }
     }
 
     public void handleRegionCheck(Entity entity, Location from, Location to) {

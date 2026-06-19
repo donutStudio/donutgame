@@ -105,9 +105,8 @@ GameSidebar createSidebar() // Creates a sidebar but does not display it yet
 GameBossbar createBossbar() // Creates a bossbar but does not display it yet
 void clearUi(Audience audience) // Clears all UI elements for a specified audience
 // TO BE IMPLEMENTED:
-void setGlowing(Entity entity, boolean glowing) // Sets whether or not an entity is glowing for all players
-void setGlowing(Entity entity, boolean glowing, Audience audience) // Same as above but entity only glows for a specified audience
-void setGlowColor(Entity entity, ChatColor color) // Sets glow color of an entity
+
+
 ```
 **GameSidebar**
 ```java
@@ -205,7 +204,8 @@ void addRegion(BoundingBox box, String regionName) // Adds region of specified n
 int removeRegion(BoundingBox box, String regionName) // Removes all regions that cover exactly the specified bounding box with a certain name (returns number removed)
 void onEntityEnterRegion(String regionName, Consumer<Entity> action) // Runs action when an entity enters a region
 void onEntityExitRegion(String regionName, Consumer<Entity> action) // Runs action when an entity exits a region
-CompletableFuture<Void> clearArea(BoundingBox box) // Deletes blocks/entities/everything else in a bounding box that does not necessarily have to be a region
+void setBlock(Location loc, BlockData blockData) // Sets a block with specified block data or material
+CompletableFuture<Void> fillArea(BoundingBox box, BlockData blockData) // Fills bounding box with specified block data or material
 ```
 **GameMap**
 ```java
@@ -220,8 +220,6 @@ enum **MapRotation**:
 enum MapRotation {DEG_0, DEG_90, DEG_180, DEG_270} // The four possible rotations of the map along y axis, counterclockwise
 static MapRotation fromDegrees(int degrees) // Returns a MapRotation which rotates map by either 0, 90, 180, or 270 degrees
 ```
-
-Everything below is yet to be implemented:
 
 ## BORDERS
 **BorderManager**

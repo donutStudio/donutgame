@@ -12,6 +12,7 @@ dependencies {
     compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.3.12")
     // Provided by the AdvancedSlimePaper server jar.
     compileOnly("com.infernalsuite.asp:api:4.0.0-SNAPSHOT")
+    compileOnly("fr.skytasul:glowingentities:1.4.11");
 
     // NOT provided by the server jar. This must be shaded into your plugin jar.
     implementation("com.infernalsuite.asp:file-loader:4.0.0-SNAPSHOT") {

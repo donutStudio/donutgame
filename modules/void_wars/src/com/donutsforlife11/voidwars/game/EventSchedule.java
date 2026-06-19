@@ -1,6 +1,9 @@
 package com.donutsforlife11.voidwars.game;
 
+import java.util.List;
+
 import org.bukkit.GameRules;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.util.BoundingBox;
 
@@ -42,5 +45,11 @@ public class EventSchedule {
             world.getBukkitWorld().setGameRule(GameRules.PVP, true);
             uiManager.gameMessage(Audience.audience(playerManager.getPlayers()), Component.text("PvP is now enabled!"));
         });
+    }
+
+    public static void spawnChests(List<Location> locations) {
+        for (Location location : locations) {
+            world.spawnLootChest(location, null);
+        }
     }
 }

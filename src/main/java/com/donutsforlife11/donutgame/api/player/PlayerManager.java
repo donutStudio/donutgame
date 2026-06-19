@@ -16,24 +16,34 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.scheduler.BukkitTask;
+
+import com.donutsforlife11.donutgame.api.time.GameTimer;
+import com.donutsforlife11.donutgame.api.time.TimeManager;
+import com.donutsforlife11.donutgame.api.ui.UIManager;
+
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 
 public class PlayerManager {
     private final Plugin plugin;
+    private final TimeManager timeManager;
+    private final UIManager uiManager;
     private final Set<UUID> players = new LinkedHashSet<>();
     private final Set<UUID> playersInWorld = ConcurrentHashMap.newKeySet();
     private final Set<UUID> spectators = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Location> spawns = new ConcurrentHashMap<>();
     private final Map<UUID, GameMode> nonSpectatorModes = new ConcurrentHashMap<>();
-    private final Map<UUID, BukkitTask> respawnTasks = new ConcurrentHashMap<>();
+    private final Map<UUID, GameTimer> respawnTasks = new ConcurrentHashMap<>();
     private final Set<UUID> pendingRespawns = ConcurrentHashMap.newKeySet();
     private final List<Consumer<Player>> onRegisteredActions = new CopyOnWriteArrayList<>();
     private final List<Consumer<Player>> onEnteredWorldActions = new CopyOnWriteArrayList<>();
 
     private volatile boolean shutdown;
 
-    public PlayerManager(Plugin plugin) {
+    public PlayerManager(Plugin plugin, TimeManager timeManager, UIManager uiManager) {
         this.plugin = plugin;
+        this.timeManager = timeManager;
+        this.uiManager = uiManager;
     }
 
     public Collection<Player> getPlayers() {
@@ -108,12 +118,17 @@ public class PlayerManager {
             return;
         }
 
-        BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            respawnTasks.remove(player.getUniqueId());
+        // New
+        GameTimer task = timeManager.createTimer(time).whileRunning(20, timer -> {
+            int remainingSeconds = timer.getRemainingSeconds();
+            String formattedTimeString = String.format("%02d:%02d", remainingSeconds / 60, remainingSeconds % 60);
+            uiManager.actionbar(player, Component.text("Respawning in: ").append(Component.text(formattedTimeString, NamedTextColor.GREEN)));
+        }).onEnd(end -> {
             if (isRegistered(player)) {
+                respawnTasks.remove(player.getUniqueId());
                 triggerRespawn(player);
             }
-        }, time);
+        }).start();
 
         respawnTasks.put(player.getUniqueId(), task);
     }
@@ -121,7 +136,7 @@ public class PlayerManager {
     public void cancelRespawn(Player player) {
         pendingRespawns.remove(player.getUniqueId());
 
-        BukkitTask task = respawnTasks.remove(player.getUniqueId());
+        GameTimer task = respawnTasks.remove(player.getUniqueId());
         if (task != null) {
             task.cancel();
         }
@@ -219,7 +234,7 @@ public class PlayerManager {
 
     public void shutdown() {
         shutdown = true;
-        List.copyOf(respawnTasks.values()).forEach(BukkitTask::cancel);
+        List.copyOf(respawnTasks.values()).forEach(GameTimer::cancel);
         respawnTasks.clear();
         pendingRespawns.clear();
         players.clear();

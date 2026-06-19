@@ -35,7 +35,7 @@ public class Players {
         Location spawnPoint = game.world().getPoints("spawn").getFirst();
         player.teleportAsync(spawnPoint);
         playerManager.setPlayerSpawn(player, spawnPoint);
-        if (game.gameStarted) {
+        if (game.gameStarted()) {
             playerManager.setSpectator(player);
         } else {
             playerManager.setNonSpectator(player);

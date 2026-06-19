@@ -141,9 +141,9 @@ public class WorldManager {
                     );
 
                     BlockVector3 max = BlockVector3.at(
-                        Math.ceil(box.getMaxX()) - 1,
-                        Math.ceil(box.getMaxY()) - 1,
-                        Math.ceil(box.getMaxZ()) - 1
+                        Math.ceil(box.getMaxX()),
+                        Math.ceil(box.getMaxY()),
+                        Math.ceil(box.getMaxZ())
                     );
 
                     com.sk89q.worldedit.world.block.BlockState worldEditBlock =
