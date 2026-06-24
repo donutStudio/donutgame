@@ -41,6 +41,7 @@ public class VoidWars extends GameModule {
         }
 
         EventSchedule.groundCollapseTimer(config.getInt("ground_collapse_time")).start();
+        EventSchedule.spawnChests(world.getPoints("chest"));
         sidebar = Ui.sidebar().setVisibility(true);
     }
 

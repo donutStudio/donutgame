@@ -16,6 +16,7 @@ import com.donutsforlife11.voidwars.VoidWars;
 
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 
 public class EventSchedule {
     private static TimeManager timeManager;
@@ -50,6 +51,7 @@ public class EventSchedule {
     public static void spawnChests(List<Location> locations) {
         for (Location location : locations) {
             world.spawnLootChest(location, null);
+            uiManager.createGlow().setTarget(location.getBlock()).setAudience(Audience.audience(playerManager.getPlayers())).setColor(NamedTextColor.RED);
         }
     }
 }

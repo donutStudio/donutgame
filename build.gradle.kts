@@ -1,6 +1,6 @@
 plugins {
     java
-    id("com.gradleup.shadow") version "8.3.6"
+    id("com.gradleup.shadow") version "8.3.10"
 }
 
 group = "com.donutsforlife11"
@@ -12,7 +12,7 @@ dependencies {
     compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.3.12")
     // Provided by the AdvancedSlimePaper server jar.
     compileOnly("com.infernalsuite.asp:api:4.0.0-SNAPSHOT")
-    compileOnly("fr.skytasul:glowingentities:1.4.11");
+    implementation("fr.skytasul:glowingentities:1.4.11")
 
     // NOT provided by the server jar. This must be shaded into your plugin jar.
     implementation("com.infernalsuite.asp:file-loader:4.0.0-SNAPSHOT") {
@@ -21,13 +21,14 @@ dependencies {
 }
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(25))
+        languageVersion.set(JavaLanguageVersion.of(21))
     }
 }
 
 tasks {
     compileJava {
         options.encoding = "UTF-8"
+        options.release.set(21)
     }
 
     processResources {
@@ -49,6 +50,11 @@ tasks {
         archiveBaseName.set("donutgame")
         archiveClassifier.set("")
         archiveVersion.set(project.version.toString())
+
+        relocate(
+            "fr.skytasul.glowingentities",
+            "com.donutsforlife11.donutgame.libs.glowingentities"
+        )
 
         // Do NOT relocate com.infernalsuite.* here.
         // Your code directly imports FileLoader, so it should remain in its normal package.
