@@ -34,6 +34,9 @@ public class PlayerManager {
 
         return true;
     }
+    public boolean isRegistered(Player player) {
+        return players.contains(player.getUniqueId());
+    }
 
     public void notifyPlayerEnteredWorld(Player player) {
         if (!isRegistered(player)) {
