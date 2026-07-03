@@ -8,10 +8,10 @@ import java.util.concurrent.CompletableFuture;
 
 import org.bukkit.plugin.Plugin;
 
-public class ModuleManager {
+public class ModuleRegistry {
     private final Plugin plugin;
 
-    public ModuleManager(Plugin plugin) {
+    public ModuleRegistry(Plugin plugin) {
         this.plugin = plugin;
     }
 
