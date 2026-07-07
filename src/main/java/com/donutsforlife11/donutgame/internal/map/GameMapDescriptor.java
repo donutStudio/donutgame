@@ -9,7 +9,7 @@ public record GameMapDescriptor(
     Path runtimeMapFolder,
     BackingType backingType,
     String assetName,
-    Path runtimeAssetPath
+    Path assetPath
 ) {
     public enum BackingType {
         NONE,

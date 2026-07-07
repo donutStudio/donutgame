@@ -51,11 +51,15 @@ public class MapRegistry {
                 descriptor.mapPath().getFileName().toString(),
                 descriptor.runtimeMapFolder(),
                 descriptor.assetName(),
-                descriptor.runtimeAssetPath()
+                descriptor.assetPath()
             );
         } catch (IOException e) {
             throw new IllegalStateException("Failed to load map " + descriptor.mapPath(), e);
         }
+    }
+
+    public File runtimeFolder() {
+        return runtimeFolder;
     }
 
     private GameMap readGameMap(InputStream inputStream, String sourceName, Path runtimeMapFolder, String assetName, Path runtimeAssetPath) throws IOException {
@@ -179,9 +183,6 @@ public class MapRegistry {
     private String stripExtension(String fileName) {
         int extensionIndex = fileName.lastIndexOf('.');
         return extensionIndex == -1 ? fileName : fileName.substring(0, extensionIndex);
-    }
-    private String sanitizeFileName(String fileName) {
-        return fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
     private Map<?, ?> asMap(Object value, String entryName, String keyName) {
         if (value instanceof Map<?, ?> map) {
