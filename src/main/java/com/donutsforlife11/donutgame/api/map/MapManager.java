@@ -13,14 +13,14 @@ import org.bukkit.util.BoundingBox;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.internal.map.GameMapDescriptor;
 import com.donutsforlife11.donutgame.internal.map.GameMapDescriptor.BackingType;
-import com.donutsforlife11.donutgame.internal.map.MapRegistry;
-import com.donutsforlife11.donutgame.internal.map.WorldRegistry;
+import com.donutsforlife11.donutgame.internal.map.MapService;
+import com.donutsforlife11.donutgame.internal.map.WorldService;
 
 public class MapManager {
     public static final String DEFAULT_MAP_ID = "donutgame_default";
 
-    private final MapRegistry mapRegistry;
-    private final WorldRegistry worldRegistry;
+    private final MapService mapService;
+    private final WorldService worldService;
     private final PlayerManager playerManager;
 
     private final String gameId;
@@ -29,34 +29,47 @@ public class MapManager {
     private volatile GameMap currentMap;
     private volatile GameWorld currentWorld;
 
-    public MapManager(MapRegistry mapRegistry, WorldRegistry worldRegistry, PlayerManager playerManager, String gameId, int gameIndex) {
-        this.mapRegistry = mapRegistry;
-        this.worldRegistry = worldRegistry;
+    public MapManager(MapService mapService, WorldService worldService, PlayerManager playerManager, String gameId, int gameIndex) {
+        this.mapService = mapService;
+        this.worldService = worldService;
         this.playerManager = playerManager;
         this.gameId = gameId;
         this.gameIndex = gameIndex;
     }
 
+    public CompletableFuture<GameMap> setMap(String mapId) {
+        Objects.requireNonNull(mapId, "mapId");
+
+        GameMapDescriptor descriptor = mapService.getGameMapDescriptor(mapId);
+        if (descriptor == null) {
+            return CompletableFuture.failedFuture(
+                new IllegalArgumentException("Unknown map: " + mapId)
+            );
+        }
+
+        GameMap map = mapService.loadGameMap(descriptor);
+        return setMap(map);
+    }
     public CompletableFuture<GameMap> setMap(GameMap map) {
         Objects.requireNonNull(map, "Map is null!");
-        GameMapDescriptor descriptor = mapRegistry.getGameMapDescriptor(map.id());
-        GameMap gameMap = mapRegistry.loadGameMap(descriptor);
+        GameMapDescriptor descriptor = mapService.getGameMapDescriptor(map.id());
+        GameMap gameMap = mapService.loadGameMap(descriptor);
         GameMapDescriptor templateDescriptor = descriptor.backingType() == BackingType.WORLD
             ? descriptor
-            : mapRegistry.getGameMapDescriptor(DEFAULT_MAP_ID);
+            : mapService.getGameMapDescriptor(DEFAULT_MAP_ID);
         if (templateDescriptor.backingType() != BackingType.WORLD) {
             return CompletableFuture.failedFuture(
                 new IllegalStateException("Default map " + DEFAULT_MAP_ID + " must be world-backed.")
             );
         }
         String instanceWorldName = gameId + "_" + gameIndex + "_" + gameMap.id();
-        CompletableFuture<GameMap> future = worldRegistry.loadSlimeWorld(templateDescriptor.assetPath(), instanceWorldName)
+        CompletableFuture<GameMap> future = worldService.loadSlimeWorld(templateDescriptor.assetPath(), instanceWorldName)
             .thenCompose(world -> {
                 GameWorld newWorld = new GameWorld(world);
                 CompletableFuture<Void> registerMapFuture = CompletableFuture.completedFuture(null);
-                if (templateDescriptor.backingType() == BackingType.SCHEMATIC) {
+                if (descriptor.backingType() == BackingType.SCHEMATIC) {
                     Location schemLoc = new Location(newWorld.getBukkitWorld(), 0, 0, 0);
-                    registerMapFuture = worldRegistry.pasteSchematic(descriptor.assetPath(), newWorld.getBukkitWorld(), schemLoc, MapRotation.DEG_0)
+                    registerMapFuture = worldService.pasteSchematic(descriptor.assetPath(), newWorld.getBukkitWorld(), schemLoc, MapRotation.DEG_0)
                         .thenAccept(metadata -> {
                             registerMapData(newWorld, gameMap, schemLoc, MapRotation.DEG_0, metadata);
                         });
@@ -80,6 +93,23 @@ public class MapManager {
         return future;
     }
 
+
+    public CompletableFuture<Void> placeMap(String mapId, Location location) {
+        return placeMap(mapId, location, MapRotation.DEG_0);
+    }
+    public CompletableFuture<Void> placeMap(String mapId, Location location, MapRotation rotation) {
+        Objects.requireNonNull(mapId, "mapId");
+
+        GameMapDescriptor descriptor = mapService.getGameMapDescriptor(mapId);
+        if (descriptor == null) {
+            return CompletableFuture.failedFuture(
+                new IllegalArgumentException("Unknown map: " + mapId)
+            );
+        }
+
+        GameMap map = mapService.loadGameMap(descriptor);
+        return placeMap(map, location, rotation);
+    }
     public CompletableFuture<Void> placeMap(GameMap map, Location location) {
         return placeMap(map, location, MapRotation.DEG_0);
     }
@@ -88,7 +118,7 @@ public class MapManager {
         Objects.requireNonNull(map, "map");
         Objects.requireNonNull(location, "location");
         Objects.requireNonNull(rotation, "rotation");
-        GameMapDescriptor descriptor = mapRegistry.getGameMapDescriptor(map.id());
+        GameMapDescriptor descriptor = mapService.getGameMapDescriptor(map.id());
         if (descriptor.backingType() == BackingType.WORLD) {
             return CompletableFuture.failedFuture(new IllegalArgumentException("World-backed maps cannot be placed into an existing world."));
         }
@@ -102,10 +132,14 @@ public class MapManager {
         if (descriptor.backingType() != BackingType.SCHEMATIC) {
             registerMapData(world, map, location, rotation, null);
         }
-        return worldRegistry.pasteSchematic(descriptor.assetPath(), world.getBukkitWorld(), location, rotation)
+        return worldService.pasteSchematic(descriptor.assetPath(), world.getBukkitWorld(), location, rotation)
             .thenAccept(metadata -> {
                 registerMapData(world, map, location, rotation, metadata);
             });
+    }
+
+    public CompletableFuture<Void> unloadCurrentWorld() {
+        return worldService.unloadWorld(currentWorld.getBukkitWorld().getName());
     }
 
     public GameWorld currentWorld() {
@@ -120,9 +154,9 @@ public class MapManager {
         GameMap map, 
         Location origin, 
         MapRotation rotation, 
-        WorldRegistry.SchematicMetadata schematicMetadata 
+        WorldService.SchematicMetadata schematicMetadata 
     ) {
-        GameMapDescriptor descriptor = mapRegistry.getGameMapDescriptor(map.id());
+        GameMapDescriptor descriptor = mapService.getGameMapDescriptor(map.id());
         if (descriptor.backingType() == BackingType.WORLD) {
             for (Map.Entry<String, List<GameMap.MapPoint>> entry : map.points().entrySet()) {
                 for (GameMap.MapPoint point : entry.getValue()) {
@@ -151,7 +185,7 @@ public class MapManager {
             return;
         }
         Location baseLocation = origin == null ? new Location(world.getBukkitWorld(), 0, 0, 0) : origin;
-        WorldRegistry.SchematicMetadata metadata = schematicMetadata == null ? worldRegistry.getSchematicMetadata(descriptor.assetPath()) : schematicMetadata;
+        WorldService.SchematicMetadata metadata = schematicMetadata == null ? worldService.getSchematicMetadata(descriptor.assetPath()) : schematicMetadata;
         for (Map.Entry<String, List<GameMap.MapPoint>> entry : map.points().entrySet()) {
             for (GameMap.MapPoint point : entry.getValue()) {
                 world.addPoint(transformPoint(baseLocation, point, rotation, metadata), entry.getKey());
@@ -173,7 +207,7 @@ public class MapManager {
             Math.max(region.min().z(), region.max().z())
         );
     }
-    private Location transformPoint(Location origin, GameMap.MapPoint point, MapRotation rotation, WorldRegistry.SchematicMetadata metadata) {
+    private Location transformPoint(Location origin, GameMap.MapPoint point, MapRotation rotation, WorldService.SchematicMetadata metadata) {
         int width = metadata == null ? 0 : metadata.width();
         int depth = metadata == null ? 0 : metadata.depth();
         int x = point.x();
@@ -187,7 +221,7 @@ public class MapManager {
             case DEG_270 -> new Location(origin.getWorld(), origin.getBlockX() - z + Math.max(0, depth - 1), origin.getBlockY() + y, origin.getBlockZ() + x);
         };
     }
-    private BoundingBox transformRegion(Location origin, GameMap.MapRegion region, MapRotation rotation, WorldRegistry.SchematicMetadata metadata) {
+    private BoundingBox transformRegion(Location origin, GameMap.MapRegion region, MapRotation rotation, WorldService.SchematicMetadata metadata) {
         int[] xs = { region.min().x(), region.max().x() };
         int[] ys = { region.min().y(), region.max().y() };
         int[] zs = { region.min().z(), region.max().z() };

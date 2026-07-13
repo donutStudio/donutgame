@@ -16,6 +16,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -28,7 +30,7 @@ import com.donutsforlife11.donutgame.internal.game.GameModule;
 import com.donutsforlife11.donutgame.internal.game.GameModuleDescriptor;
 import com.donutsforlife11.donutgame.internal.map.GameMapDescriptor;
 
-public class FileRegistry {
+public class FileService {
     private final Map<String, GameModuleDescriptor> gameModules = new HashMap<>();
     private final Map<String, GameMapDescriptor> gameMaps = new HashMap<>();
     private final List<URLClassLoader> moduleLoaders = new ArrayList<>();
@@ -37,7 +39,7 @@ public class FileRegistry {
     private final File mapsFolder;
     private final File runtimeFolder;
 
-    public FileRegistry(Plugin plugin) {
+    public FileService(Plugin plugin) {
         this.plugin = plugin;
         this.modulesFolder = new File(this.plugin.getDataFolder(), plugin.getConfig().getString("modules_directory"));
         this.mapsFolder = new File(this.plugin.getDataFolder(), plugin.getConfig().getString("maps_directory"));
@@ -94,12 +96,19 @@ public class FileRegistry {
         moduleLoaders.add(loader);
 
         String configText;
-        try (InputStream stream = loader.getResourceAsStream("config.yml")) {
-            if (stream == null) {
-                throw new IllegalArgumentException("Module jar is missing config.yml: " + gameModule.getName());
+        try (JarFile jar = new JarFile(gameModule)) {
+            JarEntry configEntry = jar.getJarEntry("config.yml");
+            if (configEntry == null) {
+                throw new IllegalArgumentException(
+                    "Module jar is missing config.yml: " + gameModule.getName()
+                );
             }
-
-            configText = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+            try (InputStream stream = jar.getInputStream(configEntry)) {
+                configText = new String(
+                    stream.readAllBytes(),
+                    StandardCharsets.UTF_8
+                );
+            }
         }
 
         YamlConfiguration config = YamlConfiguration.loadConfiguration(new StringReader(configText));

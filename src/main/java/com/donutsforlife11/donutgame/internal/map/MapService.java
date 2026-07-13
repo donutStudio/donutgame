@@ -17,19 +17,19 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import com.donutsforlife11.donutgame.api.map.GameMap;
-import com.donutsforlife11.donutgame.internal.file.FileRegistry;
+import com.donutsforlife11.donutgame.internal.file.FileService;
 
-public class MapRegistry {
+public class MapService {
     private final File runtimeFolder;
-    private final FileRegistry fileRegistry;
+    private final FileService fileService;
 
-    public MapRegistry(FileRegistry fileRegistry) {
-        this.fileRegistry = fileRegistry;
-        runtimeFolder = fileRegistry.runtimeFolder();
+    public MapService(FileService fileService) {
+        this.fileService = fileService;
+        runtimeFolder = fileService.runtimeFolder();
     }
 
     public GameMap loadGameMap(String id) {
-        return loadGameMap(fileRegistry.getGameMapDescriptor(id));
+        return loadGameMap(fileService.getGameMapDescriptor(id));
     }
 
     public GameMap loadGameMap(GameMapDescriptor descriptor) {
@@ -37,11 +37,11 @@ public class MapRegistry {
     }
 
     public GameMapDescriptor getGameMapDescriptor(String id) {
-        return fileRegistry.getGameMapDescriptor(id);
+        return fileService.getGameMapDescriptor(id);
     }
 
-    public FileRegistry fileRegistry() {
-        return fileRegistry;
+    public FileService fileService() {
+        return fileService;
     }
 
     private GameMap readGameMap(GameMapDescriptor descriptor) {
@@ -72,7 +72,7 @@ public class MapRegistry {
                 if (entry.isDirectory()) {
                     continue;
                 }
-                String entryName = fileRegistry.normalizeFileName(entry.getName());
+                String entryName = fileService.normalizeFileName(entry.getName());
                 byte[] entryBytes = zipInputStream.readAllBytes();
                 if (assetName != null && entryName.equals(assetName)) {
                     if (runtimeAssetPath == null) {
@@ -106,7 +106,7 @@ public class MapRegistry {
         if (mapYamlBytes == null) {
             throw new IllegalStateException("Map " + sourceName + " is missing map.yml!");
         }
-        YamlConfiguration metadata = fileRegistry.loadYaml(mapYamlBytes);
+        YamlConfiguration metadata = fileService.loadYaml(mapYamlBytes);
         String id = metadata.getString("id");
         if (id == null || id.isBlank()) {
             throw new IllegalStateException("Map " + sourceName + " is missing an id!");

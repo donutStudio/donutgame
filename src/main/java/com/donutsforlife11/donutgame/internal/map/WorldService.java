@@ -41,14 +41,14 @@ import com.sk89q.worldedit.math.transform.AffineTransform;
 import com.sk89q.worldedit.regions.CuboidRegion;
 import com.sk89q.worldedit.session.ClipboardHolder;
 
-public class WorldRegistry {
+public class WorldService {
     private final AdvancedSlimePaperAPI asp = AdvancedSlimePaperAPI.instance();
     private final Plugin plugin;
     private final PlayerStateStore playerStateStore;
     private final Map<String, WorldSession> worldsByName = new ConcurrentHashMap<>();
     private final Map<Path, CachedClipboard> clipboardCache = new ConcurrentHashMap<>();
 
-    public WorldRegistry(Plugin plugin, PlayerStateStore playerStateStore) {
+    public WorldService(Plugin plugin, PlayerStateStore playerStateStore) {
         this.plugin = plugin;
         this.playerStateStore = playerStateStore;
     }
