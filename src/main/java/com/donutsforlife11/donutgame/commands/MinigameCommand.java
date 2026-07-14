@@ -73,6 +73,12 @@ public class MinigameCommand implements PluginCommand {
                 "index",
                 IntegerArgumentType.integer(0)
             )
+                .suggests((context, builder) -> {
+                    for (int i : moduleService.activeGames().keySet()) {
+                        builder.suggest(i);
+                    }
+                    return builder.buildFuture();
+                })
                 .executes(context -> {
                     int index = IntegerArgumentType.getInteger(
                         context,

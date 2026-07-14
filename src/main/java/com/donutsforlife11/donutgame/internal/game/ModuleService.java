@@ -1,5 +1,6 @@
 package com.donutsforlife11.donutgame.internal.game;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -9,6 +10,7 @@ import java.util.concurrent.CompletableFuture;
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
+import com.donutsforlife11.donutgame.api.ui.UiManager;
 
 public class ModuleService {
     private final Donutgame plugin;
@@ -34,8 +36,9 @@ public class ModuleService {
             module.initialize(
                 descriptor, 
                 index, 
-                new PlayerManager(plugin), 
-                new MapManager(plugin.mapService(), plugin.worldService(), module.playerManager(), descriptor.id(), index)
+                new PlayerManager(module), 
+                new MapManager(module, plugin.mapService(), plugin.worldService()),
+                new UiManager(module, plugin)
             );
             module.startLoadSequence();
             return CompletableFuture.completedFuture(module);
@@ -55,5 +58,9 @@ public class ModuleService {
             freeIndexes.offer(index);
             return true;
         });
+    }
+
+    public Map<Integer, GameModule> activeGames() {
+        return Collections.unmodifiableMap(activeGames);
     }
 }

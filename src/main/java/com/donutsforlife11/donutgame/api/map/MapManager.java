@@ -10,7 +10,7 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.util.BoundingBox;
 
-import com.donutsforlife11.donutgame.api.player.PlayerManager;
+import com.donutsforlife11.donutgame.internal.game.GameModule;
 import com.donutsforlife11.donutgame.internal.map.GameMapDescriptor;
 import com.donutsforlife11.donutgame.internal.map.GameMapDescriptor.BackingType;
 import com.donutsforlife11.donutgame.internal.map.MapService;
@@ -19,22 +19,17 @@ import com.donutsforlife11.donutgame.internal.map.WorldService;
 public class MapManager {
     public static final String DEFAULT_MAP_ID = "donutgame_default";
 
+    private final GameModule module;
     private final MapService mapService;
     private final WorldService worldService;
-    private final PlayerManager playerManager;
-
-    private final String gameId;
-    private final int gameIndex;
 
     private volatile GameMap currentMap;
     private volatile GameWorld currentWorld;
 
-    public MapManager(MapService mapService, WorldService worldService, PlayerManager playerManager, String gameId, int gameIndex) {
+    public MapManager(GameModule module, MapService mapService, WorldService worldService) {
+        this.module = module;
         this.mapService = mapService;
         this.worldService = worldService;
-        this.playerManager = playerManager;
-        this.gameId = gameId;
-        this.gameIndex = gameIndex;
     }
 
     public CompletableFuture<GameMap> setMap(String mapId) {
@@ -62,7 +57,7 @@ public class MapManager {
                 new IllegalStateException("Default map " + DEFAULT_MAP_ID + " must be world-backed.")
             );
         }
-        String instanceWorldName = gameId + "_" + gameIndex + "_" + gameMap.id();
+        String instanceWorldName = module.id() + "_" + module.index() + "_" + gameMap.id();
         CompletableFuture<GameMap> future = worldService.loadSlimeWorld(templateDescriptor.assetPath(), instanceWorldName)
             .thenCompose(world -> {
                 GameWorld newWorld = new GameWorld(world);
@@ -84,7 +79,7 @@ public class MapManager {
             })
             .thenCompose(loadedMap -> {
                 List<CompletableFuture<Boolean>> teleports = new ArrayList<>();
-                for (Player player : playerManager.getPlayers()) {
+                for (Player player : module.playerManager().getPlayers()) {
                     teleports.add(player.teleportAsync(currentWorld.getBukkitWorld().getSpawnLocation()));
                 }
                 return CompletableFuture.allOf(teleports.toArray(new CompletableFuture[0]))

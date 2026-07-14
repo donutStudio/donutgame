@@ -7,10 +7,14 @@ public class VoidWars extends GameModule {
     public void beforeLoad() {
         mapManager().setMap("classic_enhanced");
     }
+
+    @Override
     public void onLoad() {
-        playerManager().plugin().getLogger().info("sahur");
+        // playerManager().plugin().getLogger().info("sahur");
     }
+
+    @Override
     public void onUnload() {
-        playerManager().plugin().getLogger().info("ruhas");
+        // playerManager().plugin().getLogger().info("ruhas");
     }
 }
