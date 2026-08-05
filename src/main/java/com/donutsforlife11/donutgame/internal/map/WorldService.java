@@ -190,6 +190,17 @@ public class WorldService {
         return session == null ? world.getName() : session.playerStateId();
     }
 
+    public void unloadAll() {
+        for (SlimeWorldInstance instance : asp.getLoadedWorlds()) {
+            try {
+                asp.saveWorld(instance);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            Bukkit.unloadWorld(instance.getBukkitWorld(), false);
+        }
+    }
+
     private void configureWorld(World world) {
         world.setGameRule(GameRules.ADVANCE_TIME, false);
         world.setGameRule(GameRules.ADVANCE_WEATHER, false);

@@ -1,6 +1,7 @@
 id: void_wars
 main_class: com.donutsforlife11.voidwars.VoidWars
 name: Void Wars
+map: classic_enhanced
 team_size: 1
 ground_collapse_time: 15
 pvp_enablement_time: 20

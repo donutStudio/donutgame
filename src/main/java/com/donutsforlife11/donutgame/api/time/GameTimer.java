@@ -1,0 +1,150 @@
+package com.donutsforlife11.donutgame.api.time;
+
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
+
+public class GameTimer {
+    private final TimeManager timeManager;
+
+    private final Object stateLock = new Object();
+    private final List<TickAction> onTickActions = new CopyOnWriteArrayList<>();
+    private final List<Consumer<GameTimer>> onFinishActions = new CopyOnWriteArrayList<>();
+
+    private int maxTicks = -1;
+    private volatile int elapsedTicks = 0;
+    private volatile boolean started;
+    private volatile boolean paused;
+    private volatile boolean cancelled;
+    private volatile boolean finished;
+
+    public GameTimer(TimeManager timeManager) {
+        this.timeManager = timeManager;
+    }
+
+    public GameTimer start() {
+        synchronized (stateLock) {
+            if (started) {
+                throw new IllegalStateException("Timer already started!");
+            }
+            if (finished) {
+                throw new IllegalStateException("Timer already finished!");
+            }
+            if (cancelled) {
+                throw new IllegalStateException("Cancelled timers cannot be started again!");
+            }
+            started = true;
+        }
+        timeManager.activate(this);
+        return this;
+    }
+    public GameTimer setMaxTicks(int ticks) {
+        if (ticks < 0) {
+            throw new IllegalArgumentException("A timer cannot have negative ticks!");
+        }
+        maxTicks = ticks;
+        return this;
+    }
+    public GameTimer setUnlimitedMaxTicks() {
+        maxTicks = -1;
+        return this;
+    }
+    public GameTimer pause() {
+        setPaused(true);
+        return this;
+    }
+    public GameTimer resume() {
+        setPaused(false);
+        return this;
+    }
+    public void cancel() {
+        remove();
+    }
+
+    public GameTimer onTick(Consumer<GameTimer> action) {
+        return onTick(1, action);
+    }
+    public GameTimer onTick(int interval, Consumer<GameTimer> action) {
+        onTickActions.add(new TickAction(interval, action));
+        return this;
+    }
+    public GameTimer onFinish(Consumer<GameTimer> action) {
+        onFinishActions.add(action);
+        return this;
+    }
+
+    public void remove() {
+        timeManager.timers().remove(this);
+    }
+
+    public boolean isStarted() {
+        return started;
+    }
+    public int getMaxTicks() {
+        return maxTicks;
+    }
+    public int getElapsedTicks() {
+        return elapsedTicks;
+    }
+    public int getRemainingTicks() {
+        if (maxTicks < 0) {
+            return -1;
+        }
+
+        return Math.max(maxTicks - elapsedTicks, 0);
+    }
+    public boolean isPaused() {
+        return paused;
+    }
+    public boolean isCancelled() {
+        return cancelled;
+    }
+    public boolean isFinished() {
+        return finished;
+    }
+
+    void tick() {
+        if (!started || finished || cancelled) {
+            return;
+        }
+        boolean ended = false;
+        synchronized (stateLock) {
+            if (!started || finished || cancelled) {
+                return;
+            }
+            if (!paused) {
+                elapsedTicks++;
+                for (TickAction action : onTickActions) {
+                    if (elapsedTicks % action.interval() == 0) {
+                        action.action().accept(this);
+                    }
+                }
+            }
+            if (maxTicks >= 0 && elapsedTicks >= maxTicks) {
+                finished = true;
+                paused = true;
+                ended = true;
+            }
+        }
+        if (ended) {
+            timeManager.deactivate(this);
+            for (Consumer<GameTimer> action : onFinishActions) {
+                action.accept(this);
+            }
+        }
+    }
+
+    private void setPaused(boolean paused) {
+        synchronized (stateLock) {
+            if (finished || cancelled) {
+                return;
+            }
+            if (!started) {
+                this.paused = paused;
+                return;
+            }
+        }
+    }
+
+    private record TickAction(int interval, Consumer<GameTimer> action) {}
+}

@@ -7,9 +7,13 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 
+import org.bukkit.entity.Player;
+
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
+import com.donutsforlife11.donutgame.api.team.TeamManager;
+import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.ui.UiManager;
 
 public class ModuleService {
@@ -34,11 +38,14 @@ public class ModuleService {
         activeGames.put(index, module);
         try {
             module.initialize(
+                plugin,
                 descriptor, 
                 index, 
                 new PlayerManager(module), 
                 new MapManager(module, plugin.mapService(), plugin.worldService()),
-                new UiManager(module, plugin)
+                new UiManager(module, plugin),
+                new TimeManager(plugin),
+                new TeamManager()
             );
             module.startLoadSequence();
             return CompletableFuture.completedFuture(module);
@@ -62,5 +69,20 @@ public class ModuleService {
 
     public Map<Integer, GameModule> activeGames() {
         return Collections.unmodifiableMap(activeGames);
+    }
+
+    public GameModule getGameOfPlayer(Player player) {
+        for (GameModule game : activeGames.values()) {
+            if (game.playerManager().isRegistered(player)) {
+                return game;
+            }
+        }
+        throw new IllegalArgumentException("Could not find specified player registered in any active games");
+    }
+
+    public void unloadAll() {
+        for (int gameIndex : activeGames.keySet()) {
+            unloadModule(gameIndex);
+        }
     }
 }

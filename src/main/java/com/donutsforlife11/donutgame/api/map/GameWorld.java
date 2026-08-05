@@ -1,5 +1,6 @@
 package com.donutsforlife11.donutgame.api.map;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -25,9 +26,44 @@ public class GameWorld {
         requireWorld(location);
         points.computeIfAbsent(pointName, ignored -> new CopyOnWriteArrayList<>()).add(location.clone());
     }
-    public void addRegion(BoundingBox box, String pointName) {
+    public void removePoint(Location location, String pointName) {
+        requireWorld(location);
+        points.get(pointName).remove(location);
+    }
+    public void addRegion(BoundingBox box, String regionName) {
         requireRegion(box);;
-        regions.computeIfAbsent(pointName, ignored -> new CopyOnWriteArrayList<>()).add(box.clone());
+        regions.computeIfAbsent(regionName, ignored -> new CopyOnWriteArrayList<>()).add(box.clone());
+    }
+    public void removeRegion(BoundingBox box, String regionName) {
+        requireRegion(box);
+        regions.get(regionName).remove(box);
+    }
+
+    public List<Location> getPoints(String pointName) {
+        return List.copyOf(points.get(pointName));
+    }
+    public double distanceToPoint(Location location, String pointName) {
+        List<Location> locations = getPoints(pointName);
+        if (locations.isEmpty()) {
+            return -1;
+        }
+        double closestDistance = Double.MAX_VALUE;
+        for (Location point : locations) {
+            closestDistance = Math.min(closestDistance, point.distance(location));
+        }
+        return closestDistance;
+    }
+    public List<BoundingBox> getRegions(String regionName) {
+        return List.copyOf(regions.get(regionName));
+    }
+    public boolean posInRegion(Location location, String regionName) {
+        requireWorld(location);
+        for (BoundingBox box : getRegions(regionName)) {
+            if (box.contains(location.toVector())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void requireRegion(BoundingBox box) {

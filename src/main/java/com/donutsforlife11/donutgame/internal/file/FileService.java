@@ -89,6 +89,16 @@ public class FileService {
         return runtimeFolder;
     }
 
+    public void closeModuleLoaders() {
+        try {
+            for (URLClassLoader loader : moduleLoaders) {
+                loader.close();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     private GameModuleDescriptor extractGameData(File gameModule) throws Exception {
         URL[] urls = { gameModule.toURI().toURL() };
 
