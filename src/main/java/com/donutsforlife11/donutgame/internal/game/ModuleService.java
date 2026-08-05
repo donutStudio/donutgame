@@ -10,6 +10,7 @@ import java.util.concurrent.CompletableFuture;
 import org.bukkit.entity.Player;
 
 import com.donutsforlife11.donutgame.Donutgame;
+import com.donutsforlife11.donutgame.api.border.BorderManager;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.team.TeamManager;
@@ -45,7 +46,8 @@ public class ModuleService {
                 new MapManager(module, plugin.mapService(), plugin.worldService()),
                 new UiManager(module, plugin),
                 new TimeManager(plugin),
-                new TeamManager()
+                new TeamManager(),
+                new BorderManager(module)
             );
             module.startLoadSequence();
             return CompletableFuture.completedFuture(module);

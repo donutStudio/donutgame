@@ -9,6 +9,7 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 
 import com.donutsforlife11.donutgame.Donutgame;
+import com.donutsforlife11.donutgame.api.border.BorderManager;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
@@ -29,6 +30,7 @@ public abstract class GameModule {
     private UiManager uiManager;
     private TimeManager timeManager;
     private TeamManager teamManager;
+    private BorderManager borderManager;
     private int index;
     private String id;
     private String name;
@@ -95,7 +97,8 @@ public abstract class GameModule {
         MapManager mapManager,
         UiManager uiManager,
         TimeManager timeManager,
-        TeamManager teamManager
+        TeamManager teamManager,
+        BorderManager borderManager
     ) {
         this.plugin = plugin;
         this.index = index;
@@ -107,6 +110,7 @@ public abstract class GameModule {
         this.uiManager = uiManager;
         this.timeManager = timeManager;
         this.teamManager = teamManager;
+        this.borderManager = borderManager;
     }
 
     public String id() {
@@ -138,5 +142,8 @@ public abstract class GameModule {
     }
     public TeamManager teamManager() {
         return teamManager;
+    }
+    public BorderManager borderManager() {
+        return borderManager;
     }
 }

@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.bukkit.Location;
+import org.bukkit.Particle;
 import org.bukkit.entity.Player;
 import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
@@ -15,17 +16,29 @@ import com.donutsforlife11.donutgame.internal.game.GameModule;
 public class BorderManager {
     private final GameModule module;
 
+    private double particleSpacing = 1.0;
+    private double particleViewDistance = 32.0;
+    private Particle defaultParticle = Particle.TRIAL_OMEN;
+    private Particle movingParticle = Particle.RAID_OMEN;
+
     private final Set<GameBorder> borders = new HashSet<>();
 
     private double borderDamage = 2;
     private int borderDamageInterval = 20;
 
-    private int particleInterval = 8;
+    private static int PARTICLE_INTERVAL = 8;
 
-    private GameTimer borderDamageTimer = null;
+    private GameTimer borderDamageTimer;
+    private GameTimer particleTimer;
 
     public BorderManager(GameModule module) {
         this.module = module;
+        particleTimer = module.timeManager().newTimer().onTick(PARTICLE_INTERVAL, ignored -> {
+            for (GameBorder border : borders) {
+                border.drawParticles();
+            }
+        });
+        particleTimer.start();
     }
 
     public GameBorder newBorder(BoundingBox box) {
@@ -72,5 +85,18 @@ public class BorderManager {
         CUBOID,
         CYLINDROID,
         ELLIPSOID
+    }
+
+    public double particleSpacing() {
+        return particleSpacing;
+    }
+    public double particleViewDistance() {
+        return particleViewDistance;
+    }
+    public Particle defaultParticle() {
+        return defaultParticle;
+    }
+    public Particle movingParticle() {
+        return movingParticle;
     }
 }

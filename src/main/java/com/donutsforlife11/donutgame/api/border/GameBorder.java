@@ -1,6 +1,11 @@
 package com.donutsforlife11.donutgame.api.border;
 
+import java.util.List;
+
 import org.bukkit.Location;
+import org.bukkit.Particle;
+import org.bukkit.World;
+import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.api.border.BorderManager.BorderShape;
@@ -15,11 +20,13 @@ public class GameBorder {
     private Location center;
     private Vector dimensions;
 
-    private GameTimer centerTimer = null;
-    private GameTimer dimensionsTimer = null;
+    private GameTimer centerTimer;
+    private GameTimer dimensionsTimer;
 
-    private double particleSpacing = 1.0;
-    private double particleViewDistance = 32.0;
+    // private double particleSpacing = 1.0;
+    // private double particleViewDistance = 32.0;
+    // private Particle defaultParticle = Particle.TRIAL_OMEN;
+    // private Particle movingParticle = Particle.RAID_OMEN;
 
     public GameBorder(BorderManager borderManager, TimeManager timeManager, BorderShape shape, Location center, Vector dimensions) {
         this.borderManager = borderManager;
@@ -32,69 +39,57 @@ public class GameBorder {
         borderManager.borders().remove(this);
     }
 
-    public GameBorder setCenter(Location targetCenter) {
-        return setCenter(targetCenter, 0);
+    public GameBorder setCenter(Location target) {
+        return setCenter(target, 0);
     }
-    public GameBorder setCenter(Location targetCenter, int ticks) {
-        if (targetCenter.getWorld() != center.getWorld()) {
+    public GameBorder setCenter(Location target, int ticks) {
+        if (target.getWorld() != center.getWorld()) {
             throw new IllegalArgumentException("Border center has to be in same world!");
         }
-        Location target = targetCenter;
-        
-        double remainingX = target.getX() - dimensions.getX();
-        double remainingY = target.getY() - dimensions.getY();
-        double remainingZ = target.getZ() - dimensions.getZ();
-
-        double xStep = remainingX / ticks;
-        double yStep = remainingY / ticks;
-        double zStep = remainingZ / ticks;
-
-        if (centerTimer != null) {
-            centerTimer.cancel();
+        centerTimer.cancel();
+        if (ticks <= 0) {
+            center = target.clone();
+            return this;
         }
+        Location start = center.clone();
+        Location end = target.clone();
+        int[] elapsed = {0};
         centerTimer = timeManager.newTimer(ticks).onTick(ignored -> {
-            if (remainingX != 0) {
-                center.setX(remainingX > 0 ? center.getX() + xStep : center.getX() - xStep);
-            }
-            if (remainingY != 0) {
-                center.setY(remainingY > 0 ? center.getY() + yStep : center.getY() - yStep);
-            }
-            if (remainingZ != 0) {
-                center.setZ(remainingZ > 0 ? center.getZ() + zStep : center.getZ() - zStep);
+            double progress = ++elapsed[0] / (double) ticks;
+            center.setX(lerp(start.getX(), end.getX(), progress));
+            center.setY(lerp(start.getY(), end.getY(), progress));
+            center.setZ(lerp(start.getZ(), end.getZ(), progress));
+            if (elapsed[0] >= ticks) {
+                center = end;
+                centerTimer.cancel();
             }
         }).start();
-
         return this;
     }
-    public GameBorder setDimensions(Vector targetDimensions) {
-        return setDimensions(targetDimensions, 0);
+    public GameBorder setDimensions(Vector target) {
+        return setDimensions(target, 0);
     }
-    public GameBorder setDimensions(Vector targetDimensions, int ticks) {
-        if (!(targetDimensions.getX() >= 0 && targetDimensions.getY() >= 0 && targetDimensions.getZ() >= 0)) {
+    public GameBorder setDimensions(Vector target, int ticks) {
+        if (!(target.getX() >= 0 && target.getY() >= 0 && target.getZ() >= 0)) {
             throw new IllegalArgumentException("Border dimensions must be positive or zero!");
         };
-        Vector target = targetDimensions;
-
-        double remainingX = target.getX() - dimensions.getX();
-        double remainingY = target.getY() - dimensions.getY();
-        double remainingZ = target.getZ() - dimensions.getZ();
-
-        double xStep = remainingX / ticks;
-        double yStep = remainingY / ticks;
-        double zStep = remainingZ / ticks;
-
-        if (dimensionsTimer != null) {
-            dimensionsTimer.cancel();
+        dimensionsTimer.cancel();
+        if (ticks <= 0) {
+            dimensions = target.clone();
+            return this;
         }
+        Vector start = dimensions.clone();
+        Vector end = target.clone();
+        int[] elapsed = {0};
+
         dimensionsTimer = timeManager.newTimer(ticks).onTick(ignored -> {
-            if (remainingX != 0) {
-                dimensions.setX(remainingX > 0 ? dimensions.getX() + xStep : dimensions.getX() - xStep);
-            }
-            if (remainingY != 0) {
-                dimensions.setX(remainingY > 0 ? dimensions.getY() + yStep : dimensions.getZ() - yStep);
-            }
-            if (remainingZ != 0) {
-                dimensions.setZ(remainingZ > 0 ? dimensions.getZ() + zStep : dimensions.getZ() - zStep);
+            double progress = ++elapsed[0] / (double) ticks;
+            dimensions.setX(lerp(start.getX(), end.getX(), progress));
+            dimensions.setY(lerp(start.getY(), end.getY(), progress));
+            dimensions.setZ(lerp(start.getZ(), end.getZ(), progress));
+            if (elapsed[0] >= ticks) {
+                dimensions = end;
+                dimensionsTimer.cancel();
             }
         }).start();
 
@@ -136,6 +131,29 @@ public class GameBorder {
     }
 
     void drawParticles() {
+        World world = center.getWorld();
+        if (world == null) {
+            return;
+        }
+        List<Player> viewers = world.getNearbyPlayers(center, borderManager.particleViewDistance()).stream().toList();
+        if (viewers.isEmpty()) {
+            return;
+        }
+        List<Vector> points = BorderParticleSampler.sample(this, borderManager.particleSpacing(), 500);
+        Particle selectedParticle = isMoving() ? borderManager.movingParticle() : borderManager.defaultParticle();
+        for (Vector point : points) {
+            Location location = center.clone().add(point);
+            for (Player viewer : viewers) {
+                viewer.spawnParticle(selectedParticle, location, 1, 0, 0, 0, 0);
+            }
+        }
+    }
 
+    public boolean isMoving() {
+        return !centerTimer.isCancelled() || !dimensionsTimer.isCancelled();
+    }
+
+    private static double lerp(double start, double end, double progress) {
+        return start + (end - start) * Math.min(progress, 1.0);
     }
 }

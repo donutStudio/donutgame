@@ -7,3 +7,5 @@ ground_collapse_time: 15
 pvp_enablement_time: 20
 base_respawn_time: 20
 max_rounds: 3
+min_chests: 0
+max_chests: 12

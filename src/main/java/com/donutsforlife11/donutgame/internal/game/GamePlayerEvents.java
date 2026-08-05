@@ -6,9 +6,13 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
+
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.object.ObjectContents;
 
 public class GamePlayerEvents implements Listener {
     private final ModuleService moduleService;
@@ -34,5 +38,26 @@ public class GamePlayerEvents implements Listener {
         if (spawnpoint != null) {
             event.setRespawnLocation(spawnpoint.clone());
         }
+    }
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        PlayerManager playerManager = moduleService.getGameOfPlayer(player).playerManager();
+        if (!playerManager.isSpectator(player)) {
+            playerManager.setSpectator(player);
+        }
+    }
+
+    @EventHandler
+    public void playerKillIndicator(PlayerDeathEvent event) {
+        if (!(event.getDamageSource().getCausingEntity() instanceof Player attacker)) {
+            return;
+        }
+        Player target = event.getPlayer();
+        moduleService.getGameOfPlayer(attacker).uiManager().subtitle(attacker, Component.text("🗡 ")
+            .append(Component.text(target.getName() + " ", target.getScoreboard().getPlayerTeam(target).color()))
+            .append(Component.object(ObjectContents.playerHead(target)))
+        );
     }
 }
