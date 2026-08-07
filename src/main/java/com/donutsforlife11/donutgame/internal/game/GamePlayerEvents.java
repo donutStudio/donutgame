@@ -1,6 +1,5 @@
 package com.donutsforlife11.donutgame.internal.game;
 
-import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -9,7 +8,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 
-import com.donutsforlife11.donutgame.api.player.PlayerManager;
+import com.donutsforlife11.donutgame.api.player.GamePlayer;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.object.ObjectContents;
@@ -24,28 +23,27 @@ public class GamePlayerEvents implements Listener {
     @EventHandler(priority = EventPriority.LOWEST)
     public void playerDeath(PlayerDeathEvent event) {
         Player player = event.getPlayer();
-        PlayerManager playerManager = moduleService.getGameOfPlayer(player).playerManager();
-        if (!playerManager.isSpectator(player)) {
-            playerManager.setSpectator(player);
+        GamePlayer gamePlayer = moduleService.getGameOfPlayer(player).playerManager().getPlayer(player);
+        if (gamePlayer != null && !gamePlayer.isSpectator()) {
+            gamePlayer.setSpectator();
         }
     }
 
     @EventHandler
     public void playerRespawn(PlayerRespawnEvent event) {
         Player player = event.getPlayer();
-        PlayerManager playerManager = moduleService.getGameOfPlayer(player).playerManager();
-        Location spawnpoint = playerManager.getPlayerSpawn(player);
-        if (spawnpoint != null) {
-            event.setRespawnLocation(spawnpoint.clone());
+        GamePlayer gamePlayer = moduleService.getGameOfPlayer(player).playerManager().getPlayer(player);
+        if (gamePlayer != null && gamePlayer.respawnLocation() != null) {
+            event.setRespawnLocation(gamePlayer.respawnLocation().toBukkit(gamePlayer.world().bukkitWorld()));
         }
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        PlayerManager playerManager = moduleService.getGameOfPlayer(player).playerManager();
-        if (!playerManager.isSpectator(player)) {
-            playerManager.setSpectator(player);
+        GamePlayer gamePlayer = moduleService.getGameOfPlayer(player).playerManager().getPlayer(player);
+        if (gamePlayer != null && !gamePlayer.isSpectator()) {
+            gamePlayer.setSpectator();
         }
     }
 

@@ -1,8 +1,7 @@
 package com.donutsforlife11.voidwars;
 
-import org.bukkit.entity.Player;
-
 import com.donutsforlife11.donutgame.api.border.GameBorder;
+import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.time.GameTimer;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
@@ -16,51 +15,54 @@ public class VoidWars extends GameModule {
     private GameBorder mainBorder;
 
     @Override
-    public void beforeLoad() {
-        loadRound();
-    }
-
-    @Override
     public void onLoad() {
         registerEvents(voidWarsPlayers);
-        voidWarsPlayers.assignTeams(config().getInt("team_size"));
-        loadRound();
+        mapManager().setMap(config().getString("map")).thenRun(() -> {
+            voidWarsPlayers.assignTeams(config().getInt("team_size"));
+            loadRound();
+        });
     }
 
     @Override
     public void onStart() {
         started = true;
-    }
-
-    @Override
-    public void onUnload() {
-        // playerManager().plugin().getLogger().info("tung, tung, tung, sahur");
+        startRound();
     }
 
     public void loadRound() {
-        mapManager().setMap(config().getString("map"));
-        for (Player player : playerManager().getPlayers()) {
+        for (GamePlayer player : playerManager().getPlayers()) {
             voidWarsPlayers.setupPlayer(player);
         }
-        mainBorder = borderManager().newBorder(world().getRegions("starting_border").get(0));
+        if (!world().getRegions("starting_border").isEmpty()) {
+            mainBorder = borderManager().newBorder(world().getRegions("starting_border").get(0));
+        }
         round += 1;
     }
+
     public void startRound() {
         mainTimer = timeManager().newTimer();
+        voidWarsEvents.bind(mainTimer);
+        mainTimer.start();
     }
+
     public void endRound() {
-        mainTimer.cancel();
+        if (mainTimer != null) {
+            mainTimer.cancel();
+        }
     }
 
     public boolean started() {
         return started;
     }
+
     public int round() {
         return round;
     }
+
     public GameTimer mainTimer() {
         return mainTimer;
     }
+
     public GameBorder mainBorder() {
         return mainBorder;
     }

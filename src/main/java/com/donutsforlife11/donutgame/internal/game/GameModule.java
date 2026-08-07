@@ -5,11 +5,15 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.event.Event;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
+import org.bukkit.plugin.EventExecutor;
 
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.border.BorderManager;
+import com.donutsforlife11.donutgame.api.event.GameEventRegistrar;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
@@ -31,6 +35,7 @@ public abstract class GameModule {
     private TimeManager timeManager;
     private TeamManager teamManager;
     private BorderManager borderManager;
+    private GameEventRegistrar eventRegistrar;
     private int index;
     private String id;
     private String name;
@@ -46,7 +51,6 @@ public abstract class GameModule {
     }
 
     public void onStart() {
-
     }
 
     public void onUnload() {
@@ -57,13 +61,13 @@ public abstract class GameModule {
             beforeLoad();
             onLoad();
             timeManager().newTimer(50).onFinish(titleTimer -> {
-                uiManager().title(playerManager().getPlayers(), Component.text(name(), NamedTextColor.LIGHT_PURPLE));
-                timeManager.newTimer(50).onFinish(ignoredTimer -> {
+                uiManager().titlePlayers(playerManager().getPlayers(), Component.text(name(), NamedTextColor.LIGHT_PURPLE));
+                timeManager().newTimer(50).onFinish(ignoredTimer -> {
                     int countdownTime = 200;
                     ValueFormatter.countdown(timeManager(), countdownTime, formattedNumber -> {
-                        uiManager().title(playerManager.getPlayers(), formattedNumber);
+                        uiManager().titlePlayers(playerManager().getPlayers(), formattedNumber);
                     }).onFinish(ignored -> {
-                        uiManager().title(playerManager.getPlayers(), Component.text("> START <").decorate(TextDecoration.BOLD));
+                        uiManager().titlePlayers(playerManager().getPlayers(), Component.text("> START <").decorate(TextDecoration.BOLD));
                         onStart();
                     }).start();
                 }).start();
@@ -73,9 +77,14 @@ public abstract class GameModule {
             return CompletableFuture.failedFuture(throwable);
         }
     }
+
     protected final CompletableFuture<Void> shutdown() {
+        for (Listener listener : registeredListeners.toArray(Listener[]::new)) {
+            unregisterEvents(listener);
+        }
         return mapManager.unloadCurrentWorld();
     }
+
     protected final void registerEvents(Listener listener) {
         if (listener == null) {
             throw new IllegalArgumentException("Listener cannot be null!");
@@ -84,16 +93,27 @@ public abstract class GameModule {
             plugin.getServer().getPluginManager().registerEvents(listener, plugin);
         }
     }
+
     protected final void unregisterEvents(Listener listener) {
         if (listener != null && registeredListeners.remove(listener)) {
             HandlerList.unregisterAll(listener);
         }
     }
+
+    public final void registerDynamicEvent(Listener listener, Class<? extends Event> eventType, EventExecutor executor) {
+        if (listener == null || eventType == null || executor == null) {
+            throw new IllegalArgumentException("Listener, event type, and executor cannot be null.");
+        }
+        if (registeredListeners.add(listener)) {
+            plugin.getServer().getPluginManager().registerEvent(eventType, listener, EventPriority.NORMAL, executor, plugin);
+        }
+    }
+
     protected final void initialize(
         Donutgame plugin,
-        GameModuleDescriptor descriptor, 
-        int index, 
-        PlayerManager playerManager, 
+        GameModuleDescriptor descriptor,
+        int index,
+        PlayerManager playerManager,
         MapManager mapManager,
         UiManager uiManager,
         TimeManager timeManager,
@@ -111,39 +131,54 @@ public abstract class GameModule {
         this.timeManager = timeManager;
         this.teamManager = teamManager;
         this.borderManager = borderManager;
+        this.eventRegistrar = new GameEventRegistrar(this);
     }
 
     public String id() {
         return id;
     }
+
     public String name() {
         return name;
     }
+
     public YamlConfiguration config() {
         return config;
     }
+
     public int index() {
         return index;
     }
+
     public GameWorld world() {
         return mapManager().currentWorld();
     }
+
     public PlayerManager playerManager() {
         return playerManager;
     }
+
     public MapManager mapManager() {
         return mapManager;
     }
+
     public UiManager uiManager() {
         return uiManager;
     }
+
     public TimeManager timeManager() {
         return timeManager;
     }
+
     public TeamManager teamManager() {
         return teamManager;
     }
+
     public BorderManager borderManager() {
         return borderManager;
+    }
+
+    public GameEventRegistrar events() {
+        return eventRegistrar;
     }
 }

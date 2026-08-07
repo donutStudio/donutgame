@@ -2,13 +2,13 @@ package com.donutsforlife11.donutgame.api.border;
 
 import java.util.List;
 
-import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.api.border.BorderManager.BorderShape;
+import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.time.GameTimer;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
 
@@ -17,91 +17,82 @@ public class GameBorder {
     private final TimeManager timeManager;
 
     private final BorderShape shape;
-    private Location center;
+    private GameLocation center;
     private Vector dimensions;
 
     private GameTimer centerTimer;
     private GameTimer dimensionsTimer;
 
-    // private double particleSpacing = 1.0;
-    // private double particleViewDistance = 32.0;
-    // private Particle defaultParticle = Particle.TRIAL_OMEN;
-    // private Particle movingParticle = Particle.RAID_OMEN;
-
-    public GameBorder(BorderManager borderManager, TimeManager timeManager, BorderShape shape, Location center, Vector dimensions) {
+    public GameBorder(BorderManager borderManager, TimeManager timeManager, BorderShape shape, GameLocation center, Vector dimensions) {
         this.borderManager = borderManager;
         this.timeManager = timeManager;
         this.shape = shape;
         this.center = center;
         this.dimensions = dimensions;
     }
+
     void remove() {
         borderManager.borders().remove(this);
     }
 
-    public GameBorder setCenter(Location target) {
+    public GameBorder setCenter(GameLocation target) {
         return setCenter(target, 0);
     }
-    public GameBorder setCenter(Location target, int ticks) {
-        if (target.getWorld() != center.getWorld()) {
-            throw new IllegalArgumentException("Border center has to be in same world!");
+
+    public GameBorder setCenter(GameLocation target, int ticks) {
+        if (centerTimer != null) {
+            centerTimer.cancel();
         }
-        centerTimer.cancel();
         if (ticks <= 0) {
-            center = target.clone();
+            center = target;
             return this;
         }
-        Location start = center.clone();
-        Location end = target.clone();
-        int[] elapsed = {0};
+        GameLocation start = center;
         centerTimer = timeManager.newTimer(ticks).onTick(ignored -> {
-            double progress = ++elapsed[0] / (double) ticks;
-            center.setX(lerp(start.getX(), end.getX(), progress));
-            center.setY(lerp(start.getY(), end.getY(), progress));
-            center.setZ(lerp(start.getZ(), end.getZ(), progress));
-            if (elapsed[0] >= ticks) {
-                center = end;
-                centerTimer.cancel();
-            }
-        }).start();
+            double progress = ignored.getElapsedTicks() / (double) ticks;
+            center = new GameLocation(
+                lerp(start.x(), target.x(), progress),
+                lerp(start.y(), target.y(), progress),
+                lerp(start.z(), target.z(), progress),
+                lerp(start.pitch(), target.pitch(), progress),
+                lerp(start.yaw(), target.yaw(), progress)
+            );
+        }).onFinish(ignored -> center = target).start();
         return this;
     }
+
     public GameBorder setDimensions(Vector target) {
         return setDimensions(target, 0);
     }
+
     public GameBorder setDimensions(Vector target, int ticks) {
-        if (!(target.getX() >= 0 && target.getY() >= 0 && target.getZ() >= 0)) {
+        if (target.getX() < 0 || target.getY() < 0 || target.getZ() < 0) {
             throw new IllegalArgumentException("Border dimensions must be positive or zero!");
-        };
-        dimensionsTimer.cancel();
+        }
+        if (dimensionsTimer != null) {
+            dimensionsTimer.cancel();
+        }
         if (ticks <= 0) {
             dimensions = target.clone();
             return this;
         }
         Vector start = dimensions.clone();
         Vector end = target.clone();
-        int[] elapsed = {0};
-
         dimensionsTimer = timeManager.newTimer(ticks).onTick(ignored -> {
-            double progress = ++elapsed[0] / (double) ticks;
-            dimensions.setX(lerp(start.getX(), end.getX(), progress));
-            dimensions.setY(lerp(start.getY(), end.getY(), progress));
-            dimensions.setZ(lerp(start.getZ(), end.getZ(), progress));
-            if (elapsed[0] >= ticks) {
-                dimensions = end;
-                dimensionsTimer.cancel();
-            }
-        }).start();
-
+            double progress = ignored.getElapsedTicks() / (double) ticks;
+            dimensions = new Vector(
+                lerp(start.getX(), end.getX(), progress),
+                lerp(start.getY(), end.getY(), progress),
+                lerp(start.getZ(), end.getZ(), progress)
+            );
+        }).onFinish(ignored -> dimensions = end).start();
         return this;
     }
 
-    public boolean containsLocation(Location location) {
-        if (location.getWorld() != center.getWorld()) {
-            return false;
-        }
-        return containsLocation(location.getX() - center.getX(), location.getY() - center.getY(), location.getZ() - center.getZ());
+    public boolean containsLocation(GameLocation location) {
+        return containsLocation(location.x() - center.x(), location.y() - center.y(), location.z() - center.z());
     }
+
     public boolean containsLocation(double x, double y, double z) {
         double radiusX = dimensions.getX() / 2.0;
         double radiusY = dimensions.getY() / 2.0;
@@ -115,34 +106,32 @@ public class GameBorder {
             case ELLIPSOID -> squared(x / radiusX) + squared(y / radiusY) + squared(z / radiusZ) <= 1.0;
         };
     }
-    private double squared(double input) {
-        return input * input;
-    }
-
 
     public BorderShape shape() {
         return shape;
     }
-    public Location center() {
+
+    public GameLocation center() {
         return center;
     }
+
     public Vector dimensions() {
-        return dimensions;
+        return dimensions.clone();
     }
 
     void drawParticles() {
-        World world = center.getWorld();
+        World world = borderManager.borders().stream().findFirst().map(ignored -> borderManager.module().world().bukkitWorld()).orElse(null);
         if (world == null) {
             return;
         }
-        List<Player> viewers = world.getNearbyPlayers(center, borderManager.particleViewDistance()).stream().toList();
+        List<Player> viewers = world.getNearbyPlayers(center.toBukkit(world), borderManager.particleViewDistance()).stream().toList();
         if (viewers.isEmpty()) {
             return;
         }
         List<Vector> points = BorderParticleSampler.sample(this, borderManager.particleSpacing(), 500);
         Particle selectedParticle = isMoving() ? borderManager.movingParticle() : borderManager.defaultParticle();
         for (Vector point : points) {
-            Location location = center.clone().add(point);
+            var location = center.toBukkit(world).add(point);
             for (Player viewer : viewers) {
                 viewer.spawnParticle(selectedParticle, location, 1, 0, 0, 0, 0);
             }
@@ -150,7 +139,12 @@ public class GameBorder {
     }
 
     public boolean isMoving() {
-        return !centerTimer.isCancelled() || !dimensionsTimer.isCancelled();
+        return (centerTimer != null && !centerTimer.isFinished() && !centerTimer.isCancelled())
+            || (dimensionsTimer != null && !dimensionsTimer.isFinished() && !dimensionsTimer.isCancelled());
+    }
+
+    private double squared(double input) {
+        return input * input;
     }
 
     private static double lerp(double start, double end, double progress) {

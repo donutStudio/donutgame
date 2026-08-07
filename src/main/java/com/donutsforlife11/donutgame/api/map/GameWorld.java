@@ -2,77 +2,140 @@ package com.donutsforlife11.donutgame.api.map;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
-import org.bukkit.util.BoundingBox;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
+
+import com.donutsforlife11.donutgame.api.entity.GameEntity;
+import com.donutsforlife11.donutgame.internal.map.WorldService;
 
 public class GameWorld {
-    private World bukkitWorld;
-    private final Map<String, CopyOnWriteArrayList<Location>> points = new ConcurrentHashMap<>();
-    private final Map<String, CopyOnWriteArrayList<BoundingBox>> regions = new ConcurrentHashMap<>();
+    private final World bukkitWorld;
+    private final WorldService worldService;
+    private final Map<String, CopyOnWriteArrayList<GameLocation>> points = new ConcurrentHashMap<>();
+    private final Map<String, CopyOnWriteArrayList<GameRegion>> regions = new ConcurrentHashMap<>();
 
-    public GameWorld(World bukkitWorld) {
+    public GameWorld(World bukkitWorld, WorldService worldService) {
         this.bukkitWorld = bukkitWorld;
+        this.worldService = worldService;
     }
 
-    public World getBukkitWorld() {
+    public World bukkitWorld() {
         return bukkitWorld;
     }
 
-    public void addPoint(Location location, String pointName) {
-        requireWorld(location);
-        points.computeIfAbsent(pointName, ignored -> new CopyOnWriteArrayList<>()).add(location.clone());
-    }
-    public void removePoint(Location location, String pointName) {
-        requireWorld(location);
-        points.get(pointName).remove(location);
-    }
-    public void addRegion(BoundingBox box, String regionName) {
-        requireRegion(box);;
-        regions.computeIfAbsent(regionName, ignored -> new CopyOnWriteArrayList<>()).add(box.clone());
-    }
-    public void removeRegion(BoundingBox box, String regionName) {
-        requireRegion(box);
-        regions.get(regionName).remove(box);
+    public GameLocation spawnLocation() {
+        return GameLocation.fromBukkit(bukkitWorld.getSpawnLocation());
     }
 
-    public List<Location> getPoints(String pointName) {
-        return List.copyOf(points.get(pointName));
+    public void addPoint(GameLocation location, String pointName) {
+        requireWorld(location);
+        points.computeIfAbsent(pointName, ignored -> new CopyOnWriteArrayList<>()).add(location);
     }
-    public double distanceToPoint(Location location, String pointName) {
-        List<Location> locations = getPoints(pointName);
+
+    public void removePoint(GameLocation location, String pointName) {
+        requireWorld(location);
+        points.getOrDefault(pointName, new CopyOnWriteArrayList<>()).remove(location);
+    }
+
+    public void addRegion(GameRegion region, String regionName) {
+        requireRegion(region);
+        regions.computeIfAbsent(regionName, ignored -> new CopyOnWriteArrayList<>()).add(region);
+    }
+
+    public void removeRegion(GameRegion region, String regionName) {
+        requireRegion(region);
+        regions.getOrDefault(regionName, new CopyOnWriteArrayList<>()).remove(region);
+    }
+
+    public List<GameLocation> getPoints(String pointName) {
+        return List.copyOf(points.getOrDefault(pointName, new CopyOnWriteArrayList<>()));
+    }
+
+    public double distanceToPoint(GameLocation location, String pointName) {
+        List<GameLocation> locations = getPoints(pointName);
         if (locations.isEmpty()) {
             return -1;
         }
-        double closestDistance = Double.MAX_VALUE;
-        for (Location point : locations) {
-            closestDistance = Math.min(closestDistance, point.distance(location));
+        double closestDistanceSquared = Double.MAX_VALUE;
+        for (GameLocation point : locations) {
+            closestDistanceSquared = Math.min(closestDistanceSquared, point.distanceSquared(location));
         }
-        return closestDistance;
+        return Math.sqrt(closestDistanceSquared);
     }
-    public List<BoundingBox> getRegions(String regionName) {
-        return List.copyOf(regions.get(regionName));
+
+    public List<GameRegion> getRegions(String regionName) {
+        return List.copyOf(regions.getOrDefault(regionName, new CopyOnWriteArrayList<>()));
     }
-    public boolean posInRegion(Location location, String regionName) {
+
+    public boolean posInRegion(GameLocation location, String regionName) {
         requireWorld(location);
-        for (BoundingBox box : getRegions(regionName)) {
-            if (box.contains(location.toVector())) {
+        for (GameRegion region : getRegions(regionName)) {
+            if (region.contains(location)) {
                 return true;
             }
         }
         return false;
     }
 
-    private void requireRegion(BoundingBox box) {
-        if (box == null) {
-            throw new IllegalArgumentException("BoundingBox cannot be null.");
+    public boolean contains(Location location) {
+        return location != null && bukkitWorld.equals(location.getWorld());
+    }
+
+    public boolean contains(GameLocation location) {
+        return location != null;
+    }
+
+    public boolean contains(Entity entity) {
+        return entity != null && bukkitWorld.equals(entity.getWorld());
+    }
+
+    public void setBlock(GameLocation location, Material material) {
+        setBlock(location, material.createBlockData());
+    }
+
+    public void setBlock(GameLocation location, BlockData blockData) {
+        requireWorld(location);
+        bukkitWorld.getBlockAt(location.toBukkit(bukkitWorld)).setBlockData(blockData, false);
+    }
+
+    public CompletableFuture<Void> fill(GameRegion region, Material material) {
+        return fill(region, material.createBlockData());
+    }
+
+    public CompletableFuture<Void> fill(GameRegion region, BlockData blockData) {
+        requireRegion(region);
+        return worldService.fillArea(bukkitWorld, region.toBoundingBox(), blockData);
+    }
+
+    public GameEntity summon(EntityType entityType, GameLocation location) {
+        requireWorld(location);
+        Entity entity = bukkitWorld.spawnEntity(location.toBukkit(bukkitWorld), entityType);
+        return new GameEntity(this, entity.getUniqueId(), entity.getType());
+    }
+
+    public GameEntity entity(Entity entity) {
+        if (!contains(entity)) {
+            return null;
+        }
+        return new GameEntity(this, entity.getUniqueId(), entity.getType());
+    }
+
+    private void requireRegion(GameRegion region) {
+        if (region == null) {
+            throw new IllegalArgumentException("GameRegion cannot be null.");
         }
     }
-    private void requireWorld(Location location) {
-        if (location == null || location.getWorld() == null || !bukkitWorld.equals(location.getWorld())) {
+
+    private void requireWorld(GameLocation location) {
+        if (location == null) {
             throw new IllegalArgumentException("Location must be in the GameWorld.");
         }
     }

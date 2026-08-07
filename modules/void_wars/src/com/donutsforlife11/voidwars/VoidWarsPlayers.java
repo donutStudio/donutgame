@@ -5,14 +5,14 @@ import java.util.Collections;
 import java.util.List;
 
 import org.bukkit.GameMode;
-import org.bukkit.Location;
-import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 
+import com.donutsforlife11.donutgame.api.map.GameLocation;
+import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
 
 import net.kyori.adventure.text.Component;
@@ -30,7 +30,7 @@ public class VoidWarsPlayers implements Listener {
         if (teamSize <= 0) {
             throw new IllegalArgumentException("Team size must be greater than zero!");
         }
-        List<Player> players = new ArrayList<>(game.playerManager().getNonSpectators());
+        List<GamePlayer> players = new ArrayList<>(game.playerManager().getNonSpectators());
         int teamCount = (int) Math.ceil((double) players.size() / teamSize);
         Collections.shuffle(players);
         for (int i = 0; i < teamCount; i++) {
@@ -41,22 +41,25 @@ public class VoidWarsPlayers implements Listener {
             teams.get(i % teamCount).addPlayer(players.get(i));
         }
     }
-    public void setupPlayer(Player player) {
-        Location spawnPoint = game.world().getPoints("spawn").get(0);
-        game.playerManager().setPlayerSpawn(player, spawnPoint);
-        player.teleportAsync(spawnPoint);
+
+    public void setupPlayer(GamePlayer player) {
+        GameLocation spawnPoint = game.world().getPoints("spawn").get(0);
+        player.setRespawnLocation(spawnPoint);
+        player.teleport(spawnPoint);
         if (game.started()) {
-            game.playerManager().setSpectator(player);
+            player.setSpectator();
         } else {
-            game.playerManager().setNonSpectator(player);
-            player.setGameMode(GameMode.ADVENTURE);
+            player.setNonSpectator();
+            if (player.player() != null) {
+                player.player().setGameMode(GameMode.ADVENTURE);
+            }
         }
     }
 
     @EventHandler
     public void onPlayerDeath(PlayerDeathEvent event) {
-        Player player = event.getPlayer();
-        if (!game.playerManager().isRegistered(player)) {
+        GamePlayer player = game.playerManager().getPlayer(event.getPlayer());
+        if (player == null) {
             return;
         }
         if (game.started()) {
@@ -67,17 +70,17 @@ public class VoidWarsPlayers implements Listener {
                 event.setDroppedExp(0);
             }
         } else {
-            game.playerManager().respawnPlayer(player);
+            player.respawn();
         }
     }
 
-    public boolean tryRespawn(Player player, int baseRespawnTime) {
+    public boolean tryRespawn(GamePlayer player, int baseRespawnTime) {
         GameTeam team = game.teamManager().getPlayerTeam(player);
         int respawnTime = baseRespawnTime * (team.getMembers().size() - 1);
 
         if (isTeamEliminated(team)) {
-            for (Player teammate : team.getMembers()) {
-                game.playerManager().cancelRespawn(teammate);
+            for (GamePlayer teammate : team.getMembers()) {
+                teammate.cancelRespawn();
                 if (game.config().getInt("team_size") == 1) {
                     game.uiManager().title(teammate, Component.text("Eliminated!", NamedTextColor.RED).decorate(TextDecoration.BOLD));
                 } else {
@@ -85,21 +88,24 @@ public class VoidWarsPlayers implements Listener {
                 }
             }
         } else {
-            game.playerManager().respawnPlayer(player, respawnTime * 20);
+            player.respawn(respawnTime * 20);
         }
         return !isTeamEliminated(team);
     }
+
     public boolean isTeamEliminated(GameTeam team) {
-        for (Player player : team.getMembers()) {
-            if (!game.playerManager().isSpectator(player)) {
+        for (GamePlayer player : team.getMembers()) {
+            if (!player.isSpectator()) {
                 return false;
             }
         }
         return true;
     }
+
     public int alivePlayerCount() {
         return game.playerManager().getNonSpectators().size();
     }
+
     public int aliveTeamCount() {
         int aliveTeamCount = 0;
         for (GameTeam team : game.teamManager().getTeams()) {
@@ -112,18 +118,19 @@ public class VoidWarsPlayers implements Listener {
 
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
-        Player player = event.getPlayer();
-        if (!game.playerManager().isRegistered(player)) {
+        GamePlayer player = game.playerManager().getPlayer(event.getPlayer());
+        if (player == null) {
             return;
         }
         if (!game.started()) {
             event.setCancelled(true);
-            return;
         }
     }
+
+    @EventHandler
     public void onJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
-        if (!game.playerManager().isRegistered(player)) {
+        GamePlayer player = game.playerManager().getPlayer(event.getPlayer());
+        if (player == null) {
             return;
         }
         if (game.started()) {

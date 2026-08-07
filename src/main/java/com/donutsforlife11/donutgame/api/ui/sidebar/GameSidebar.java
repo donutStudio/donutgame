@@ -1,7 +1,9 @@
 package com.donutsforlife11.donutgame.api.ui.sidebar;
 
 import java.util.Collection;
+import java.util.Objects;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.bukkit.entity.Player;
 
@@ -17,7 +19,10 @@ public class GameSidebar {
     public GameSidebar(GameModule module, UiManager uiManager) {
         this.module = module;
         this.uiManager = uiManager;
-        this.viewersSupplier = module.playerManager()::getPlayers;
+        this.viewersSupplier = () -> module.playerManager().getPlayers().stream()
+            .map(gamePlayer -> gamePlayer.player())
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
     }
 }
 

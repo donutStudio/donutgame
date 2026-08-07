@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import org.bukkit.entity.Player;
@@ -29,26 +30,23 @@ public class ModuleService {
     private int nextIndex = 0;
 
     public CompletableFuture<GameModule> loadModule(GameModuleDescriptor descriptor) throws Exception {
-        int index;
-        if (freeIndexes.isEmpty()) {
-            index = nextIndex++;
-        } else {
-            index = freeIndexes.poll();
-        }
+        int index = freeIndexes.isEmpty() ? nextIndex++ : freeIndexes.poll();
         GameModule module = descriptor.createModule();
         activeGames.put(index, module);
         try {
+            PlayerManager playerManager = new PlayerManager(module);
             module.initialize(
                 plugin,
-                descriptor, 
-                index, 
-                new PlayerManager(module), 
+                descriptor,
+                index,
+                playerManager,
                 new MapManager(module, plugin.mapService(), plugin.worldService()),
                 new UiManager(module, plugin),
                 new TimeManager(plugin),
-                new TeamManager(),
+                new TeamManager(playerManager),
                 new BorderManager(module)
             );
+            module.borderManager().initialize();
             module.startLoadSequence();
             return CompletableFuture.completedFuture(module);
         } catch (RuntimeException e) {
@@ -83,7 +81,7 @@ public class ModuleService {
     }
 
     public void unloadAll() {
-        for (int gameIndex : activeGames.keySet()) {
+        for (int gameIndex : Set.copyOf(activeGames.keySet())) {
             unloadModule(gameIndex);
         }
     }
