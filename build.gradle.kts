@@ -11,7 +11,7 @@ dependencies {
     compileOnly("net.dmulloy2:ProtocolLib:5.4.0")
     compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.3.12")
     compileOnly("com.infernalsuite.asp:api:4.0.0-SNAPSHOT")
-    implementation("fr.skytasul:glowingentities:1.4.11")
+    implementation("fr.skytasul:glowingentities:2.0.0")
     implementation("fr.mrmicky:fastboard:2.2.0")
     implementation("com.infernalsuite.asp:file-loader:4.0.0-SNAPSHOT") {
         exclude(group = "com.infernalsuite.asp", module = "api")

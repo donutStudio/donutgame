@@ -6,6 +6,7 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
 
+import org.bukkit.Bukkit;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 
@@ -15,39 +16,48 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
 public class GameTeam {
+    private final TeamManager teamManager;
     private final Team bukkitTeam;
     private final Set<UUID> members = new LinkedHashSet<>();
-
-    private final TeamManager teamManager;
 
     private NamedTextColor color = NamedTextColor.WHITE;
     private boolean teamGlow = true;
     private Component prefix = Component.empty();
     private Component suffix = Component.empty();
-    private boolean friendlyFire = false;
+    private boolean friendlyFire;
     private boolean seeFriendlyInvisibles = true;
     private Team.OptionStatus nametagVisibility = Team.OptionStatus.ALWAYS;
     private Team.OptionStatus collisionRule = Team.OptionStatus.FOR_OWN_TEAM;
 
     public GameTeam(TeamManager teamManager, Scoreboard scoreboard) {
         this.teamManager = teamManager;
-        this.bukkitTeam = scoreboard.registerNewTeam("team_" + System.identityHashCode(this));
+        bukkitTeam = scoreboard.registerNewTeam("team_" + Integer.toUnsignedString(System.identityHashCode(this), 36));
         applyProperties();
     }
 
     public GameTeam addPlayer(GamePlayer player) {
-        members.add(player.uuid());
+        if (player == null || !members.add(player.uuid())) {
+            return this;
+        }
+        teamManager.assign(this, player);
         if (player.player() != null) {
+            player.player().setScoreboard(bukkitTeam.getScoreboard());
             bukkitTeam.addEntity(player.player());
         }
+        teamManager.playerManager().module().uiManager().refreshPlayerState();
         return this;
     }
 
     public GameTeam removePlayer(GamePlayer player) {
-        members.remove(player.uuid());
+        if (player == null || !members.remove(player.uuid())) {
+            return this;
+        }
+        teamManager.unassign(this, player);
         if (player.player() != null) {
             bukkitTeam.removeEntity(player.player());
+            player.player().setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
         }
+        teamManager.playerManager().module().uiManager().refreshPlayerState();
         return this;
     }
 
@@ -76,6 +86,14 @@ public class GameTeam {
         bukkitTeam.setCanSeeFriendlyInvisibles(seeFriendlyInvisibles);
         bukkitTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, nametagVisibility);
         bukkitTeam.setOption(Team.Option.COLLISION_RULE, collisionRule);
+        teamManager.playerManager().module().uiManager().refreshPlayerState();
+    }
+
+    GameTeam clearMembers() {
+        for (GamePlayer player : Set.copyOf(getMembers())) {
+            removePlayer(player);
+        }
+        return this;
     }
 
     public GameTeam setColor(NamedTextColor color) {
@@ -156,12 +174,5 @@ public class GameTeam {
 
     public Team.OptionStatus collisionRule() {
         return collisionRule;
-    }
-
-    GameTeam clearMembers() {
-        for (GamePlayer player : Set.copyOf(getMembers())) {
-            removePlayer(player);
-        }
-        return this;
     }
 }

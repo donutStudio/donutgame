@@ -21,6 +21,9 @@ public class BorderParticleSampler {
         if (sizeX < 0.0 || sizeY < 0.0 || sizeZ < 0.0) {
             return List.of();
         }
+        if (border.shape() == BorderManager.BorderShape.CUBOID) {
+            return sampleCuboid(dimensions, spacing, maxParticles);
+        }
 
         int targetCount = estimateParticleCount(sizeX, sizeY, sizeZ, spacing, maxParticles);
         int candidateCount = targetCount * 2;
@@ -46,6 +49,46 @@ public class BorderParticleSampler {
         }
         return points;
     }
+
+    private static List<Vector> sampleCuboid(Vector dimensions, double spacing, int maxParticles) {
+        double halfX = dimensions.getX() / 2.0;
+        double halfY = dimensions.getY() / 2.0;
+        double halfZ = dimensions.getZ() / 2.0;
+        List<Vector> points = new ArrayList<>(maxParticles);
+        Set<GridCell> occupiedCells = new HashSet<>();
+        int perFace = Math.max(1, maxParticles / 6);
+        addCuboidFace(points, occupiedCells, spacing, perFace, -halfX, -halfY, -halfZ, -halfX, halfY, halfZ);
+        addCuboidFace(points, occupiedCells, spacing, perFace, halfX, -halfY, -halfZ, halfX, halfY, halfZ);
+        addCuboidFace(points, occupiedCells, spacing, perFace, -halfX, -halfY, -halfZ, halfX, -halfY, halfZ);
+        addCuboidFace(points, occupiedCells, spacing, perFace, -halfX, halfY, -halfZ, halfX, halfY, halfZ);
+        addCuboidFace(points, occupiedCells, spacing, perFace, -halfX, -halfY, -halfZ, halfX, halfY, -halfZ);
+        addCuboidFace(points, occupiedCells, spacing, perFace, -halfX, -halfY, halfZ, halfX, halfY, halfZ);
+        return points;
+    }
+
+    private static void addCuboidFace(List<Vector> points, Set<GridCell> occupiedCells, double spacing, int maxFaceParticles,
+                                  double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
+    double widthA = minX == maxX ? maxY - minY : maxX - minX;
+    double widthB = minZ == maxZ ? maxY - minY : maxZ - minZ;
+    double faceSpacing = Math.max(spacing, Math.sqrt(Math.max(1.0, widthA * widthB) / maxFaceParticles));
+    int added = 0;
+
+    for (double x = minX; x <= maxX + 1.0e-6; x += step(minX, maxX, faceSpacing)) {
+        for (double y = minY; y <= maxY + 1.0e-6; y += step(minY, maxY, faceSpacing)) {
+            for (double z = minZ; z <= maxZ + 1.0e-6; z += step(minZ, maxZ, faceSpacing)) {
+                Vector point = new Vector(clampAxis(x, minX, maxX), clampAxis(y, minY, maxY), clampAxis(z, minZ, maxZ));
+                if (!occupiedCells.add(GridCell.from(point, faceSpacing))) {
+                    continue;
+                }
+
+                points.add(point);
+                if (++added >= maxFaceParticles) {
+                    return;
+                }
+            }
+        }
+    }
+}
 
     private static Vector fibonacciDirection(int index, int count) {
         double y = 1.0 - 2.0 * ((index + 0.5) / count);
@@ -83,5 +126,13 @@ public class BorderParticleSampler {
         static GridCell from(Vector point, double spacing) {
             return new GridCell(Math.round(point.getX() / spacing), Math.round(point.getY() / spacing), Math.round(point.getZ() / spacing));
         }
+    }
+
+    private static double step(double min, double max, double spacing) {
+        return min == max ? Double.POSITIVE_INFINITY : Math.max(0.25, spacing);
+    }
+
+    private static double clampAxis(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 }

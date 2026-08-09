@@ -1,118 +1,97 @@
 package com.donutsforlife11.donutgame.api.ui;
 
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
+import org.bukkit.Sound;
+import org.bukkit.SoundCategory;
 import org.bukkit.entity.Player;
 
 import com.donutsforlife11.donutgame.Donutgame;
+import com.donutsforlife11.donutgame.api.entity.GameEntity;
+import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.team.GameTeam;
 import com.donutsforlife11.donutgame.api.ui.sidebar.GameSidebar;
-import com.donutsforlife11.donutgame.api.ui.title.TitlePacketTracker;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
+import com.donutsforlife11.donutgame.internal.ui.GlowService;
 
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.title.Title;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.title.TitlePart;
 
 public class UiManager {
-    private final Donutgame plugin;
-    private final GameModule module;
-
-    private final TitlePacketTracker titlePacketTracker;
     private final Set<GameSidebar> sidebars = ConcurrentHashMap.newKeySet();
+    private final Set<GameGlow> glows = ConcurrentHashMap.newKeySet();
+    private final GameModule module;
+    private final GlowService glowService;
+    private boolean playerStateRefreshScheduled;
 
     public UiManager(GameModule module, Donutgame plugin) {
         this.module = module;
-        this.plugin = plugin;
-        this.titlePacketTracker = new TitlePacketTracker(this.plugin);
-    }
-
-    public void title(Player player, Component title) {
-        title(Collections.singletonList(player), title);
+        glowService = plugin.glowService();
     }
 
     public void title(GamePlayer player, Component title) {
-        if (player.player() != null) {
-            title(player.player(), title);
-        }
+        title(Set.of(player), title);
     }
 
-    public void title(Collection<Player> players, Component title) {
-        Audience.audience(players).sendTitlePart(TitlePart.TITLE, title);
-    }
-
-    public void titlePlayers(Collection<GamePlayer> players, Component title) {
-        title(resolvePlayers(players), title);
-    }
-
-    public void subtitle(Player player, Component subtitle) {
-        subtitle(Collections.singletonList(player), subtitle);
+    public void title(Collection<GamePlayer> players, Component title) {
+        Audience.audience(resolvePlayers(players)).sendTitlePart(TitlePart.TITLE, title);
     }
 
     public void subtitle(GamePlayer player, Component subtitle) {
-        if (player.player() != null) {
-            subtitle(player.player(), subtitle);
+        subtitle(Set.of(player), subtitle);
+    }
+
+    public void subtitle(Collection<GamePlayer> players, Component subtitle) {
+        for (Player player : resolvePlayers(players)) {
+            player.sendTitlePart(TitlePart.SUBTITLE, subtitle);
         }
-    }
-
-    public void subtitle(Collection<Player> players, Component subtitle) {
-        for (Player player : players) {
-            if (!titlePacketTracker.available() || titlePacketTracker.hasActiveTitle(player)) {
-                player.sendTitlePart(TitlePart.SUBTITLE, subtitle);
-                continue;
-            }
-            player.showTitle(Title.title(Component.empty(), subtitle));
-        }
-    }
-
-    public void subtitlePlayers(Collection<GamePlayer> players, Component subtitle) {
-        subtitle(resolvePlayers(players), subtitle);
-    }
-
-    public void actionbar(Player player, Component actionbar) {
-        actionbar(Collections.singletonList(player), actionbar);
     }
 
     public void actionbar(GamePlayer player, Component actionbar) {
-        if (player.player() != null) {
-            actionbar(player.player(), actionbar);
-        }
+        actionbar(Set.of(player), actionbar);
     }
 
-    public void actionbar(Collection<Player> players, Component actionbar) {
-        Audience.audience(players).sendActionBar(actionbar);
-    }
-
-    public void actionbarPlayers(Collection<GamePlayer> players, Component actionbar) {
-        actionbar(resolvePlayers(players), actionbar);
-    }
-
-    public void chat(Player player, Component message) {
-        chat(Collections.singletonList(player), message);
+    public void actionbar(Collection<GamePlayer> players, Component actionbar) {
+        Audience.audience(resolvePlayers(players)).sendActionBar(actionbar);
     }
 
     public void chat(GamePlayer player, Component message) {
-        if (player.player() != null) {
-            chat(player.player(), message);
+        chat(Set.of(player), message);
+    }
+
+    public void chat(Collection<GamePlayer> players, Component message) {
+        Audience.audience(resolvePlayers(players)).sendMessage(message);
+    }
+
+    public void gameMessage(GamePlayer player, Component message) {
+        gameMessage(Set.of(player), message);
+    }
+
+    public void gameMessage(Collection<GamePlayer> players, Component message) {
+        chat(players, Component.text().append(Component.text("Game > ", NamedTextColor.GREEN, TextDecoration.BOLD)).append(message).build());
+    }
+
+    public void sound(GamePlayer player, Sound sound, float volume, float pitch) {
+        sound(Set.of(player), sound, volume, pitch);
+    }
+
+    public void sound(Collection<GamePlayer> players, Sound sound, float volume, float pitch) {
+        for (Player player : resolvePlayers(players)) {
+            player.playSound(player.getLocation(), sound, SoundCategory.MASTER, volume, pitch);
         }
     }
 
-    public void chat(Collection<Player> players, Component message) {
-        Audience.audience(players).sendMessage(message);
-    }
-
-    public void chatPlayers(Collection<GamePlayer> players, Component message) {
-        chat(resolvePlayers(players), message);
-    }
-
     public GameSidebar newSidebar() {
-        GameSidebar sidebar = new GameSidebar(module, this);
+        GameSidebar sidebar = new GameSidebar(module);
         sidebars.add(sidebar);
         return sidebar;
     }
@@ -121,11 +100,128 @@ public class UiManager {
         return sidebars;
     }
 
-    @SuppressWarnings("null")
+    public GameGlow glow(GameEntity entity, Collection<GamePlayer> viewers, NamedTextColor color) {
+        if (entity == null || entity.bukkitEntity() == null) {
+            return new GameGlow(() -> {
+            });
+        }
+        Collection<Player> resolvedViewers = resolvePlayers(viewers);
+        glowService.glowEntity(entity.bukkitEntity(), resolvedViewers, color);
+        GameGlow glow = new GameGlow(() -> glowService.clearEntityGlow(entity.bukkitEntity(), resolvedViewers));
+        glows.add(glow);
+        return glow;
+    }
+
+    public GameGlow glow(GameEntity entity, GamePlayer viewer, NamedTextColor color) {
+        return glow(entity, Set.of(viewer), color);
+    }
+
+    public GameGlow glow(GameLocation location, org.bukkit.block.data.BlockData blockData, Collection<GamePlayer> viewers, NamedTextColor color) {
+        GameGlow glow = glowService.glowBlock(module.world(), location, blockData, resolvePlayers(viewers), color);
+        glows.add(glow);
+        return glow;
+    }
+
+    public GameGlow glow(GameLocation location, org.bukkit.block.data.BlockData blockData, GamePlayer viewer, NamedTextColor color) {
+        return glow(location, blockData, Set.of(viewer), color);
+    }
+
+    public void refreshTeamGlows() {
+        refreshPlayerState();
+    }
+
+    public void refreshPlayerState() {
+        if (playerStateRefreshScheduled) {
+            return;
+        }
+
+        playerStateRefreshScheduled = true;
+
+        module.plugin().getServer().getScheduler().runTask(module.plugin(), () -> {
+            playerStateRefreshScheduled = false;
+            refreshPlayerStateNow();
+        });
+    }
+
+    private void refreshPlayerStateNow() {
+        List<GamePlayer> players = new ArrayList<>(module.playerManager().getPlayers());
+
+        for (GamePlayer viewer : players) {
+            Player viewerPlayer = viewer.player();
+
+            if (viewerPlayer == null || !viewerPlayer.isOnline()) {
+                continue;
+            }
+
+            for (GamePlayer subject : players) {
+                if (viewer.uuid().equals(subject.uuid())) {
+                    continue;
+                }
+
+                Player subjectPlayer = subject.player();
+
+                if (subjectPlayer == null || !subjectPlayer.isOnline()) {
+                    continue;
+                }
+
+                /*
+                * Do not send entity visibility/glow changes while one player
+                * has crossed into the new round world and the other has not.
+                */
+                if (!viewerPlayer.getWorld().equals(subjectPlayer.getWorld())) {
+                    continue;
+                }
+
+                if (subject.isSpectator()) {
+                    viewerPlayer.hidePlayer(module.plugin(), subjectPlayer);
+                    glowService.clearEntityGlow(subjectPlayer, Set.of(viewerPlayer));
+                    continue;
+                }
+
+                viewerPlayer.showPlayer(module.plugin(), subjectPlayer);
+
+                GameTeam viewerTeam = viewer.team();
+                GameTeam subjectTeam = subject.team();
+
+                if (
+                    viewerTeam != null
+                        && viewerTeam == subjectTeam
+                        && subjectTeam.teamGlow()
+                ) {
+                    glowService.glowEntity(
+                        subjectPlayer,
+                        Set.of(viewerPlayer),
+                        subjectTeam.color()
+                    );
+                } else {
+                    glowService.clearEntityGlow(
+                        subjectPlayer,
+                        Set.of(viewerPlayer)
+                    );
+                }
+            }
+        }
+    }
+
+    public void clear() {
+        for (GameSidebar sidebar : Set.copyOf(sidebars)) {
+            sidebar.delete();
+            sidebars.remove(sidebar);
+        }
+        for (GameGlow glow : Set.copyOf(glows)) {
+            glow.clear();
+            glows.remove(glow);
+        }
+    }
+
     private Collection<Player> resolvePlayers(Collection<GamePlayer> players) {
-        return players.stream()
-            .map(GamePlayer::player)
-            .filter(Objects::nonNull)
-            .collect(Collectors.toSet());
+        List<Player> resolved = new ArrayList<>(players.size());
+        for (GamePlayer player : players) {
+            Player bukkitPlayer = player == null ? null : player.player();
+            if (bukkitPlayer != null) {
+                resolved.add(bukkitPlayer);
+            }
+        }
+        return resolved;
     }
 }

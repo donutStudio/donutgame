@@ -7,7 +7,7 @@ sourceSets {
         java.setSrcDirs(listOf("src"))
 
         resources.setSrcDirs(listOf("."))
-        resources.include("config.yml")
+        resources.include("config.yml", "events.yml", "data/**")
     }
 }
 

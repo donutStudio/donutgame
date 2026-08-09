@@ -5,6 +5,7 @@ import java.util.List;
 import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.bukkit.Location;
 import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.api.border.BorderManager.BorderShape;
@@ -32,6 +33,14 @@ public class GameBorder {
     }
 
     void remove() {
+        if (centerTimer != null) {
+            centerTimer.cancel();
+            centerTimer = null;
+        }
+        if (dimensionsTimer != null) {
+            dimensionsTimer.cancel();
+            dimensionsTimer = null;
+        }
         borderManager.borders().remove(this);
     }
 
@@ -120,22 +129,120 @@ public class GameBorder {
     }
 
     void drawParticles() {
-        World world = borderManager.borders().stream().findFirst().map(ignored -> borderManager.module().world().bukkitWorld()).orElse(null);
+        World world = borderManager.module().world().bukkitWorld();
         if (world == null) {
             return;
         }
-        List<Player> viewers = world.getNearbyPlayers(center.toBukkit(world), borderManager.particleViewDistance()).stream().toList();
+
+        List<Player> viewers = borderManager.module().playerManager().getPlayers().stream()
+            .map(gamePlayer -> gamePlayer.player())
+            .filter(player -> player != null && player.getWorld().equals(world))
+            .toList();
+
         if (viewers.isEmpty()) {
             return;
         }
-        List<Vector> points = BorderParticleSampler.sample(this, borderManager.particleSpacing(), 500);
-        Particle selectedParticle = isMoving() ? borderManager.movingParticle() : borderManager.defaultParticle();
-        for (Vector point : points) {
-            var location = center.toBukkit(world).add(point);
-            for (Player viewer : viewers) {
-                viewer.spawnParticle(selectedParticle, location, 1, 0, 0, 0, 0);
+
+        Particle particle = isMoving() ? borderManager.movingParticle() : borderManager.defaultParticle();
+        Location centerLocation = center.toBukkit(world);
+
+        /*
+        * Keep the particle count bounded.
+        *
+        * Cuboids get 360 because those particles are divided across six faces.
+        * Curved shapes get 420 because their sampler distributes points across
+        * the complete surface.
+        */
+        int maxParticles = shape == BorderShape.CUBOID ? 360 : 420;
+        List<Vector> points = BorderParticleSampler.sample(this, borderManager.particleSpacing(), maxParticles);
+
+        double viewDistanceSquared = squared(borderManager.particleViewDistance());
+
+        for (Player viewer : viewers) {
+            Location viewerLocation = viewer.getLocation();
+            int spawned = 0;
+
+            for (Vector point : points) {
+                Location location = centerLocation.clone().add(point);
+
+                if (viewerLocation.distanceSquared(location) > viewDistanceSquared) {
+                    continue;
+                }
+
+                viewer.spawnParticle(particle, location, 1, 0, 0, 0, 0, null, true);
+                spawned++;
+            }
+
+            /*
+            * Large ellipsoids/cylindroids can have globally distributed samples
+            * with no sample landing inside this player's small view radius.
+            *
+            * In that case, render a small fallback patch around the surface
+            * direction nearest to the player.
+            */
+            if (spawned == 0 && shape != BorderShape.CUBOID) {
+                drawNearbySurfaceFallback(viewer, particle, centerLocation);
             }
         }
+    }
+
+    private void drawNearbySurfaceFallback(Player viewer, Particle particle, Location centerLocation) {
+        Vector relative = viewer.getLocation().toVector().subtract(centerLocation.toVector());
+        if (relative.lengthSquared() < 1.0e-6) {
+            relative.setX(1);
+        }
+        Vector direction = relative.clone().normalize();
+        Vector surface = findSurfacePoint(direction);
+        if (surface == null) {
+            return;
+        }
+        Location base = centerLocation.clone().add(surface);
+        double maxDistanceSquared = squared(borderManager.particleViewDistance());
+        if (viewer.getLocation().distanceSquared(base) > maxDistanceSquared) {
+            return;
+        }
+        Vector tangentA = direction.clone().crossProduct(new Vector(0, 1, 0));
+        if (tangentA.lengthSquared() < 1.0e-6) {
+            tangentA = direction.clone().crossProduct(new Vector(1, 0, 0));
+        }
+        tangentA.normalize();
+        Vector tangentB = direction.clone().crossProduct(tangentA).normalize();
+        double spacing = Math.max(1.25, borderManager.particleSpacing());
+        for (int a = -2; a <= 2; a++) {
+            for (int b = -2; b <= 2; b++) {
+                Vector sampleDirection = surface.clone()
+                    .add(tangentA.clone().multiply(a * spacing))
+                    .add(tangentB.clone().multiply(b * spacing))
+                    .normalize();
+                Vector sample = findSurfacePoint(sampleDirection);
+                if (sample == null) {
+                    continue;
+                }
+                Location location = centerLocation.clone().add(sample);
+                if (viewer.getLocation().distanceSquared(location) <= maxDistanceSquared) {
+                    viewer.spawnParticle(particle, location, 1, 0, 0, 0, 0, null, true);
+                }
+            }
+        }
+    }
+    private Vector findSurfacePoint(Vector direction) {
+        Vector half = dimensions().multiply(0.5);
+        double maxDistance = half.length() * 1.1;
+        if (maxDistance <= 0) {
+            return null;
+        }
+        double inside = 0;
+        double outside = maxDistance;
+        for (int i = 0; i < 10; i++) {
+            double distance = (inside + outside) * 0.5;
+            Vector point = direction.clone().multiply(distance);
+            if (containsLocation(point.getX(), point.getY(), point.getZ())) {
+                inside = distance;
+            } else {
+                outside = distance;
+            }
+        }
+        return direction.clone().multiply(inside);
     }
 
     public boolean isMoving() {

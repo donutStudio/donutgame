@@ -2,6 +2,7 @@ package com.donutsforlife11.donutgame.internal.player;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Map;
 
 import org.bukkit.GameMode;
 import org.bukkit.Registry;
@@ -22,18 +23,53 @@ import com.donutsforlife11.donutgame.internal.map.WorldService;
 import com.donutsforlife11.donutgame.internal.player.WorldPlayerState.AttributeState;
 
 public class PlayerEvents implements Listener {
+    private static final Map<Attribute, Double> VANILLA_PLAYER_ATTRIBUTE_BASES = Map.ofEntries(
+        Map.entry(Attribute.MAX_HEALTH, 20.0),
+        Map.entry(Attribute.FOLLOW_RANGE, 32.0),
+        Map.entry(Attribute.KNOCKBACK_RESISTANCE, 0.0),
+        Map.entry(Attribute.MOVEMENT_SPEED, 0.1),
+        Map.entry(Attribute.FLYING_SPEED, 0.4),
+        Map.entry(Attribute.ATTACK_DAMAGE, 1.0),
+        Map.entry(Attribute.ATTACK_KNOCKBACK, 0.0),
+        Map.entry(Attribute.ATTACK_SPEED, 4.0),
+        Map.entry(Attribute.ARMOR, 0.0),
+        Map.entry(Attribute.ARMOR_TOUGHNESS, 0.0),
+        Map.entry(Attribute.LUCK, 0.0),
+        Map.entry(Attribute.JUMP_STRENGTH, 0.42),
+        Map.entry(Attribute.OXYGEN_BONUS, 0.0),
+        Map.entry(Attribute.BURNING_TIME, 1.0),
+        Map.entry(Attribute.EXPLOSION_KNOCKBACK_RESISTANCE, 0.0),
+        Map.entry(Attribute.MOVEMENT_EFFICIENCY, 0.0),
+        Map.entry(Attribute.WATER_MOVEMENT_EFFICIENCY, 0.0),
+        Map.entry(Attribute.BLOCK_BREAK_SPEED, 1.0),
+        Map.entry(Attribute.SUBMERGED_MINING_SPEED, 0.2),
+        Map.entry(Attribute.ENTITY_INTERACTION_RANGE, 3.0),
+        Map.entry(Attribute.BLOCK_INTERACTION_RANGE, 4.5),
+        Map.entry(Attribute.SAFE_FALL_DISTANCE, 3.0),
+        Map.entry(Attribute.FALL_DAMAGE_MULTIPLIER, 1.0),
+        Map.entry(Attribute.SNEAKING_SPEED, 0.3),
+        Map.entry(Attribute.MINING_EFFICIENCY, 0.0),
+        Map.entry(Attribute.SWEEPING_DAMAGE_RATIO, 0.0),
+        Map.entry(Attribute.SCALE, 1.0),
+        Map.entry(Attribute.STEP_HEIGHT, 0.6),
+        Map.entry(Attribute.GRAVITY, 0.08),
+        Map.entry(Attribute.CAMERA_DISTANCE, 4.0)
+    );
+
     private final PlayerStateStore playerStateStore;
+    private final WorldService worldService;
 
     public PlayerEvents(PlayerStateStore playerStateStore, WorldService worldService) {
         this.playerStateStore = playerStateStore;
+        this.worldService = worldService;
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void playerChangedWorld(PlayerChangedWorldEvent event) {
         Player player = event.getPlayer();
-        String fromWorldName = event.getFrom().getName();
-        String toWorldName = player.getWorld().getName();
-        if (fromWorldName == toWorldName) {
+        String fromWorldName = worldService.getPlayerStateId(event.getFrom());
+        String toWorldName = worldService.getPlayerStateId(player.getWorld());
+        if (fromWorldName.equals(toWorldName)) {
             return;
         }
         WorldPlayerState oldWorldState = savePlayerState(player);
@@ -48,7 +84,7 @@ public class PlayerEvents implements Listener {
     @EventHandler
     public void playerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
-        String worldId = player.getWorld().getName();
+        String worldId = worldService.getPlayerStateId(player.getWorld());
 
         playerStateStore.save(player.getUniqueId(), worldId, savePlayerState(player));
     }
@@ -126,7 +162,8 @@ public class PlayerEvents implements Listener {
             }
         }
 
-        player.setHealth(Math.min(state.health, player.getAttribute(Attribute.MAX_HEALTH).getValue()));
+        AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
+        player.setHealth(Math.min(state.health, maxHealth == null ? state.health : maxHealth.getValue()));
         player.setFoodLevel(state.foodLevel);
         player.setSaturation(state.saturation);
         player.setExhaustion(state.exhaustion);
@@ -153,9 +190,11 @@ public class PlayerEvents implements Listener {
         for (Attribute attribute : Registry.ATTRIBUTE) {
             AttributeInstance instance = player.getAttribute(attribute);
             if (instance != null) {
-                state.attributes.add(new AttributeState(attribute, instance.getDefaultValue(), new HashSet<>()));
+                state.attributes.add(new AttributeState(attribute, defaultBaseValue(attribute, instance), new HashSet<>()));
             }
         }
+        AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
+        state.health = maxHealth == null ? 20.0 : defaultBaseValue(Attribute.MAX_HEALTH, maxHealth);
         state.foodLevel = 20;
         state.saturation = 5.0f;
         state.exhaustion = 0.0f;
@@ -164,7 +203,7 @@ public class PlayerEvents implements Listener {
         state.exp = 0.0f;
         state.totalExperience = 0;
 
-        state.gameMode = GameMode.ADVENTURE;
+        state.gameMode = GameMode.SURVIVAL;
         state.potionEffects = new ArrayList<>();
         return state;
     }
@@ -177,5 +216,9 @@ public class PlayerEvents implements Listener {
         }
 
         return clone;
+    }
+
+    private double defaultBaseValue(Attribute attribute, AttributeInstance instance) {
+        return VANILLA_PLAYER_ATTRIBUTE_BASES.getOrDefault(attribute, instance.getDefaultValue());
     }
 }

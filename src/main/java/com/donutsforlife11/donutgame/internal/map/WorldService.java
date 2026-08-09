@@ -6,7 +6,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -53,7 +52,7 @@ public class WorldService {
         this.playerStateStore = playerStateStore;
     }
 
-    public CompletableFuture<World> loadSlimeWorld(Path slimeFile, String instanceWorldName) {
+    public CompletableFuture<World> loadSlimeWorld(Path slimeFile, String instanceWorldName, String playerStateId) {
         Objects.requireNonNull(slimeFile, "Slime world can't be null!");
         CompletableFuture<World> future = new CompletableFuture<>();
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -69,7 +68,7 @@ public class WorldService {
                     configureWorld(world);
 
                     worldsByName.put(world.getName(), new WorldSession(
-                        UUID.randomUUID().toString(),
+                        playerStateId,
                         instance
                     ));
 
@@ -164,18 +163,25 @@ public class WorldService {
                 World world = Bukkit.getWorld(worldName);
 
                 if (world != null) {
+                    Location fallback = Bukkit.getWorlds().getFirst().getSpawnLocation();
                     for (Player player : world.getPlayers()) {
-                        player.teleport(Bukkit.getWorlds().getFirst().getSpawnLocation());
+                        player.teleport(fallback);
                     }
-
-                    Bukkit.unloadWorld(world, false);
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        try {
+                            Bukkit.unloadWorld(world, false);
+                            deleteWorldFolder(worldName);
+                            future.complete(null);
+                        } catch (Throwable throwable) {
+                            future.completeExceptionally(throwable);
+                        }
+                    });
+                    return null;
                 }
 
                 if (releasedSession != null) {
-                    playerStateStore.clearWorld(releasedSession.playerStateId());
                     deleteWorldFolder(worldName);
                 }
-
                 future.complete(null);
             } catch (Throwable throwable) {
                 future.completeExceptionally(throwable);
@@ -188,6 +194,10 @@ public class WorldService {
     public String getPlayerStateId(World world) {
         WorldSession session = worldsByName.get(world.getName());
         return session == null ? world.getName() : session.playerStateId();
+    }
+
+    public void clearPlayerState(String playerStateId) {
+        playerStateStore.clearWorld(playerStateId);
     }
 
     public void unloadAll() {
@@ -305,10 +315,7 @@ public class WorldService {
 
     private record CachedClipboard(long lastModified, Clipboard clipboard, SchematicMetadata metadata) {
     }
-    private record WorldSession(
-        String playerStateId,
-        SlimeWorldInstance worldInstance
-    ) {
+    private record WorldSession(String playerStateId, SlimeWorldInstance worldInstance) {
     }
     public record SchematicMetadata(int width, int height, int depth) {
     }

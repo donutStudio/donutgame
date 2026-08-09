@@ -1,0 +1,57 @@
+item_drops:
+  - {time: 0, pool: ["white_wool[custom_data={\"donutgame:team_sync\":true,\"donutgame:infinite_build\":true}] 65"]}
+  - {time: 0, pool: ["cooked_beef 16"]}
+  - {time: 0, pool: ["shears"]}
+  - {time: 20, pool: ["oak_planks 64"]}
+  - {time: 50, pool: ["flint_and_steel", "wind_charge 4", "ender_pearl"]}
+  - {time: 80, pool: ["golden_apple", "tnt[custom_data={\"donutgame:auto_ignite\":80}]", "lava_bucket"]}
+  - {time: 110, pool: ["arrow 5"]}
+  - {time: 110, pool: ["tnt[custom_data={\"donutgame:auto_ignite\":80}] 2", "ender_pearl 3", "cobweb 8"]}
+  - {time: 125, pool: ["leather 24", "copper_ingot 12"]}
+  - {time: 140, pool: ["cobblestone 64"]}
+  - {time: 220, pool: ["tnt[custom_data={\"donutgame:auto_ignite\":80}]", "wind_charge 16", "water_bucket"]}
+  - {time: 280, pool: ["arrow 20", "tipped_arrow[potion_contents={potion:strong_harming}] 10"]}
+  - {time: 310, pool: ["bow[enchantments={punch:1,power:1}]", "crossbow[enchantments={quick_charge:1}]", "trident"]}
+  - {time: 310, pool: ["snowball 32", "shield[damage=328]", "copper_ingot 24"]}
+  - {time: 330, pool: ["cobweb 32", "golden_spear[enchantments={knockback:2}]", "scaffolding 64"]}
+  - {time: 350, pool: ["creeper_spawn_egg", "iron_golem_spawn_egg", "water_bucket"]}
+  - {time: 380, pool: ["iron_ingot 3"]}
+  - {time: 380, pool: ["gold_ingot 24", "iron_ingot 21", "diamond 24"]}
+  - {time: 460, pool: ["mace", "totem_of_undying"]}
+  - {time: 500, pool: ["golden_apple 2", "enchanted_golden_apple", "elytra"]}
+  - {time: 540, pool: ["golden_spear[enchantments={lunge:2}]", "wooden_sword[enchantments={knockback:2,fire_aspect:1}]"]}
+  - {time: 580, pool: ["totem_of_undying", "tnt[custom_data={\"donutgame:auto_ignite\":80}]"]}
+  - {time: 630, pool: ["splash_potion[potion_contents={potion:invisibility}]", "splash_potion[potion_contents={potion:strong_leaping}]", "splash_potion[potion_contents={potion:strong_strength}]", "splash_potion[potion_contents={potion:strong_swiftness}]"]}
+  - {time: 660, pool: ["water_bucket", "golden_apple", "lava_bucket"]}
+  - {time: 690, pool: ["splash_potion[potion_contents={potion:strong_regeneration}]", "splash_potion[potion_contents={potion:strong_healing}]", "splash_potion[potion_contents={potion:long_regeneration}]"]}
+  - {time: 720, pool: ["splash_potion[potion_contents={potion:strong_poison}]", "splash_potion[potion_contents={potion:strong_harming}]", "splash_potion[potion_contents={potion:weakness}]"]}
+  - {time: 750, pool: ["enchanting_table"]}
+  - {time: 750, pool: ["bookshelf 64"]}
+  - {time: 750, pool: ["grindstone"]}
+  - {time: 750, pool: ["lapis_lazuli"]}
+  - {time: 790, pool: ["enchanted_book[stored_enchantments={swift_sneak:3}]", "enchanted_book[stored_enchantments={wind_burst:2}]"]}
+  - {time: 830, pool: ["wind_charge 20", "bow[enchantments={power:5,flame:1,punch:2}]"]}
+  - {time: 880, pool: ["obsidian 2"]}
+  - {time: 880, pool: ["end_crystal 2"]}
+  - {time: 910, pool: ["water_bucket", "lava_bucket"]}
+  - {time: 960, pool: ["rail 64"]}
+  - {time: 960, pool: ["tnt_minecart 3"]}
+
+borders:
+  - {time: 75, scale: 0.9}
+  - {time: 180, scale: 0.889}
+  - {time: 270, scale: 0.875}
+  - {time: 390, scale: 0.857}
+  - {time: 480, scale: 0.833}
+  - {time: 600, scale: 0.8}
+  - {time: 690, scale: 0.75}
+  - {time: 810, scale: 0.667}
+  - {time: 900, scale: 0.5}
+  - {time: 990, scale: 0.0}
+
+chest_fills:
+  - {time: 0, loot_table: "chest/base"}
+  - {time: 200, loot_table: "chest/common"}
+  - {time: 400, loot_table: "chest/rare"}
+  - {time: 600, loot_table: "chest/epic"}
+  - {time: 800, loot_table: "chest/legendary"}

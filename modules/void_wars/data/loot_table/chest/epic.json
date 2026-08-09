@@ -1,0 +1,43 @@
+{
+  "type": "minecraft:chest",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {"type": "minecraft:item", "name": "minecraft:diamond_sword", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 14, "max": 22}, "options": ["minecraft:sharpness", "minecraft:knockback", "minecraft:sweeping_edge"]}]},
+        {"type": "minecraft:item", "name": "minecraft:diamond_axe", "functions": [{"function": "minecraft:set_enchantments", "enchantments": {"minecraft:sharpness": {"type": "minecraft:uniform", "min": 2, "max": 4}}}]},
+        {"type": "minecraft:item", "name": "minecraft:diamond_spear", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 14, "max": 22}, "options": ["minecraft:sharpness", "minecraft:knockback", "minecraft:lunge"]}]},
+        {"type": "minecraft:item", "name": "minecraft:bow", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 14, "max": 22}, "options": ["minecraft:power", "minecraft:punch", "minecraft:flame"]}]},
+        {"type": "minecraft:item", "name": "minecraft:crossbow", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 14, "max": 22}, "options": ["minecraft:quick_charge", "minecraft:multishot", "minecraft:piercing"]}]},
+        {"type": "minecraft:item", "name": "minecraft:mace", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 14, "max": 22}, "options": ["minecraft:density", "minecraft:breach", "minecraft:wind_burst"]}]},
+        {"type": "minecraft:item", "name": "minecraft:trident", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 14, "max": 22}, "options": ["minecraft:loyalty", "minecraft:impaling", "minecraft:riptide", "minecraft:channeling"]}]}
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {"type": "minecraft:item", "name": "minecraft:diamond_chestplate", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 12, "max": 20}}]},
+        {"type": "minecraft:item", "name": "minecraft:diamond_leggings", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 12, "max": 20}}]},
+        {"type": "minecraft:item", "name": "minecraft:diamond_boots", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 12, "max": 20}}]},
+        {"type": "minecraft:item", "name": "minecraft:diamond_helmet", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 12, "max": 20}}]},
+        {"type": "minecraft:item", "name": "minecraft:golden_apple", "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}}]},
+        {"type": "minecraft:item", "name": "minecraft:ender_pearl", "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 3}}]},
+        {"type": "minecraft:item", "name": "minecraft:wind_charge", "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 8, "max": 14}}]},
+        {"type": "minecraft:item", "name": "minecraft:cobweb", "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 4, "max": 8}}]},
+        {"type": "minecraft:item", "name": "minecraft:splash_potion", "functions": [{"function": "minecraft:set_potion", "id": "minecraft:strong_strength"}]},
+        {"type": "minecraft:item", "name": "minecraft:splash_potion", "functions": [{"function": "minecraft:set_potion", "id": "minecraft:strong_swiftness"}]},
+        {"type": "minecraft:item", "name": "minecraft:splash_potion", "functions": [{"function": "minecraft:set_potion", "id": "minecraft:strong_healing"}]},
+        {"type": "minecraft:item", "name": "minecraft:splash_potion", "functions": [{"function": "minecraft:set_potion", "id": "minecraft:strong_poison"}]}
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {"type": "minecraft:empty", "weight": 7},
+        {"type": "minecraft:item", "name": "minecraft:totem_of_undying", "weight": 1},
+        {"type": "minecraft:item", "name": "minecraft:enchanted_golden_apple", "weight": 1},
+        {"type": "minecraft:item", "name": "minecraft:golden_apple", "weight": 2, "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}}]}
+      ]
+    }
+  ]
+}

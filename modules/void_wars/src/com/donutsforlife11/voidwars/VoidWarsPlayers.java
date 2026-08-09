@@ -5,13 +5,16 @@ import java.util.Collections;
 import java.util.List;
 
 import org.bukkit.GameMode;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
+import com.donutsforlife11.donutgame.api.event.GamePlayerEvent;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
+import com.donutsforlife11.donutgame.api.map.GameRegion;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
 
@@ -19,22 +22,29 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 
-public class VoidWarsPlayers implements Listener {
+public class VoidWarsPlayers {
     private final VoidWars game;
 
     public VoidWarsPlayers(VoidWars game) {
         this.game = game;
     }
 
+    public void bind() {
+        game.events().player(PlayerDeathEvent.class, PlayerDeathEvent::getPlayer, this::onDeath);
+        game.events().player(PlayerJoinEvent.class, PlayerJoinEvent::getPlayer, this::onJoin);
+        game.events().player(PlayerQuitEvent.class, PlayerQuitEvent::getPlayer, this::onQuit);
+        game.events().player(PlayerMoveEvent.class, PlayerMoveEvent::getPlayer, this::onMove);
+    }
+
     public void assignTeams(int teamSize) {
         if (teamSize <= 0) {
-            throw new IllegalArgumentException("Team size must be greater than zero!");
+            throw new IllegalArgumentException("Team size must be greater than zero.");
         }
-        List<GamePlayer> players = new ArrayList<>(game.playerManager().getNonSpectators());
-        int teamCount = (int) Math.ceil((double) players.size() / teamSize);
+        List<GamePlayer> players = new ArrayList<>(game.playerManager().getPlayers());
         Collections.shuffle(players);
+        int teamCount = Math.max(1, (int) Math.ceil(players.size() / (double) teamSize));
         for (int i = 0; i < teamCount; i++) {
-            game.teamManager().newTeam();
+            game.teamManager().newColoredTeam();
         }
         List<GameTeam> teams = new ArrayList<>(game.teamManager().getTeams());
         for (int i = 0; i < players.size(); i++) {
@@ -42,99 +52,157 @@ public class VoidWarsPlayers implements Listener {
         }
     }
 
-    public void setupPlayer(GamePlayer player) {
-        GameLocation spawnPoint = game.world().getPoints("spawn").get(0);
-        player.setRespawnLocation(spawnPoint);
-        player.teleport(spawnPoint);
-        if (game.started()) {
-            player.setSpectator();
-        } else {
-            player.setNonSpectator();
-            if (player.player() != null) {
-                player.player().setGameMode(GameMode.ADVENTURE);
-            }
+    public void prepareRoundPlayers() {
+        for (GamePlayer player : game.playerManager().getPlayers()) {
+            setupPlayer(player);
+            player.addEffect(PotionEffectType.INVISIBILITY, PotionEffect.INFINITE_DURATION, 1);
         }
     }
 
-    @EventHandler
-    public void onPlayerDeath(PlayerDeathEvent event) {
-        GamePlayer player = game.playerManager().getPlayer(event.getPlayer());
-        if (player == null) {
+    public void handleRegisteredPlayer(GamePlayer player) {
+        if (player.team() == null) {
+            int teamSize = Math.max(1, game.config().getInt("team_size"));
+            GameTeam team = smallestTeam();
+            if (team == null || team.getMembers().size() >= teamSize) {
+                team = game.teamManager().newColoredTeam();
+            }
+            team.addPlayer(player);
+        }
+        setupPlayer(player);
+        game.refreshAliveCounts();
+        game.checkRoundEnd();
+    }
+
+    public void handleUnregisteredPlayer(GamePlayer player) {
+        GameTeam team = player.team();
+        if (team != null) {
+            team.removePlayer(player);
+        }
+        game.clearReconnectRespawn(player);
+        game.refreshAliveCounts();
+        if (team != null && game.teamEliminated(team)) {
+            game.cancelTeamRespawns(team);
+        }
+        game.checkRoundEnd();
+    }
+
+    private void onDeath(GamePlayerEvent<PlayerDeathEvent> wrapped) {
+        GamePlayer player = wrapped.player();
+        GameLocation deathLocation = GameLocation.fromBukkit(wrapped.event().getPlayer().getLocation());
+        player.setRespawnLocation(game.respawnPointAfterDeath(deathLocation));
+        player.setSpectator(game.spectatorLocationFor(deathLocation));
+        if (!game.roundActive()) {
+            player.respawn(0, game::spawn);
             return;
         }
-        if (game.started()) {
-            if (tryRespawn(player, game.config().getInt("base_respawn_time"))) {
-                event.setKeepInventory(true);
-                event.getDrops().clear();
-                event.setKeepLevel(true);
-                event.setDroppedExp(0);
+        if (wrapped.event().getDamageSource().getCausingEntity() instanceof org.bukkit.entity.Player killerEntity) {
+            GamePlayer killer = game.playerManager().getPlayer(killerEntity);
+            if (killer != null && !killer.uuid().equals(player.uuid())) {
+                game.addKill(killer);
             }
-        } else {
-            player.respawn();
+        }
+        if (game.respawnPossible(player)) {
+            wrapped.event().setKeepInventory(true);
+            wrapped.event().setKeepLevel(true);
+            wrapped.event().setDroppedExp(0);
+            wrapped.event().getDrops().clear();
+            player.respawn(game.respawnTicks(player), () -> game.respawnLocationFor(player));
+            return;
+        }
+        eliminateTeam(player.team());
+    }
+
+    private void onJoin(GamePlayerEvent<PlayerJoinEvent> wrapped) {
+        GamePlayer player = wrapped.player();
+        if (!game.roundActive() || !game.needsReconnectRespawn(player)) {
+            return;
+        }
+        game.clearReconnectRespawn(player);
+        if (game.respawnPossible(player)) {
+            player.respawn(game.respawnTicks(player), () -> game.respawnLocationFor(player));
+            return;
+        }
+        eliminateTeam(player.team());
+    }
+
+    private void onQuit(GamePlayerEvent<PlayerQuitEvent> wrapped) {
+        if (!game.roundActive()) {
+            return;
+        }
+        GamePlayer player = wrapped.player();
+        player.cancelRespawn();
+        if (!player.isSpectator()) {
+            player.setSpectator(game.spectatorLocationFor(player.location()));
+            game.markReconnectRespawn(player);
+            GameTeam team = player.team();
+            game.refreshAliveCounts();
+            if (team != null && game.teamEliminated(team)) {
+                eliminateTeam(team);
+            }
+            game.checkRoundEnd();
+        } else if (player.team() != null && !game.teamEliminated(player.team())) {
+            game.markReconnectRespawn(player);
         }
     }
 
-    public boolean tryRespawn(GamePlayer player, int baseRespawnTime) {
-        GameTeam team = game.teamManager().getPlayerTeam(player);
-        int respawnTime = baseRespawnTime * (team.getMembers().size() - 1);
-
-        if (isTeamEliminated(team)) {
-            for (GamePlayer teammate : team.getMembers()) {
-                teammate.cancelRespawn();
-                if (game.config().getInt("team_size") == 1) {
-                    game.uiManager().title(teammate, Component.text("Eliminated!", NamedTextColor.RED).decorate(TextDecoration.BOLD));
-                } else {
-                    game.uiManager().title(teammate, Component.text("Team Eliminated!", NamedTextColor.RED).decorate(TextDecoration.BOLD));
-                }
-            }
-        } else {
-            player.respawn(respawnTime * 20);
+    private void onMove(GamePlayerEvent<PlayerMoveEvent> wrapped) {
+        if (game.roundActive()) {
+            return;
         }
-        return !isTeamEliminated(team);
-    }
-
-    public boolean isTeamEliminated(GameTeam team) {
-        for (GamePlayer player : team.getMembers()) {
-            if (!player.isSpectator()) {
-                return false;
-            }
+        GameRegion startBorder = game.startingBorderRegion();
+        if (startBorder == null || wrapped.event().getTo() == null) {
+            return;
         }
-        return true;
+        if (!startBorder.contains(GameLocation.fromBukkit(wrapped.event().getTo()))) {
+            wrapped.player().teleport(game.spawn());
+        }
     }
 
-    public int alivePlayerCount() {
-        return game.playerManager().getNonSpectators().size();
+    private void setupPlayer(GamePlayer player) {
+        player.cancelRespawn();
+        player.setNonSpectator();
+        player.setRespawnLocation(game.spawn());
+        player.setGameMode(GameMode.ADVENTURE);
+        player.clearInventory();
+        player.clearExperience();
+        player.clearEffects();
+        player.setFoodLevel(20);
+        player.setSaturation(20);
+        player.setHealth(20);
+        if (player.isOnline()) {
+            player.teleport(game.spawn());
+        }
     }
 
-    public int aliveTeamCount() {
-        int aliveTeamCount = 0;
+    private void eliminateTeam(GameTeam team) {
+        if (team == null) {
+            return;
+        }
+        game.cancelTeamRespawns(team);
+        game.refreshAliveCounts();
+        game.checkRoundEnd();
+        if (game.roundEnding()) {
+            return;
+        }
+        for (GamePlayer teammate : team.getMembers()) {
+            teammate.setSpectator(game.spectatorLocationFor(teammate.location()));
+            game.uiManager().title(teammate, Component.text(
+                game.config().getInt("team_size") == 1 ? "Eliminated!" : "Team Eliminated!",
+                NamedTextColor.RED
+            ).decorate(TextDecoration.BOLD));
+        }
+    }
+
+    private GameTeam smallestTeam() {
+        GameTeam selected = null;
+        int size = Integer.MAX_VALUE;
         for (GameTeam team : game.teamManager().getTeams()) {
-            if (!isTeamEliminated(team)) {
-                aliveTeamCount += 1;
+            int members = team.getMembers().size();
+            if (members < size) {
+                size = members;
+                selected = team;
             }
         }
-        return aliveTeamCount;
-    }
-
-    @EventHandler
-    public void onBlockBreak(BlockBreakEvent event) {
-        GamePlayer player = game.playerManager().getPlayer(event.getPlayer());
-        if (player == null) {
-            return;
-        }
-        if (!game.started()) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler
-    public void onJoin(PlayerJoinEvent event) {
-        GamePlayer player = game.playerManager().getPlayer(event.getPlayer());
-        if (player == null) {
-            return;
-        }
-        if (game.started()) {
-            tryRespawn(player, game.config().getInt("base_respawn_time"));
-        }
+        return selected;
     }
 }

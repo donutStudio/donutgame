@@ -7,8 +7,11 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.List;
+import java.util.logging.Level;
 
 import org.bukkit.entity.Player;
+import org.bukkit.configuration.file.YamlConfiguration;
 
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.border.BorderManager;
@@ -30,6 +33,10 @@ public class ModuleService {
     private int nextIndex = 0;
 
     public CompletableFuture<GameModule> loadModule(GameModuleDescriptor descriptor) throws Exception {
+        return loadModule(descriptor, descriptor.createConfig());
+    }
+
+    public CompletableFuture<GameModule> loadModule(GameModuleDescriptor descriptor, YamlConfiguration config) throws Exception {
         int index = freeIndexes.isEmpty() ? nextIndex++ : freeIndexes.poll();
         GameModule module = descriptor.createModule();
         activeGames.put(index, module);
@@ -39,17 +46,28 @@ public class ModuleService {
                 plugin,
                 descriptor,
                 index,
+                config,
                 playerManager,
                 new MapManager(module, plugin.mapService(), plugin.worldService()),
                 new UiManager(module, plugin),
                 new TimeManager(plugin),
                 new TeamManager(playerManager),
-                new BorderManager(module)
+                new BorderManager(module),
+                plugin.itemService()
             );
             module.borderManager().initialize();
-            module.startLoadSequence();
-            return CompletableFuture.completedFuture(module);
+            plugin.getLogger().info("Loading module " + descriptor.id() + " as active game " + index + ".");
+            return module.startLoadSequence()
+                .thenApply(ignored -> module)
+                .whenComplete((ignored, throwable) -> {
+                    if (throwable == null) {
+                        plugin.getLogger().info("Module " + descriptor.id() + " loaded as active game " + index + ".");
+                        return;
+                    }
+                    plugin.getLogger().log(Level.SEVERE, "Failed to load module " + descriptor.id() + " as active game " + index + ".", throwable);
+                });
         } catch (RuntimeException e) {
+            activeGames.remove(index);
             freeIndexes.offer(index);
             throw e;
         }
@@ -71,6 +89,10 @@ public class ModuleService {
         return Collections.unmodifiableMap(activeGames);
     }
 
+    public GameModule activeGame(int index) {
+        return activeGames.get(index);
+    }
+
     public GameModule getGameOfPlayer(Player player) {
         for (GameModule game : activeGames.values()) {
             if (game.playerManager().isRegistered(player)) {
@@ -84,5 +106,22 @@ public class ModuleService {
         for (int gameIndex : Set.copyOf(activeGames.keySet())) {
             unloadModule(gameIndex);
         }
+    }
+
+    public int leaveGames(List<Player> players) {
+        int removed = 0;
+        for (Player player : players) {
+            for (GameModule game : activeGames.values()) {
+                if (game.playerManager().unregister(player)) {
+                    removed++;
+                    break;
+                }
+            }
+        }
+        return removed;
+    }
+
+    public Donutgame plugin() {
+        return plugin;
     }
 }

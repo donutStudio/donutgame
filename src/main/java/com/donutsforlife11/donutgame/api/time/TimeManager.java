@@ -53,6 +53,12 @@ public class TimeManager {
         stopTickerTaskIfIdle();
     }
 
+    public void cancelAll() {
+        for (GameTimer timer : Set.copyOf(timers)) {
+            timer.cancel();
+        }
+    }
+
     private void stopTickerTaskIfIdle() {
         synchronized (taskLock) {
             if (!timers.isEmpty() || tickerTask == null) {

@@ -45,6 +45,7 @@ public class MapManager {
         Objects.requireNonNull(map, "Map is null!");
         GameMapDescriptor descriptor = mapService.getGameMapDescriptor(map.id());
         GameMap gameMap = mapService.loadGameMap(descriptor);
+        module.log("Loading map " + map.id() + " for active game " + module.index() + ".");
         GameMapDescriptor templateDescriptor = descriptor.backingType() == BackingType.WORLD
             ? descriptor
             : mapService.getGameMapDescriptor(DEFAULT_MAP_ID);
@@ -53,32 +54,16 @@ public class MapManager {
                 new IllegalStateException("Default map " + DEFAULT_MAP_ID + " must be world-backed.")
             );
         }
-        String instanceWorldName = module.id() + "_" + module.index() + "_" + gameMap.id();
-        return worldService.loadSlimeWorld(templateDescriptor.assetPath(), instanceWorldName)
-            .thenCompose(world -> {
-                GameWorld newWorld = new GameWorld(world, worldService);
-                CompletableFuture<Void> registerMapFuture = CompletableFuture.completedFuture(null);
-                if (descriptor.backingType() == BackingType.SCHEMATIC) {
-                    Location schemLoc = new Location(newWorld.bukkitWorld(), 0, 0, 0);
-                    registerMapFuture = worldService.pasteSchematic(descriptor.assetPath(), newWorld.bukkitWorld(), schemLoc, MapRotation.DEG_0)
-                        .thenAccept(metadata -> registerMapData(newWorld, gameMap, schemLoc, MapRotation.DEG_0, metadata));
-                } else {
-                    registerMapData(newWorld, gameMap, null, MapRotation.DEG_0, null);
-                }
-                return registerMapFuture.thenApply(ignored -> {
-                    currentMap = gameMap;
-                    currentWorld = newWorld;
-                    return gameMap;
-                });
-            })
-            .thenCompose(loadedMap -> {
-                List<CompletableFuture<Boolean>> teleports = new ArrayList<>();
-                for (var player : module.playerManager().getPlayers()) {
-                    if (player.player() != null) {
-                        teleports.add(player.player().teleportAsync(currentWorld.spawnLocation().toBukkit(currentWorld.bukkitWorld())));
-                    }
-                }
-                return CompletableFuture.allOf(teleports.toArray(new CompletableFuture[0])).thenApply(ignored -> loadedMap);
+        GameWorld existingWorld = currentWorld;
+        String logicalWorldName = module.id() + "_" + module.index();
+        String stagedWorldName = existingWorld == null
+            ? logicalWorldName
+            : logicalWorldName + "__staged_" + System.nanoTime();
+        return worldService.loadSlimeWorld(templateDescriptor.assetPath(), stagedWorldName, logicalWorldName)
+            .thenCompose(stagedBukkitWorld -> {
+                GameWorld stagedWorld = new GameWorld(logicalWorldName, stagedBukkitWorld, worldService);
+                return prepareWorld(stagedWorld, gameMap, descriptor)
+                    .thenCompose(ignored -> activateWorld(gameMap, stagedWorld, existingWorld));
             });
     }
 
@@ -124,9 +109,19 @@ public class MapManager {
     }
 
     public CompletableFuture<Void> unloadCurrentWorld() {
-        return currentWorld == null
-            ? CompletableFuture.completedFuture(null)
-            : worldService.unloadWorld(currentWorld.bukkitWorld().getName());
+        GameWorld world = currentWorld;
+        if (world == null) {
+            currentMap = null;
+            return CompletableFuture.completedFuture(null);
+        }
+        String playerStateId = worldService.getPlayerStateId(world.bukkitWorld());
+        return worldService.unloadWorld(world.bukkitWorld().getName()).thenRun(() -> {
+            worldService.clearPlayerState(playerStateId);
+            if (currentWorld == world) {
+                currentWorld = null;
+                currentMap = null;
+            }
+        });
     }
 
     public GameWorld currentWorld() {
@@ -135,6 +130,97 @@ public class MapManager {
 
     public GameMap currentMap() {
         return currentMap;
+    }
+
+    private CompletableFuture<Void> prepareWorld(GameWorld world, GameMap map, GameMapDescriptor descriptor) {
+        if (descriptor.backingType() != BackingType.SCHEMATIC) {
+            world.clearMapData();
+            registerMapData(world, map, null, MapRotation.DEG_0, null);
+            return CompletableFuture.completedFuture(null);
+        }
+        Location origin = new Location(world.bukkitWorld(), 0, 0, 0);
+        return worldService.pasteSchematic(descriptor.assetPath(), world.bukkitWorld(), origin, MapRotation.DEG_0)
+            .thenAccept(metadata -> {
+                world.clearMapData();
+                registerMapData(world, map, origin, MapRotation.DEG_0, metadata);
+            });
+    }
+
+    private CompletableFuture<GameMap> activateWorld(
+        GameMap gameMap,
+        GameWorld stagedWorld,
+        GameWorld existingWorld
+    ) {
+        String oldWorldName = existingWorld == null
+            ? null
+            : existingWorld.bukkitWorld().getName();
+        GameWorld liveWorld = existingWorld == null
+            ? stagedWorld
+            : existingWorld;
+        if (existingWorld != null) {
+            existingWorld.replaceBukkitWorld(stagedWorld.bukkitWorld());
+            existingWorld.clearMapData();
+            copyMapData(stagedWorld, existingWorld);
+        }
+        currentMap = gameMap;
+        currentWorld = liveWorld;
+        module.log(
+            "Map " + gameMap.id()
+                + " loaded into world " + liveWorld.name()
+                + " (" + liveWorld.bukkitWorld().getName() + ")."
+        );
+        /*
+        * IMPORTANT:
+        *
+        * Move players who are ALREADY registered first.
+        *
+        * Pending players are registered afterwards. registerNow() already
+        * teleports a newly registered player to the game spawn, so activating
+        * them before teleportPlayers() caused them to be teleported twice
+        * during initial game loading.
+        */
+        return teleportPlayers(liveWorld)
+            .thenRun(module.playerManager()::activatePendingPlayers)
+            .thenCompose(ignored -> {
+                if (
+                    oldWorldName == null
+                        || oldWorldName.equals(liveWorld.bukkitWorld().getName())
+                ) {
+                    return CompletableFuture.completedFuture(gameMap);
+                }
+
+                return worldService.unloadWorld(oldWorldName)
+                    .thenApply(unused -> gameMap);
+            });
+    }
+
+    private CompletableFuture<Void> teleportPlayers(GameWorld world) {
+        List<CompletableFuture<Boolean>> teleports = new ArrayList<>();
+        for (var player : module.playerManager().getPlayers()) {
+            if (player.player() == null) {
+                continue;
+            }
+            GameLocation target = world.getPoints("spawn").isEmpty()
+                ? world.spawnLocation()
+                : world.getPoints("spawn").get(0);
+            player.setRespawnLocation(target);
+            module.log("Teleporting registered player " + player.player().getName() + " to map spawn " + target.x() + ", " + target.y() + ", " + target.z() + ".");
+            teleports.add(player.player().teleportAsync(target.toBukkit(world.bukkitWorld())));
+        }
+        return CompletableFuture.allOf(teleports.toArray(new CompletableFuture[0]));
+    }
+
+    private void copyMapData(GameWorld source, GameWorld target) {
+        for (Map.Entry<String, List<GameLocation>> entry : source.copyPoints().entrySet()) {
+            for (GameLocation point : entry.getValue()) {
+                target.addPoint(point, entry.getKey());
+            }
+        }
+        for (Map.Entry<String, List<GameRegion>> entry : source.copyRegions().entrySet()) {
+            for (GameRegion region : entry.getValue()) {
+                target.addRegion(region, entry.getKey());
+            }
+        }
     }
 
     private void registerMapData(
