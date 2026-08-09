@@ -58,15 +58,17 @@ public class ModuleService {
             module.borderManager().initialize();
             plugin.getLogger().info("Loading module " + descriptor.id() + " as active game " + index + ".");
             return module.startLoadSequence()
-                .thenApply(ignored -> module)
+                .thenApply(unused -> module)
                 .whenComplete((ignored, throwable) -> {
                     if (throwable == null) {
                         plugin.getLogger().info("Module " + descriptor.id() + " loaded as active game " + index + ".");
                         return;
                     }
                     plugin.getLogger().log(Level.SEVERE, "Failed to load module " + descriptor.id() + " as active game " + index + ".", throwable);
+                    activeGames.remove(index, module);
+                    freeIndexes.offer(index);
                 });
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             activeGames.remove(index);
             freeIndexes.offer(index);
             throw e;
@@ -82,6 +84,9 @@ public class ModuleService {
         return module.shutdown().thenApply(ignored -> {
             freeIndexes.offer(index);
             return true;
+        }).exceptionally(throwable -> {
+            freeIndexes.offer(index);
+            throw new RuntimeException(throwable);
         });
     }
 
@@ -104,7 +109,7 @@ public class ModuleService {
 
     public void unloadAll() {
         for (int gameIndex : Set.copyOf(activeGames.keySet())) {
-            unloadModule(gameIndex);
+            unloadModule(gameIndex).join();
         }
     }
 

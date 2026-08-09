@@ -41,14 +41,16 @@ public class FileService {
 
     public FileService(Plugin plugin) {
         this.plugin = plugin;
-        this.modulesFolder = new File(this.plugin.getDataFolder(), plugin.getConfig().getString("modules_directory"));
-        this.mapsFolder = new File(this.plugin.getDataFolder(), plugin.getConfig().getString("maps_directory"));
-        this.runtimeFolder = new File(this.plugin.getDataFolder(), plugin.getConfig().getString("runtime_directory"));
+        this.modulesFolder = new File(plugin.getDataFolder(), plugin.getConfig().getString("modules_directory", "modules"));
+        this.mapsFolder = new File(plugin.getDataFolder(), plugin.getConfig().getString("maps_directory", "maps"));
+        this.runtimeFolder = new File(plugin.getDataFolder(), plugin.getConfig().getString("runtime_directory", ".runtime"));
     }
 
     public void reload() {
         gameModules.clear();
         gameMaps.clear();
+        closeModuleLoaders();
+        moduleLoaders.clear();
         loadModuleFiles();
         loadMapFiles();
     }
@@ -56,9 +58,11 @@ public class FileService {
         for (File module : getFolderContentsRecursive(modulesFolder, ".jar")) {
             try {
                 GameModuleDescriptor descriptor = extractGameData(module);
-                gameModules.put(descriptor.id(), descriptor);
-            } catch(Exception e) {
-                e.printStackTrace();
+                if (gameModules.put(descriptor.id(), descriptor) != null) {
+                    plugin.getLogger().warning("Duplicate module id '" + descriptor.id() + "' from " + module.getName() + ".");
+                }
+            } catch (Exception e) {
+                plugin.getLogger().severe("Failed to load module descriptor from " + module.getName() + ": " + e.getMessage());
             }
         }
     }
@@ -66,9 +70,11 @@ public class FileService {
         for (File map : getFolderContentsRecursive(mapsFolder, ".dmap")) {
             try {
                 GameMapDescriptor descriptor = extractMapData(map);
-                gameMaps.put(descriptor.id(), descriptor);
-            } catch(Exception e) {
-                e.printStackTrace();
+                if (gameMaps.put(descriptor.id(), descriptor) != null) {
+                    plugin.getLogger().warning("Duplicate map id '" + descriptor.id() + "' from " + map.getName() + ".");
+                }
+            } catch (Exception e) {
+                plugin.getLogger().severe("Failed to load map descriptor from " + map.getName() + ": " + e.getMessage());
             }
         }
     }
@@ -90,12 +96,12 @@ public class FileService {
     }
 
     public void closeModuleLoaders() {
-        try {
-            for (URLClassLoader loader : moduleLoaders) {
+        for (URLClassLoader loader : moduleLoaders) {
+            try {
                 loader.close();
+            } catch (IOException e) {
+                plugin.getLogger().warning("Failed to close module classloader: " + e.getMessage());
             }
-        } catch (Exception e) {
-            e.printStackTrace();
         }
     }
 
@@ -189,25 +195,9 @@ public class FileService {
                 if (id == null) {
                     throw new IllegalStateException("Map " + normalizedPath + " is missing map.yml!");
                 }
-                Path runtimeMapFolder = runtimeFolder.toPath()
-                .resolve("maps")
-                .resolve(sanitizeFileName(id))
-                .toAbsolutePath()
-                .normalize();
-
-            Path runtimeAssetPath = backingEntry == null
-                ? null
-                : runtimeMapFolder.resolve(backingEntry).toAbsolutePath().normalize();
-
-            return new GameMapDescriptor(
-                id,
-                name,
-                normalizedPath,
-                runtimeMapFolder,
-                backingType,
-                backingEntry,
-                runtimeAssetPath
-            );
+                Path runtimeMapFolder = runtimeFolder.toPath().resolve("maps").resolve(sanitizeFileName(id)).toAbsolutePath().normalize();
+                Path runtimeAssetPath = backingEntry == null ? null : runtimeMapFolder.resolve(backingEntry).toAbsolutePath().normalize();
+                return new GameMapDescriptor(id, name, normalizedPath, runtimeMapFolder, backingType, backingEntry, runtimeAssetPath);
             }
         } catch (IOException e) {
             throw new IllegalStateException("Failed to read map descriptor from " + gameMap.toPath(), e);
@@ -215,23 +205,13 @@ public class FileService {
     }
 
     private List<File> getFolderContentsRecursive(File folder, String extension) {
-        List<File> files = new ArrayList<>();
-
-        if (!folder.exists()) {
-            folder.mkdirs();
-        }
-
+        if (!folder.exists()) folder.mkdirs();
         File[] fileList = folder.listFiles();
-        if (fileList == null) {
-            return files;
-        }
-
+        if (fileList == null) return List.of();
+        List<File> files = new ArrayList<>();
         for (File file : fileList) {
-            if (file.isDirectory()) {
-                files.addAll(getFolderContentsRecursive(file, extension));
-            } else if (extension == null || (extension != null && file.getName().toLowerCase().endsWith(extension))) {
-                files.add(file);
-            }
+            if (file.isDirectory()) files.addAll(getFolderContentsRecursive(file, extension));
+            else if (extension == null || file.getName().toLowerCase().endsWith(extension)) files.add(file);
         }
         return files;
     }
@@ -245,9 +225,7 @@ public class FileService {
     }
     public GameMapDescriptor getGameMapDescriptor(String id) {
         GameMapDescriptor descriptor = gameMaps.get(id);
-        if (descriptor == null) {
-            throw new IllegalArgumentException("Unknown map id: " + id);
-        }
+        if (descriptor == null) throw new IllegalArgumentException("Unknown map id: " + id);
         return descriptor;
     }
     private String sanitizeFileName(String fileName) {

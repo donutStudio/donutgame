@@ -57,10 +57,13 @@ public class PlayerEvents implements Listener {
     );
 
     private final PlayerStateStore playerStateStore;
-    private final WorldService worldService;
+    private WorldService worldService;
 
-    public PlayerEvents(PlayerStateStore playerStateStore, WorldService worldService) {
+    public PlayerEvents(PlayerStateStore playerStateStore) {
         this.playerStateStore = playerStateStore;
+    }
+
+    public void setWorldService(WorldService worldService) {
         this.worldService = worldService;
     }
 
@@ -127,15 +130,13 @@ public class PlayerEvents implements Listener {
         PlayerInventory inv = player.getInventory();
 
         inv.clear();
-        inv.setStorageContents(state.inventory);
-        inv.setArmorContents(state.armor);
+        inv.setStorageContents(cloneContents(state.inventory));
+        inv.setArmorContents(cloneContents(state.armor));
         inv.setItemInOffHand(state.offhand);
 
         player.getEnderChest().clear();
 
-        if (state.enderChest != null) {
-            player.getEnderChest().setContents(state.enderChest);
-        }
+        if (state.enderChest != null) player.getEnderChest().setContents(cloneContents(state.enderChest));
 
         for (PotionEffect effect : player.getActivePotionEffects()) {
             player.removePotionEffect(effect.getType());
@@ -172,9 +173,7 @@ public class PlayerEvents implements Listener {
         player.setExp(state.exp);
         player.setTotalExperience(state.totalExperience);
 
-        if (state.gameMode != null) {
-            player.setGameMode(state.gameMode);
-        }
+        if (state.gameMode != null) player.setGameMode(state.gameMode);
 
         player.updateInventory();
     }
@@ -209,12 +208,9 @@ public class PlayerEvents implements Listener {
     }
 
     private ItemStack[] cloneContents(ItemStack[] contents) {
+        if (contents == null) return null;
         ItemStack[] clone = new ItemStack[contents.length];
-
-        for (int i = 0; i < contents.length; i++) {
-            clone[i] = contents[i] == null ? null : contents[i].clone();
-        }
-
+        for (int i = 0; i < contents.length; i++) clone[i] = contents[i] == null ? null : contents[i].clone();
         return clone;
     }
 

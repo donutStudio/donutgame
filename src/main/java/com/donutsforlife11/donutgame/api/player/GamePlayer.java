@@ -2,7 +2,6 @@ package com.donutsforlife11.donutgame.api.player;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -29,7 +28,6 @@ import net.kyori.adventure.text.format.NamedTextColor;
 
 public class GamePlayer extends GameEntity {
     private final PlayerManager playerManager;
-
     private boolean spectator;
     private GameLocation respawnLocation;
     private GameTimer respawnTimer;
@@ -59,13 +57,9 @@ public class GamePlayer extends GameEntity {
     public void setSpectator(GameLocation location) {
         spectator = true;
         Player player = player();
-        if (player == null) {
-            return;
-        }
+        if (player == null) return;
         storeInventoryIfNeeded(player);
-        if (location != null) {
-            teleport(location);
-        }
+        if (location != null) teleport(location);
         player.setGameMode(GameMode.ADVENTURE);
         player.setAllowFlight(true);
         player.setFlying(true);
@@ -83,9 +77,7 @@ public class GamePlayer extends GameEntity {
     public void setNonSpectator() {
         spectator = false;
         Player player = player();
-        if (player == null) {
-            return;
-        }
+        if (player == null) return;
         restoreInventoryIfNeeded(player);
         player.setInvulnerable(false);
         player.setInvisible(false);
@@ -98,26 +90,16 @@ public class GamePlayer extends GameEntity {
     }
 
     public void addEffect(PotionEffectType effect, int ticks, int amplifier) {
-        if (effect == null) {
-            throw new IllegalArgumentException("Effect cannot be null.");
-        }
-        if (ticks < 0 && ticks != PotionEffect.INFINITE_DURATION) {
-            throw new IllegalArgumentException("Effect duration cannot be negative.");
-        }
-        if (amplifier < 0) {
-            throw new IllegalArgumentException("Effect amplifier cannot be negative.");
-        }
+        if (effect == null) throw new IllegalArgumentException("Effect cannot be null.");
+        if (ticks < 0 && ticks != PotionEffect.INFINITE_DURATION) throw new IllegalArgumentException("Effect duration cannot be negative.");
+        if (amplifier < 0) throw new IllegalArgumentException("Effect amplifier cannot be negative.");
         Player player = player();
-        if (player != null) {
-            player.addPotionEffect(new PotionEffect(effect, ticks, amplifier));
-        }
+        if (player != null) player.addPotionEffect(new PotionEffect(effect, ticks, amplifier));
     }
 
     public void removeEffect(PotionEffectType effect) {
         Player player = player();
-        if (player != null) {
-            player.removePotionEffect(effect);
-        }
+        if (player != null) player.removePotionEffect(effect);
     }
 
     public Collection<PotionEffect> getEffects() {
@@ -127,12 +109,8 @@ public class GamePlayer extends GameEntity {
 
     public void clearEffects() {
         Player player = player();
-        if (player == null) {
-            return;
-        }
-        for (PotionEffect effect : player.getActivePotionEffects()) {
-            player.removePotionEffect(effect.getType());
-        }
+        if (player == null) return;
+        for (PotionEffect effect : player.getActivePotionEffects()) player.removePotionEffect(effect.getType());
     }
 
     public void respawn() {
@@ -144,23 +122,15 @@ public class GamePlayer extends GameEntity {
     }
 
     public void respawn(int ticks, Supplier<GameLocation> locationSupplier) {
-        if (ticks < 0) {
-            throw new IllegalArgumentException("Respawn time cannot be negative.");
-        }
+        if (ticks < 0) throw new IllegalArgumentException("Respawn time cannot be negative.");
         cancelRespawn();
         setSpectator();
         respawnTimer = playerManager.module().timeManager().newTimer(ticks).onTick(20, timer -> {
             int remainingSeconds = Math.round(timer.getRemainingTicks() / 20.0f);
-            playerManager.module().uiManager().actionbar(
-                this,
-                Component.text("Respawning in: ")
-                    .append(Component.text(String.format("%02d:%02d", remainingSeconds / 60, remainingSeconds % 60), NamedTextColor.GREEN))
-            );
-        }).onFinish(ignored -> {
+            playerManager.module().uiManager().actionbar(this, Component.text("Respawning in: ").append(Component.text(String.format("%02d:%02d", remainingSeconds / 60, remainingSeconds % 60), NamedTextColor.GREEN)));
+        }).onFinish(timer -> {
             respawnTimer = null;
-            if (!playerManager.isRegistered(this) || player() == null) {
-                return;
-            }
+            if (!playerManager.isRegistered(this) || player() == null) return;
             GameLocation location = locationSupplier.get();
             if (location != null) {
                 setRespawnLocation(location);
@@ -180,38 +150,16 @@ public class GamePlayer extends GameEntity {
     public void setRespawnLocation(GameLocation location) {
         respawnLocation = location;
         Player player = player();
-        if (player != null && location != null) {
-            player.setRespawnLocation(location.toBukkit(world().bukkitWorld()), true);
-        }
+        if (player != null && location != null) player.setRespawnLocation(location.toBukkit(world().bukkitWorld()), true);
     }
 
-    public Map<Integer, ItemStack> addToStoredInventory(
-        Collection<ItemStack> items
-    ) {
-        if (items == null || items.isEmpty()) {
-            return Map.of();
-        }
-
-        /*
-        * A spectator should normally already have this because
-        * setSpectator() snapshots their inventory before clearing it.
-        */
-        if (storedInventory == null) {
-            storedInventory = new ItemStack[36];
-        }
-
+    public Map<Integer, ItemStack> addToStoredInventory(Collection<ItemStack> items) {
+        if (items == null || items.isEmpty()) return Map.of();
+        if (storedInventory == null) storedInventory = new ItemStack[36];
         Inventory temporaryInventory = Bukkit.createInventory(null, 36);
-
         temporaryInventory.setContents(cloneContents(storedInventory));
-
-        Map<Integer, ItemStack> leftovers = temporaryInventory.addItem(
-            items.stream()
-                .map(ItemStack::clone)
-                .toArray(ItemStack[]::new)
-        );
-
+        Map<Integer, ItemStack> leftovers = temporaryInventory.addItem(items.stream().map(item -> item.clone()).toArray(ItemStack[]::new));
         storedInventory = cloneContents(temporaryInventory.getContents());
-
         return leftovers;
     }
 
@@ -226,9 +174,7 @@ public class GamePlayer extends GameEntity {
 
     public void setGameMode(GameMode gameMode) {
         Player player = player();
-        if (player != null) {
-            player.setGameMode(gameMode);
-        }
+        if (player != null) player.setGameMode(gameMode);
     }
 
     public GameMode gameMode() {
@@ -250,30 +196,22 @@ public class GamePlayer extends GameEntity {
 
     public void clearInventory() {
         Player player = player();
-        if (player != null) {
-            player.getInventory().clear();
-        }
+        if (player != null) player.getInventory().clear();
     }
 
     public void setFoodLevel(int foodLevel) {
         Player player = player();
-        if (player != null) {
-            player.setFoodLevel(foodLevel);
-        }
+        if (player != null) player.setFoodLevel(foodLevel);
     }
 
     public void setSaturation(float saturation) {
         Player player = player();
-        if (player != null) {
-            player.setSaturation(saturation);
-        }
+        if (player != null) player.setSaturation(saturation);
     }
 
     public void clearExperience() {
         Player player = player();
-        if (player == null) {
-            return;
-        }
+        if (player == null) return;
         player.setLevel(0);
         player.setExp(0);
         player.setTotalExperience(0);
@@ -292,9 +230,7 @@ public class GamePlayer extends GameEntity {
         GamePlayer closest = null;
         double bestDistance = Double.MAX_VALUE;
         for (GamePlayer teammate : teammates()) {
-            if (teammate.uuid().equals(uuid()) || !filter.test(teammate) || teammate.player() == null) {
-                continue;
-            }
+            if (teammate.uuid().equals(uuid()) || !filter.test(teammate) || teammate.player() == null) continue;
             double distance = teammate.location().distanceSquared(location());
             if (distance < bestDistance) {
                 bestDistance = distance;
@@ -305,41 +241,27 @@ public class GamePlayer extends GameEntity {
     }
 
     private void storeInventoryIfNeeded(Player player) {
-        if (storedInventory != null) {
-            return;
-        }
-        storedInventory = cloneContents(
-            player.getInventory().getStorageContents()
-        );
-        storedArmor = cloneContents(
-            player.getInventory().getArmorContents()
-        );
+        if (storedInventory != null) return;
+        storedInventory = cloneContents(player.getInventory().getStorageContents());
+        storedArmor = cloneContents(player.getInventory().getArmorContents());
         ItemStack offhand = player.getInventory().getItemInOffHand();
-        storedOffhand = offhand == null
-            ? null
-            : offhand.clone();
+        storedOffhand = offhand == null ? null : offhand.clone();
     }
 
     private void restoreInventoryIfNeeded(Player player) {
-        if (storedInventory == null) {
-            return;
-        }
-        player.getInventory().setStorageContents(storedInventory);
-        player.getInventory().setArmorContents(storedArmor);
-        player.getInventory().setItemInOffHand(storedOffhand);
+        if (storedInventory == null) return;
+        player.getInventory().setStorageContents(cloneContents(storedInventory));
+        player.getInventory().setArmorContents(cloneContents(storedArmor));
+        player.getInventory().setItemInOffHand(storedOffhand == null ? null : storedOffhand.clone());
         storedInventory = null;
         storedArmor = null;
         storedOffhand = null;
     }
+
     private ItemStack[] cloneContents(ItemStack[] contents) {
+        if (contents == null) return null;
         ItemStack[] clone = new ItemStack[contents.length];
-
-        for (int i = 0; i < contents.length; i++) {
-            clone[i] = contents[i] == null
-                ? null
-                : contents[i].clone();
-        }
-
+        for (int i = 0; i < contents.length; i++) clone[i] = contents[i] == null ? null : contents[i].clone();
         return clone;
     }
 }

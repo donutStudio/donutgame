@@ -1,10 +1,10 @@
 package com.donutsforlife11.donutgame.api.map;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.bukkit.GameRules;
 import org.bukkit.Location;
@@ -20,9 +20,9 @@ import com.donutsforlife11.donutgame.internal.map.WorldService;
 public class GameWorld {
     private final String name;
     private final WorldService worldService;
+    private final Map<String, List<GameLocation>> points = new LinkedHashMap<>();
+    private final Map<String, List<GameRegion>> regions = new LinkedHashMap<>();
     private volatile World bukkitWorld;
-    private final Map<String, CopyOnWriteArrayList<GameLocation>> points = new ConcurrentHashMap<>();
-    private final Map<String, CopyOnWriteArrayList<GameRegion>> regions = new ConcurrentHashMap<>();
 
     public GameWorld(String name, World bukkitWorld, WorldService worldService) {
         this.name = name;
@@ -47,62 +47,60 @@ public class GameWorld {
     }
 
     public void addPoint(GameLocation location, String pointName) {
-        requireWorld(location);
-        points.computeIfAbsent(pointName, ignored -> new CopyOnWriteArrayList<>()).add(location);
+        requireLocation(location);
+        points.computeIfAbsent(pointName, key -> new ArrayList<>()).add(location);
     }
 
     public void removePoint(GameLocation location, String pointName) {
-        requireWorld(location);
-        points.getOrDefault(pointName, new CopyOnWriteArrayList<>()).remove(location);
+        requireLocation(location);
+        List<GameLocation> matches = points.get(pointName);
+        if (matches != null) matches.remove(location);
     }
 
     public void addRegion(GameRegion region, String regionName) {
         requireRegion(region);
-        regions.computeIfAbsent(regionName, ignored -> new CopyOnWriteArrayList<>()).add(region);
+        regions.computeIfAbsent(regionName, key -> new ArrayList<>()).add(region);
     }
 
     public void removeRegion(GameRegion region, String regionName) {
         requireRegion(region);
-        regions.getOrDefault(regionName, new CopyOnWriteArrayList<>()).remove(region);
+        List<GameRegion> matches = regions.get(regionName);
+        if (matches != null) matches.remove(region);
     }
 
     public List<GameLocation> getPoints(String pointName) {
-        return List.copyOf(points.getOrDefault(pointName, new CopyOnWriteArrayList<>()));
+        List<GameLocation> matches = points.get(pointName);
+        return matches == null ? List.of() : List.copyOf(matches);
     }
 
     public GameLocation point(String pointName) {
-        List<GameLocation> matches = getPoints(pointName);
-        return matches.isEmpty() ? null : matches.getFirst();
+        List<GameLocation> matches = points.get(pointName);
+        return matches == null || matches.isEmpty() ? null : matches.getFirst();
     }
 
     public double distanceToPoint(GameLocation location, String pointName) {
-        List<GameLocation> locations = getPoints(pointName);
-        if (locations.isEmpty()) {
-            return -1;
-        }
-        double closestDistanceSquared = Double.MAX_VALUE;
-        for (GameLocation point : locations) {
-            closestDistanceSquared = Math.min(closestDistanceSquared, point.distanceSquared(location));
-        }
-        return Math.sqrt(closestDistanceSquared);
+        List<GameLocation> matches = points.get(pointName);
+        if (matches == null || matches.isEmpty()) return -1;
+        double closest = Double.MAX_VALUE;
+        for (GameLocation point : matches) closest = Math.min(closest, point.distanceSquared(location));
+        return Math.sqrt(closest);
     }
 
     public List<GameRegion> getRegions(String regionName) {
-        return List.copyOf(regions.getOrDefault(regionName, new CopyOnWriteArrayList<>()));
+        List<GameRegion> matches = regions.get(regionName);
+        return matches == null ? List.of() : List.copyOf(matches);
     }
 
     public GameRegion region(String regionName) {
-        List<GameRegion> matches = getRegions(regionName);
-        return matches.isEmpty() ? null : matches.getFirst();
+        List<GameRegion> matches = regions.get(regionName);
+        return matches == null || matches.isEmpty() ? null : matches.getFirst();
     }
 
     public boolean posInRegion(GameLocation location, String regionName) {
-        requireWorld(location);
-        for (GameRegion region : getRegions(regionName)) {
-            if (region.contains(location)) {
-                return true;
-            }
-        }
+        requireLocation(location);
+        List<GameRegion> matches = regions.get(regionName);
+        if (matches == null) return false;
+        for (GameRegion region : matches) if (region.contains(location)) return true;
         return false;
     }
 
@@ -123,7 +121,7 @@ public class GameWorld {
     }
 
     public void setBlock(GameLocation location, BlockData blockData) {
-        requireWorld(location);
+        requireLocation(location);
         bukkitWorld.getBlockAt(location.toBukkit(bukkitWorld)).setBlockData(blockData, false);
     }
 
@@ -137,7 +135,7 @@ public class GameWorld {
     }
 
     public GameEntity summon(EntityType entityType, GameLocation location) {
-        requireWorld(location);
+        requireLocation(location);
         Entity entity = bukkitWorld.spawnEntity(location.toBukkit(bukkitWorld), entityType);
         return new GameEntity(this, entity.getUniqueId(), entity.getType());
     }
@@ -148,10 +146,7 @@ public class GameWorld {
     }
 
     public GameEntity entity(Entity entity) {
-        if (!contains(entity)) {
-            return null;
-        }
-        return new GameEntity(this, entity.getUniqueId(), entity.getType());
+        return contains(entity) ? new GameEntity(this, entity.getUniqueId(), entity.getType()) : null;
     }
 
     public void replaceBukkitWorld(World bukkitWorld) {
@@ -164,30 +159,22 @@ public class GameWorld {
     }
 
     public Map<String, List<GameLocation>> copyPoints() {
-        Map<String, List<GameLocation>> copy = new ConcurrentHashMap<>();
-        for (Map.Entry<String, CopyOnWriteArrayList<GameLocation>> entry : points.entrySet()) {
-            copy.put(entry.getKey(), List.copyOf(entry.getValue()));
-        }
+        Map<String, List<GameLocation>> copy = new LinkedHashMap<>();
+        points.forEach((name, entries) -> copy.put(name, List.copyOf(entries)));
         return Map.copyOf(copy);
     }
 
     public Map<String, List<GameRegion>> copyRegions() {
-        Map<String, List<GameRegion>> copy = new ConcurrentHashMap<>();
-        for (Map.Entry<String, CopyOnWriteArrayList<GameRegion>> entry : regions.entrySet()) {
-            copy.put(entry.getKey(), List.copyOf(entry.getValue()));
-        }
+        Map<String, List<GameRegion>> copy = new LinkedHashMap<>();
+        regions.forEach((name, entries) -> copy.put(name, List.copyOf(entries)));
         return Map.copyOf(copy);
     }
 
     private void requireRegion(GameRegion region) {
-        if (region == null) {
-            throw new IllegalArgumentException("GameRegion cannot be null.");
-        }
+        if (region == null) throw new IllegalArgumentException("GameRegion cannot be null.");
     }
 
-    private void requireWorld(GameLocation location) {
-        if (location == null) {
-            throw new IllegalArgumentException("Location must be in the GameWorld.");
-        }
+    private void requireLocation(GameLocation location) {
+        if (location == null) throw new IllegalArgumentException("Location must be in the GameWorld.");
     }
 }

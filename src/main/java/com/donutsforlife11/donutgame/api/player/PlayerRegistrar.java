@@ -4,11 +4,11 @@ import org.bukkit.entity.Player;
 
 public class PlayerRegistrar {
     public static GamePlayer registerPlayer(PlayerManager playerManager, Player player) {
-        playerManager.registerPlayer(player);
+        playerManager.register(player);
         return playerManager.getPlayer(player);
     }
 
     public static void unregisterPlayer(PlayerManager playerManager, Player player) {
-        playerManager.unregisterPlayer(player);
+        playerManager.unregister(player);
     }
 }

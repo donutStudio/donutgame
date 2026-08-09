@@ -3,7 +3,6 @@ package com.donutsforlife11.donutgame.api.ui;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -35,7 +34,7 @@ public class UiManager {
 
     public UiManager(GameModule module, Donutgame plugin) {
         this.module = module;
-        glowService = plugin.glowService();
+        this.glowService = plugin.glowService();
     }
 
     public void title(GamePlayer player, Component title) {
@@ -51,9 +50,7 @@ public class UiManager {
     }
 
     public void subtitle(Collection<GamePlayer> players, Component subtitle) {
-        for (Player player : resolvePlayers(players)) {
-            player.sendTitlePart(TitlePart.SUBTITLE, subtitle);
-        }
+        for (Player player : resolvePlayers(players)) player.sendTitlePart(TitlePart.SUBTITLE, subtitle);
     }
 
     public void actionbar(GamePlayer player, Component actionbar) {
@@ -85,7 +82,7 @@ public class UiManager {
     }
 
     public void sound(Collection<GamePlayer> players, Sound sound, float volume, float pitch) {
-        for (Player player : resolvePlayers(players)) {
+        for (Player player : resolvePlayers(players)) { 
             player.playSound(player.getLocation(), sound, SoundCategory.MASTER, volume, pitch);
         }
     }
@@ -102,12 +99,11 @@ public class UiManager {
 
     public GameGlow glow(GameEntity entity, Collection<GamePlayer> viewers, NamedTextColor color) {
         if (entity == null || entity.bukkitEntity() == null) {
-            return new GameGlow(() -> {
-            });
+            return new GameGlow(() -> {});
         }
-        Collection<Player> resolvedViewers = resolvePlayers(viewers);
-        glowService.glowEntity(entity.bukkitEntity(), resolvedViewers, color);
-        GameGlow glow = new GameGlow(() -> glowService.clearEntityGlow(entity.bukkitEntity(), resolvedViewers));
+        Collection<Player> resolved = resolvePlayers(viewers);
+        glowService.glowEntity(entity.bukkitEntity(), resolved, color);
+        GameGlow glow = new GameGlow(() -> glowService.clearEntityGlow(entity.bukkitEntity(), resolved));
         glows.add(glow);
         return glow;
     }
@@ -131,12 +127,8 @@ public class UiManager {
     }
 
     public void refreshPlayerState() {
-        if (playerStateRefreshScheduled) {
-            return;
-        }
-
+        if (playerStateRefreshScheduled) return;
         playerStateRefreshScheduled = true;
-
         module.plugin().getServer().getScheduler().runTask(module.plugin(), () -> {
             playerStateRefreshScheduled = false;
             refreshPlayerStateNow();
@@ -145,60 +137,23 @@ public class UiManager {
 
     private void refreshPlayerStateNow() {
         List<GamePlayer> players = new ArrayList<>(module.playerManager().getPlayers());
-
         for (GamePlayer viewer : players) {
             Player viewerPlayer = viewer.player();
-
-            if (viewerPlayer == null || !viewerPlayer.isOnline()) {
-                continue;
-            }
-
+            if (viewerPlayer == null || !viewerPlayer.isOnline()) continue;
             for (GamePlayer subject : players) {
-                if (viewer.uuid().equals(subject.uuid())) {
-                    continue;
-                }
-
+                if (viewer.uuid().equals(subject.uuid())) continue;
                 Player subjectPlayer = subject.player();
-
-                if (subjectPlayer == null || !subjectPlayer.isOnline()) {
-                    continue;
-                }
-
-                /*
-                * Do not send entity visibility/glow changes while one player
-                * has crossed into the new round world and the other has not.
-                */
-                if (!viewerPlayer.getWorld().equals(subjectPlayer.getWorld())) {
-                    continue;
-                }
-
+                if (subjectPlayer == null || !subjectPlayer.isOnline() || !viewerPlayer.getWorld().equals(subjectPlayer.getWorld())) continue;
                 if (subject.isSpectator()) {
                     viewerPlayer.hidePlayer(module.plugin(), subjectPlayer);
                     glowService.clearEntityGlow(subjectPlayer, Set.of(viewerPlayer));
                     continue;
                 }
-
                 viewerPlayer.showPlayer(module.plugin(), subjectPlayer);
-
                 GameTeam viewerTeam = viewer.team();
                 GameTeam subjectTeam = subject.team();
-
-                if (
-                    viewerTeam != null
-                        && viewerTeam == subjectTeam
-                        && subjectTeam.teamGlow()
-                ) {
-                    glowService.glowEntity(
-                        subjectPlayer,
-                        Set.of(viewerPlayer),
-                        subjectTeam.color()
-                    );
-                } else {
-                    glowService.clearEntityGlow(
-                        subjectPlayer,
-                        Set.of(viewerPlayer)
-                    );
-                }
+                if (viewerTeam != null && viewerTeam == subjectTeam && subjectTeam.teamGlow()) glowService.glowEntity(subjectPlayer, Set.of(viewerPlayer), subjectTeam.color());
+                else glowService.clearEntityGlow(subjectPlayer, Set.of(viewerPlayer));
             }
         }
     }

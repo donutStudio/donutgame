@@ -38,17 +38,13 @@ public class VoidWarsEvents {
     }
 
     public void bind() {
-        game.events().player(BlockPlaceEvent.class, BlockPlaceEvent::getPlayer, wrapped -> {
-            if (!mutable(wrapped.event().getBlockPlaced().getLocation())) {
-                wrapped.event().setCancelled(true);
-            }
+        game.events().player(BlockPlaceEvent.class, event -> event.getPlayer(), wrapped -> {
+            if (!mutable(wrapped.event().getBlockPlaced().getLocation())) wrapped.event().setCancelled(true);
         });
-        game.events().player(BlockBreakEvent.class, BlockBreakEvent::getPlayer, wrapped -> {
-            if (!mutable(wrapped.event().getBlock().getLocation())) {
-                wrapped.event().setCancelled(true);
-            }
+        game.events().player(BlockBreakEvent.class, event -> event.getPlayer(), wrapped -> {
+            if (!mutable(wrapped.event().getBlock().getLocation())) wrapped.event().setCancelled(true);
         });
-        game.events().location(EntityExplodeEvent.class, EntityExplodeEvent::getLocation, wrapped -> filterExplosion(wrapped.event().blockList()));
+        game.events().location(EntityExplodeEvent.class, event -> event.getLocation(), wrapped -> filterExplosion(wrapped.event().blockList()));
         game.events().location(BlockExplodeEvent.class, event -> event.getBlock().getLocation(), wrapped -> filterExplosion(wrapped.event().blockList()));
     }
 
@@ -62,9 +58,7 @@ public class VoidWarsEvents {
 
     public List<GameChest> spawnChests() {
         List<GameLocation> points = new ArrayList<>(game.world().getPoints("chest"));
-        if (points.isEmpty()) {
-            return List.of();
-        }
+        if (points.isEmpty()) return List.of();
         Collections.shuffle(points);
         int min = Math.max(0, game.config().getInt("min_chests"));
         int max = Math.max(min, game.config().getInt("max_chests"));
@@ -81,13 +75,9 @@ public class VoidWarsEvents {
     public SidebarEvent sidebarEvent() {
         int seconds = game.roundElapsedSeconds();
         int collapseTime = game.config().getInt("ground_collapse_time");
-        if (seconds < collapseTime) {
-            return new SidebarEvent("Ground Collapse", collapseTime - seconds);
-        }
+        if (seconds < collapseTime) return new SidebarEvent("Ground Collapse", collapseTime - seconds);
         int pvpTime = game.config().getInt("pvp_enablement_time");
-        if (seconds < pvpTime) {
-            return new SidebarEvent("PvP Enablement", pvpTime - seconds);
-        }
+        if (seconds < pvpTime) return new SidebarEvent("PvP Enablement", pvpTime - seconds);
         TimedLabel next = nextTimedEvent(seconds);
         return next == null ? null : new SidebarEvent(next.label(), next.time() - seconds);
     }
@@ -97,66 +87,30 @@ public class VoidWarsEvents {
         chestFills.clear();
         borders.clear();
         borderBlocksPerTick = -1;
-        for (Map<?, ?> entry : game.eventsConfig().getMapList("item_drops")) {
-            itemDrops.add(readSupply(entry));
-        }
-        for (Map<?, ?> entry : game.eventsConfig().getMapList("chest_fills")) {
-            chestFills.add(readSupply(entry));
-        }
-        for (Map<?, ?> entry : game.eventsConfig().getMapList("borders")) {
-            borders.add(new BorderEvent(number(entry.get("time")), decimal(entry.get("scale"))));
-        }
+        for (Map<?, ?> entry : game.eventsConfig().getMapList("item_drops")) itemDrops.add(readSupply(entry));
+        for (Map<?, ?> entry : game.eventsConfig().getMapList("chest_fills")) chestFills.add(readSupply(entry));
+        for (Map<?, ?> entry : game.eventsConfig().getMapList("borders")) borders.add(new BorderEvent(number(entry.get("time")), decimal(entry.get("scale"))));
     }
 
     private void tick(int seconds) {
-        if (!game.roundActive()) {
-            return;
-        }
-        if (seconds == game.config().getInt("ground_collapse_time")) {
-            game.collapseGround();
-        }
-        if (seconds == game.config().getInt("pvp_enablement_time")) {
-            game.enablePvp();
-        }
-        for (SupplyEvent event : itemDrops) {
-            if (event.time() == seconds) {
-                givePlayers(event);
-            }
-        }
-        for (SupplyEvent event : chestFills) {
-            if (event.time() == seconds) {
-                refillChests(event);
-            }
-        }
-        for (BorderEvent event : borders) {
-            if (event.time() == seconds) {
-                shrinkBorder(event);
-            }
-        }
+        if (!game.roundActive()) return;
+        if (seconds == game.config().getInt("ground_collapse_time")) game.collapseGround();
+        if (seconds == game.config().getInt("pvp_enablement_time")) game.enablePvp();
+        for (SupplyEvent event : itemDrops) if (event.time() == seconds) givePlayers(event);
+        for (SupplyEvent event : chestFills) if (event.time() == seconds) refillChests(event);
+        for (BorderEvent event : borders) if (event.time() == seconds) shrinkBorder(event);
     }
 
     private void runInstantEvents() {
-        for (SupplyEvent event : itemDrops) {
-            if (event.time() == 0) {
-                givePlayers(event);
-            }
-        }
-        for (SupplyEvent event : chestFills) {
-            if (event.time() == 0) {
-                refillChests(event);
-            }
-        }
+        for (SupplyEvent event : itemDrops) if (event.time() == 0) givePlayers(event);
+        for (SupplyEvent event : chestFills) if (event.time() == 0) refillChests(event);
     }
 
     private void givePlayers(SupplyEvent event) {
         Collection<ItemStack> sharedItems = event.sharedItems(game);
-        if (sharedItems.isEmpty()) {
-            return;
-        }
+        if (sharedItems.isEmpty()) return;
         List<ItemStack> announcementItems = cloneItems(sharedItems);
-        for (GamePlayer player : game.playerManager().getPlayers()) {
-            game.data().give(player, cloneItems(sharedItems));
-        }
+        for (GamePlayer player : game.playerManager().getPlayers()) game.data().give(player, cloneItems(sharedItems));
         if (event.time() > 0) {
             announceSupply("Gave players ", announcementItems);
             game.uiManager().sound(game.playerManager().getPlayers(), Sound.ENTITY_ITEM_PICKUP, 0.8f, 0.9f);
@@ -167,16 +121,10 @@ public class VoidWarsEvents {
         int multiplier = Math.max(1, game.config().getInt("team_size"));
         for (GameChest chest : game.chests()) {
             chest.ensurePresent();
-            for (int i = 0; i < multiplier; i++) {
-                chest.addItems(event.items(null, game));
-            }
+            for (int i = 0; i < multiplier; i++) chest.addItems(event.items(null, game));
         }
         if (event.time() > 0) {
-            game.uiManager().subtitle(game.playerManager().getPlayers(), Component.text()
-                .append(Component.text("! ", NamedTextColor.DARK_GREEN, TextDecoration.BOLD))
-                .append(Component.text("Chests Refilled", NamedTextColor.GREEN))
-                .append(Component.text(" !", NamedTextColor.DARK_GREEN, TextDecoration.BOLD))
-                .build());
+            game.uiManager().subtitle(game.playerManager().getPlayers(), Component.text().append(Component.text("! ", NamedTextColor.DARK_GREEN, TextDecoration.BOLD)).append(Component.text("Chests Refilled", NamedTextColor.GREEN)).append(Component.text(" !", NamedTextColor.DARK_GREEN, TextDecoration.BOLD)).build());
             game.uiManager().sound(game.playerManager().getPlayers(), Sound.BLOCK_CHEST_OPEN, 0.8f, 1.05f);
         }
     }
@@ -198,16 +146,12 @@ public class VoidWarsEvents {
             .append(Component.text("! ", NamedTextColor.DARK_RED, TextDecoration.BOLD))
             .append(Component.text("Border Shrinking", NamedTextColor.RED))
             .append(Component.text(" !", NamedTextColor.DARK_RED, TextDecoration.BOLD))
-            .build());
+        .build());
         game.uiManager().sound(game.playerManager().getPlayers(), Sound.BLOCK_BEACON_AMBIENT, 0.9f, 0.75f);
     }
 
     private void announceSupply(String prefix, List<ItemStack> items) {
-        for (ItemStack item : items) {
-            game.uiManager().gameMessage(game.playerManager().getPlayers(), Component.text(prefix)
-                .append(game.data().itemName(item))
-                .append(Component.text(" x" + item.getAmount())));
-        }
+        for (ItemStack item : items) game.uiManager().gameMessage(game.playerManager().getPlayers(), Component.text(prefix).append(game.data().itemName(item)).append(Component.text(" x" + item.getAmount())));
     }
 
     private void filterExplosion(List<Block> blocks) {
@@ -220,32 +164,14 @@ public class VoidWarsEvents {
 
     private TimedLabel nextTimedEvent(int seconds) {
         TimedLabel next = null;
-        for (SupplyEvent event : itemDrops) {
-            if (event.time() > seconds) {
-                next = earliest(next, new TimedLabel("Item Drop", event.time(), 2));
-            }
-        }
-        for (SupplyEvent event : chestFills) {
-            if (event.time() > seconds) {
-                next = earliest(next, new TimedLabel("Chest Refill", event.time(), 1));
-            }
-        }
-        for (BorderEvent event : borders) {
-            if (event.time() > seconds) {
-                next = earliest(next, new TimedLabel("Border Shrink", event.time(), 0));
-            }
-        }
+        for (SupplyEvent event : itemDrops) if (event.time() > seconds) next = earliest(next, new TimedLabel("Item Drop", event.time(), 2));
+        for (SupplyEvent event : chestFills) if (event.time() > seconds) next = earliest(next, new TimedLabel("Chest Refill", event.time(), 1));
+        for (BorderEvent event : borders) if (event.time() > seconds) next = earliest(next, new TimedLabel("Border Shrink", event.time(), 0));
         return next;
     }
 
     private TimedLabel earliest(TimedLabel current, TimedLabel candidate) {
-        if (current == null) {
-            return candidate;
-        }
-        if (candidate.time() < current.time() || candidate.time() == current.time() && candidate.priority() < current.priority()) {
-            return candidate;
-        }
-        return current;
+        return current == null || candidate.time() < current.time() || candidate.time() == current.time() && candidate.priority() < current.priority() ? candidate : current;
     }
 
     private SupplyEvent readSupply(Map<?, ?> entry) {
@@ -254,22 +180,14 @@ public class VoidWarsEvents {
 
     private List<ItemStack> cloneItems(Collection<ItemStack> items) {
         List<ItemStack> clones = new ArrayList<>(items.size());
-        for (ItemStack item : items) {
-            clones.add(item.clone());
-        }
+        for (ItemStack item : items) clones.add(item.clone());
         return clones;
     }
 
     private List<String> strings(Object value) {
-        if (!(value instanceof List<?> list)) {
-            return List.of();
-        }
+        if (!(value instanceof List<?> list)) return List.of();
         List<String> strings = new ArrayList<>(list.size());
-        for (Object entry : list) {
-            if (entry != null) {
-                strings.add(String.valueOf(entry));
-            }
-        }
+        for (Object entry : list) if (entry != null) strings.add(String.valueOf(entry));
         return strings;
     }
 
@@ -285,14 +203,11 @@ public class VoidWarsEvents {
         return value == null ? null : String.valueOf(value);
     }
 
-    private record BorderEvent(int time, double scale) {
-    }
+    private record BorderEvent(int time, double scale) {}
 
-    public record SidebarEvent(String label, int remainingSeconds) {
-    }
+    public record SidebarEvent(String label, int remainingSeconds) {}
 
-    private record TimedLabel(String label, int time, int priority) {
-    }
+    private record TimedLabel(String label, int time, int priority) {}
 
     private record SupplyEvent(int time, List<String> pool, String lootTable) {
         Collection<ItemStack> sharedItems(VoidWars game) {
@@ -300,9 +215,7 @@ public class VoidWarsEvents {
         }
 
         Collection<ItemStack> items(GamePlayer player, VoidWars game) {
-            if (!pool.isEmpty()) {
-                return List.of(game.data().randomPool(pool));
-            }
+            if (!pool.isEmpty()) return List.of(game.data().randomPool(pool));
             return lootTable == null ? List.of() : game.data().loot(lootTable, player);
         }
     }

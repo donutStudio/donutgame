@@ -21,19 +21,22 @@ import com.donutsforlife11.donutgame.internal.player.PlayerStateStore;
 import com.donutsforlife11.donutgame.internal.ui.GlowService;
 
 public final class Donutgame extends JavaPlugin {
-    private final FileService fileService = new FileService(this);
+    private FileService fileService;
+    private MapService mapService;
+    private WorldService worldService;
     private final ModuleService moduleService = new ModuleService(this);
-    private final MapService mapService = new MapService(fileService);
     private final PlayerStateStore playerStateStore = new PlayerStateStore();
-    private final WorldService worldService = new WorldService(this, playerStateStore);
     private final GameItemService itemService = new GameItemService();
+    private final PlayerEvents playerEvents = new PlayerEvents(playerStateStore);
     private GlowService glowService;
-
-    private PlayerEvents playerEvents = new PlayerEvents(playerStateStore, worldService);
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        fileService = new FileService(this);
+        mapService = new MapService(fileService);
+        worldService = new WorldService(this, playerStateStore);
+        playerEvents.setWorldService(worldService);
         fileService.reload();
         glowService = new GlowService(this);
         glowService.enable();
@@ -61,9 +64,7 @@ public final class Donutgame extends JavaPlugin {
         }
         fileService.closeModuleLoaders();
         worldService.unloadAll();
-        if (glowService != null) {
-            glowService.disable();
-        }
+        if (glowService != null) glowService.disable();
     }
 
     public FileService fileService() {

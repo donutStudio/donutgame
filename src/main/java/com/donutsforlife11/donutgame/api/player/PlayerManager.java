@@ -76,14 +76,12 @@ public class PlayerManager {
     public boolean register(Player player) {
         Objects.requireNonNull(player);
         UUID uuid = player.getUniqueId();
-        if (playersById.containsKey(uuid) || !pendingPlayers.add(uuid) && module.world() == null) {
-            module.log("Skipped registration for " + player.getName() + " because they are already registered or pending.");
-            return false;
-        }
         if (module.world() == null) {
+            if (!pendingPlayers.add(uuid)) return false;
             module.log("Queued player " + player.getName() + " for registration until the game world is ready.");
             return true;
         }
+        if (playersById.containsKey(uuid)) return false;
         pendingPlayers.remove(uuid);
         registerNow(player);
         return true;
@@ -103,16 +101,12 @@ public class PlayerManager {
         Objects.requireNonNull(player);
         pendingPlayers.remove(player.getUniqueId());
         GamePlayer gamePlayer = playersById.remove(player.getUniqueId());
-        if (gamePlayer == null) {
-            return false;
-        }
+        if (gamePlayer == null) return false;
         players.remove(gamePlayer);
         gamePlayer.cancelRespawn();
         gamePlayer.setNonSpectator();
         module.log("Unregistered player " + player.getName() + " from active game " + module.index() + ".");
-        for (Consumer<GamePlayer> action : unregistrationActions) {
-            action.accept(gamePlayer);
-        }
+        for (Consumer<GamePlayer> action : unregistrationActions) action.accept(gamePlayer);
         return true;
     }
 
@@ -122,20 +116,10 @@ public class PlayerManager {
         }
         for (UUID uuid : Set.copyOf(pendingPlayers)) {
             Player player = Bukkit.getPlayer(uuid);
-            if (player == null || playersById.containsKey(uuid)) {
-                continue;
-            }
+            if (player == null || playersById.containsKey(uuid)) continue;
             pendingPlayers.remove(uuid);
             registerNow(player);
         }
-    }
-
-    void registerPlayer(Player player) {
-        register(player);
-    }
-
-    void unregisterPlayer(Player player) {
-        unregister(player);
     }
 
     public GameModule module() {
@@ -143,12 +127,12 @@ public class PlayerManager {
     }
 
     private void registerNow(Player player) {
-        GamePlayer gamePlayer = new GamePlayer(this, module.world(), player.getUniqueId(), defaultSpawnLocation());
+        GameLocation spawn = defaultSpawnLocation();
+        GamePlayer gamePlayer = new GamePlayer(this, module.world(), player.getUniqueId(), spawn);
         players.add(gamePlayer);
         playersById.put(player.getUniqueId(), gamePlayer);
-        module.log("Registering player " + player.getName() + " into game world " + module.world().bukkitWorld().getName()
-            + " at " + formatLocation(gamePlayer.respawnLocation()) + ".");
-        gamePlayer.teleport(gamePlayer.respawnLocation());
+        module.log("Registering player " + player.getName() + " into game world " + module.world().bukkitWorld().getName() + " at " + formatLocation(spawn) + ".");
+        gamePlayer.teleport(spawn);
         for (Consumer<GamePlayer> action : registrationActions) {
             try {
                 action.accept(gamePlayer);
@@ -160,11 +144,7 @@ public class PlayerManager {
 
     private Collection<GamePlayer> filtered(boolean spectators) {
         Set<GamePlayer> filtered = new LinkedHashSet<>();
-        for (GamePlayer player : players) {
-            if (player.isSpectator() == spectators) {
-                filtered.add(player);
-            }
-        }
+        for (GamePlayer player : players) if (player.isSpectator() == spectators) filtered.add(player);
         return Collections.unmodifiableSet(filtered);
     }
 
