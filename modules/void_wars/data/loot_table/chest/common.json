@@ -4,37 +4,241 @@
     {
       "rolls": 1,
       "entries": [
-        {"type": "minecraft:item", "name": "minecraft:iron_sword", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 6, "max": 11}, "options": ["minecraft:sharpness", "minecraft:knockback"]}]},
-        {"type": "minecraft:item", "name": "minecraft:iron_axe", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 7, "max": 13}, "options": ["minecraft:sharpness"]}]},
-        {"type": "minecraft:item", "name": "minecraft:copper_spear", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 7, "max": 13}, "options": ["minecraft:sharpness", "minecraft:knockback", "minecraft:lunge"]}]},
-        {"type": "minecraft:item", "name": "minecraft:golden_spear", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 8, "max": 12}, "options": ["minecraft:sharpness", "minecraft:knockback", "minecraft:lunge"]}]},
-        {"type": "minecraft:item", "name": "minecraft:bow", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 7, "max": 13}, "options": ["minecraft:power", "minecraft:punch", "minecraft:flame"]}]},
-        {"type": "minecraft:item", "name": "minecraft:crossbow", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 7, "max": 13}, "options": ["minecraft:quick_charge", "minecraft:multishot", "minecraft:piercing"]}]},
-        {"type": "minecraft:item", "name": "minecraft:shield", "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 6, "max": 12}, "options": ["minecraft:unbreaking"]}]}
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:stone_sword",
+          "weight": 2,
+          "functions": [
+            {
+              "function": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:sharpness": 1
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:stone_axe",
+          "weight": 2,
+          "functions": [
+            {
+              "function": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:sharpness": 1
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:stone_spear",
+          "weight": 2,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 3,
+                "max": 6
+              },
+              "options": [
+                "minecraft:sharpness",
+                "minecraft:knockback"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:copper_spear",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 3,
+                "max": 6
+              },
+              "options": [
+                "minecraft:sharpness",
+                "minecraft:knockback"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:wooden_sword",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 5,
+                "max": 8
+              },
+              "options": [
+                "minecraft:sharpness",
+                "minecraft:knockback"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "minecraft:empty",
+          "weight": 5
+        }
       ]
     },
     {
       "rolls": 1,
       "entries": [
-        {"type": "minecraft:item", "name": "minecraft:arrow", "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 6, "max": 12}}]},
-        {"type": "minecraft:item", "name": "minecraft:wind_charge", "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 4, "max": 8}}]},
-        {"type": "minecraft:item", "name": "minecraft:cobweb", "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 2, "max": 5}}]},
-        {"type": "minecraft:item", "name": "minecraft:ender_pearl", "functions": [{"function": "minecraft:set_count", "count": 1}]},
-        {"type": "minecraft:item", "name": "minecraft:tnt", "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}}, {"function": "minecraft:set_components", "components": {"minecraft:custom_data": {"donutgame:auto_ignite": 80}}}]},
-        {"type": "minecraft:item", "name": "minecraft:iron_ingot", "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 3, "max": 5}}]},
-        {"type": "minecraft:item", "name": "minecraft:scaffolding", "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 10, "max": 18}}]},
-        {"type": "minecraft:item", "name": "minecraft:water_bucket"},
-        {"type": "minecraft:item", "name": "minecraft:lava_bucket"},
-        {"type": "minecraft:item", "name": "minecraft:golden_apple"}
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:arrow",
+          "weight": 3,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 5,
+                "max": 10
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:wind_charge",
+          "weight": 2,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 3,
+                "max": 6
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:cobweb",
+          "weight": 2,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 1,
+                "max": 3
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:ender_pearl",
+          "weight": 2
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:tnt",
+          "weight": 2,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": 1
+            },
+            {
+              "function": "minecraft:set_components",
+              "components": {
+                "minecraft:custom_data": {
+                  "donutgame:auto_ignite": 80
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:leather",
+          "weight": 2,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 3,
+                "max": 6
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:cobblestone",
+          "weight": 2,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 8,
+                "max": 16
+              }
+            }
+          ]
+        }
       ]
     },
     {
       "rolls": 1,
       "entries": [
-        {"type": "minecraft:empty", "weight": 7},
-        {"type": "minecraft:item", "name": "minecraft:iron_chestplate", "weight": 1, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 7, "max": 13}}]},
-        {"type": "minecraft:item", "name": "minecraft:diamond", "weight": 1, "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 3}}]},
-        {"type": "minecraft:item", "name": "minecraft:golden_apple", "weight": 1}
+        {
+          "type": "minecraft:empty",
+          "weight": 11
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:golden_apple",
+          "weight": 2
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:chainmail_boots",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 4,
+                "max": 8
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:chainmail_chestplate",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 4,
+                "max": 8
+              }
+            }
+          ]
+        }
       ]
     }
   ]

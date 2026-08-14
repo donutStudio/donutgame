@@ -76,15 +76,18 @@ public class ModuleService {
     }
 
     public CompletableFuture<Boolean> unloadModule(int index) {
-        GameModule module = activeGames.remove(index);
+        GameModule module = activeGames.get(index);
         if (module == null) {
             return CompletableFuture.completedFuture(false);
         }
+        module.setTransitioning(true);
         module.onUnload();
         return module.shutdown().thenApply(ignored -> {
+            activeGames.remove(index, module);
             freeIndexes.offer(index);
             return true;
         }).exceptionally(throwable -> {
+            activeGames.remove(index, module);
             freeIndexes.offer(index);
             throw new RuntimeException(throwable);
         });

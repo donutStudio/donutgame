@@ -7,3 +7,7 @@ description: Donutsforlife11's base for creating minigames
 author: Donutsforlife11
 depend:
   - WorldEdit
+permissions:
+  donutgame.command:
+    description: Allows use of Donutgame administrative commands.
+    default: op

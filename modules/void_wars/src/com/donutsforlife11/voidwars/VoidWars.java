@@ -20,7 +20,6 @@ import com.donutsforlife11.donutgame.api.map.GameRegion;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
 import com.donutsforlife11.donutgame.api.time.GameTimer;
-import com.donutsforlife11.donutgame.api.ui.sidebar.GameSidebar;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
 import net.kyori.adventure.text.Component;
@@ -35,13 +34,13 @@ public class VoidWars extends GameModule {
 
     private final VoidWarsPlayers players = new VoidWarsPlayers(this);
     private final VoidWarsEvents roundEvents = new VoidWarsEvents(this);
+    private final VoidWarsSidebar roundSidebar = new VoidWarsSidebar(this);
     private final List<GameChest> chests = new ArrayList<>();
     private final Set<UUID> reconnectRespawns = new HashSet<>();
     private final Map<UUID, Integer> kills = new HashMap<>();
     private YamlConfiguration eventsConfig;
     private GameTimer roundTimer;
     private GameBorder mainBorder;
-    private GameSidebar sidebar;
     private int round;
     private int alivePlayers;
     private int aliveTeams;
@@ -50,7 +49,7 @@ public class VoidWars extends GameModule {
 
     @Override
     public void onLoad() {
-        eventsConfig = data().configuration("events");
+        eventsConfig = config("events.yml");
         playerManager().onPlayerRegistered(player -> players.handleRegisteredPlayer(player));
         playerManager().onPlayerUnregistered(player -> players.handleUnregisteredPlayer(player));
         players.bind();
@@ -63,16 +62,20 @@ public class VoidWars extends GameModule {
     }
 
     @Override
+    public void onReload() {
+        restartRound();
+    }
+
+    @Override
     public void onUnload() {
         cancelRoundTimer();
         borderManager().clear();
-        teamManager().clear();
         mainBorder = null;
-        if (sidebar != null) sidebar.delete();
-        sidebar = null;
+        roundSidebar.clear();
         for (GamePlayer player : playerManager().getPlayers()) {
             player.cancelRespawn();
-            player.setNonSpectator();
+            if (player.bukkitPlayer() != null) player.bukkitPlayer().closeInventory();
+            player.setSpectator(false);
         }
     }
 
@@ -106,10 +109,10 @@ public class VoidWars extends GameModule {
     }
 
     void collapseGround() {
-        GameRegion region = world().region("spawn_platform");
+        GameRegion region = world().getRegion("spawn_platform");
         if (region != null) {
             world().fill(region, org.bukkit.Material.AIR);
-            uiManager().sound(playerManager().getPlayers(), Sound.ENTITY_GENERIC_EXPLODE, 0.9f, 0.8f);
+            uiManager().playSound(playerManager().getPlayers(), Sound.ENTITY_WARDEN_ATTACK_IMPACT, 0.9f, 0.8f);
         }
     }
 
@@ -123,17 +126,26 @@ public class VoidWars extends GameModule {
         timeManager().newTimer(ROUND_OVER_TITLE_DELAY).onFinish(timer -> {
             List<GamePlayer> winners = new ArrayList<>(playerManager().getNonSpectators());
             uiManager().title(playerManager().getSpectators(), Component.text("Round Over"));
+            uiManager().playSound(playerManager().getSpectators(), Sound.ENTITY_ENDER_DRAGON_GROWL, 1f, 1.5f);
             uiManager().title(winners, Component.text("VICTORY", NamedTextColor.GOLD, TextDecoration.BOLD));
-            if (!winners.isEmpty()) uiManager().subtitle(playerManager().getPlayers(), Component.text((winners.size() == 1 ? "Winner: " : "Winners: ") + winners.stream().map(player -> player.getName()).collect(Collectors.joining(", "))));
-            for (GamePlayer winner : winners) winner.setSpectator(winner.location());
+            uiManager().playSound(winners, Sound.UI_TOAST_CHALLENGE_COMPLETE, 1f, 1.5f);
+            if (!winners.isEmpty()) {
+                uiManager().subtitle(playerManager().getPlayers(), Component.text(
+                    (winners.size() == 1 ? "Winner: " : "Winners: ") + 
+                    winners.stream().map(player -> player.name()).collect(Collectors.joining(", "))
+                ));
+            }
+            for (GamePlayer winner : winners) {
+                winner.setSpectator(true, winner.location());
+            }
         }).start();
         if (round >= maxRounds()) {
             timeManager().newTimer(GAME_END_DELAY).onFinish(timer -> {
                 uiManager().gameMessage(playerManager().getPlayers(), Component.text("Game over!"));
-                unloadSelf();
+                unload();
             }).start();
         } else {
-            timeManager().newTimer(ROUND_RESTART_DELAY).onFinish(timer -> restartRound()).start();
+            timeManager().newTimer(ROUND_RESTART_DELAY).onFinish(timer -> reload()).start();
         }
     }
 
@@ -171,7 +183,7 @@ public class VoidWars extends GameModule {
 
     int respawnTicks(GamePlayer player) {
         GameTeam team = player.team();
-        return team == null ? 0 : Math.max(0, aliveMembers(team) * config().getInt("base_respawn_time") * 20);
+        return team == null ? 0 : Math.max(0, (aliveMembers(team) - 1) * config().getInt("base_respawn_time") * 20);
     }
 
     GameLocation respawnLocationFor(GamePlayer player) {
@@ -252,7 +264,7 @@ public class VoidWars extends GameModule {
     }
 
     int roundElapsedSeconds() {
-        return roundTimer == null ? 0 : roundTimer.getElapsedTicks() / 20;
+        return roundTimer == null ? 0 : (int) roundTimer.getElapsedSeconds();
     }
 
     @SuppressWarnings("null")
@@ -265,25 +277,30 @@ public class VoidWars extends GameModule {
     }
 
     GameLocation spawn() {
-        GameLocation spawn = world().point("spawn");
-        return spawn == null ? world().spawnLocation() : spawn;
+        GameLocation spawn = world().getPoint("spawn");
+        return spawn == null ? world().worldSpawn() : spawn;
     }
 
     GameRegion startingBorderRegion() {
-        return world().region("starting_border");
+        return world().getRegion("starting_border");
+    }
+
+    VoidWarsEvents roundEvents() {
+        return roundEvents;
     }
 
     private void initializeGame() {
         teamManager().clear();
         players.assignTeams(config().getInt("team_size"));
-        initializeSidebar();
+        players.updateSpectatorTargets();
+        roundSidebar.show();
         prepareRound();
     }
 
     private void startRound() {
         roundActive = true;
         for (GamePlayer player : playerManager().getPlayers()) {
-            player.setNonSpectator();
+            player.setSpectator(false);
             player.setGameMode(GameMode.SURVIVAL);
             player.clearEffects();
         }
@@ -291,6 +308,10 @@ public class VoidWars extends GameModule {
     }
 
     private void restartRound() {
+        for (GamePlayer player : playerManager().getPlayers()) {
+            player.cancelRespawn();
+            if (player.bukkitPlayer() != null) player.bukkitPlayer().closeInventory();
+        }
         mapManager().setMap(config().getString("map")).thenRun(() -> prepareRound()).exceptionally(throwable -> {
             logError("Failed to restart round " + (round + 1) + ".", throwable);
             return null;
@@ -300,17 +321,5 @@ public class VoidWars extends GameModule {
     private void cancelRoundTimer() {
         if (roundTimer != null) roundTimer.cancel();
         roundTimer = null;
-    }
-
-    private void initializeSidebar() {
-        sidebar = uiManager().newSidebar().fraction("Round", this::round, this::maxRounds).blank().dynamicTime(() -> {
-            VoidWarsEvents.SidebarEvent event = roundEvents.sidebarEvent();
-            return event == null ? "Overtime" : event.label();
-        }, () -> {
-            VoidWarsEvents.SidebarEvent event = roundEvents.sidebarEvent();
-            return event == null ? 0 : event.remainingSeconds();
-        }).blank().fraction("Alive Players", this::alivePlayers, this::totalPlayers);
-        if (config().getInt("team_size") > 1) sidebar.fraction("Alive Teams", this::aliveTeams, this::totalTeams);
-        sidebar.blank().integer("Kills", this::kills).show();
     }
 }

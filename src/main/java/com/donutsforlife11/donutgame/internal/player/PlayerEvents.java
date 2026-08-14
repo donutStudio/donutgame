@@ -19,6 +19,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.potion.PotionEffect;
 
+import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.internal.map.WorldService;
 import com.donutsforlife11.donutgame.internal.player.WorldPlayerState.AttributeState;
 
@@ -97,11 +98,11 @@ public class PlayerEvents implements Listener {
 
         PlayerInventory inv = player.getInventory();
 
-        state.inventory = cloneContents(inv.getStorageContents());
-        state.armor = cloneContents(inv.getArmorContents());
+        state.inventory = GamePlayer.stripSpectatorCompass(cloneContents(inv.getStorageContents()));
+        state.armor = GamePlayer.stripSpectatorCompass(cloneContents(inv.getArmorContents()));
 
         ItemStack offhand = inv.getItemInOffHand();
-        state.offhand = offhand == null ? null : offhand.clone();
+        state.offhand = GamePlayer.stripSpectatorCompass(offhand == null ? null : offhand.clone());
 
         state.enderChest = cloneContents(player.getEnderChest().getContents());
 
@@ -130,9 +131,9 @@ public class PlayerEvents implements Listener {
         PlayerInventory inv = player.getInventory();
 
         inv.clear();
-        inv.setStorageContents(cloneContents(state.inventory));
-        inv.setArmorContents(cloneContents(state.armor));
-        inv.setItemInOffHand(state.offhand);
+        inv.setStorageContents(GamePlayer.stripSpectatorCompass(cloneContents(state.inventory)));
+        inv.setArmorContents(GamePlayer.stripSpectatorCompass(cloneContents(state.armor)));
+        inv.setItemInOffHand(GamePlayer.stripSpectatorCompass(state.offhand));
 
         player.getEnderChest().clear();
 

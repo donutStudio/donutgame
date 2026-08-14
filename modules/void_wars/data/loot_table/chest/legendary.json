@@ -4,44 +4,411 @@
     {
       "rolls": 1,
       "entries": [
-        {"type": "minecraft:item", "name": "minecraft:diamond_sword", "weight": 4, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 18, "max": 26}, "options": ["minecraft:sharpness", "minecraft:knockback", "minecraft:sweeping_edge"]}]},
-        {"type": "minecraft:item", "name": "minecraft:diamond_axe", "weight": 4, "functions": [{"function": "minecraft:set_enchantments", "enchantments": {"minecraft:sharpness": {"type": "minecraft:uniform", "min": 2, "max": 4}}}]},
-        {"type": "minecraft:item", "name": "minecraft:diamond_spear", "weight": 4, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 18, "max": 26}, "options": ["minecraft:sharpness", "minecraft:knockback", "minecraft:lunge"]}]},
-        {"type": "minecraft:item", "name": "minecraft:mace", "weight": 3, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 18, "max": 26}, "options": ["minecraft:density", "minecraft:breach", "minecraft:wind_burst"]}]},
-        {"type": "minecraft:item", "name": "minecraft:bow", "weight": 4, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 18, "max": 26}, "options": ["minecraft:power", "minecraft:punch", "minecraft:flame", "minecraft:infinity"]}]},
-        {"type": "minecraft:item", "name": "minecraft:crossbow", "weight": 4, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 18, "max": 26}, "options": ["minecraft:quick_charge", "minecraft:multishot", "minecraft:piercing"]}]},
-        {"type": "minecraft:item", "name": "minecraft:trident", "weight": 3, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 18, "max": 26}, "options": ["minecraft:loyalty", "minecraft:impaling", "minecraft:riptide", "minecraft:channeling"]}]},
-        {"type": "minecraft:item", "name": "minecraft:netherite_sword", "weight": 2, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 16, "max": 22}, "options": ["minecraft:sharpness", "minecraft:knockback", "minecraft:sweeping_edge"]}]},
-        {"type": "minecraft:item", "name": "minecraft:netherite_axe", "weight": 2, "functions": [{"function": "minecraft:set_enchantments", "enchantments": {"minecraft:sharpness": {"type": "minecraft:uniform", "min": 2, "max": 3}}}]},
-        {"type": "minecraft:item", "name": "minecraft:netherite_spear", "weight": 2, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 16, "max": 22}, "options": ["minecraft:sharpness", "minecraft:knockback", "minecraft:lunge"]}]}
+        {
+          "type": "minecraft:empty",
+          "weight": 16
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 11,
+                "max": 17
+              },
+              "options": [
+                "minecraft:sharpness",
+                "minecraft:knockback",
+                "minecraft:sweeping_edge"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_axe",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:sharpness": {
+                  "type": "minecraft:uniform",
+                  "min": 1,
+                  "max": 2
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_spear",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 11,
+                "max": 17
+              },
+              "options": [
+                "minecraft:sharpness",
+                "minecraft:knockback",
+                "minecraft:lunge"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:bow",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 12,
+                "max": 18
+              },
+              "options": [
+                "minecraft:power",
+                "minecraft:punch",
+                "minecraft:flame"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:crossbow",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 12,
+                "max": 18
+              },
+              "options": [
+                "minecraft:quick_charge",
+                "minecraft:multishot",
+                "minecraft:piercing"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:trident",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 12,
+                "max": 18
+              },
+              "options": [
+                "minecraft:loyalty",
+                "minecraft:impaling",
+                "minecraft:riptide"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:mace",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 12,
+                "max": 18
+              },
+              "options": [
+                "minecraft:density",
+                "minecraft:breach",
+                "minecraft:wind_burst"
+              ]
+            }
+          ]
+        }
       ]
     },
     {
       "rolls": 1,
       "entries": [
-        {"type": "minecraft:item", "name": "minecraft:diamond_chestplate", "weight": 4, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 16, "max": 24}}]},
-        {"type": "minecraft:item", "name": "minecraft:diamond_leggings", "weight": 4, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 16, "max": 24}}]},
-        {"type": "minecraft:item", "name": "minecraft:diamond_boots", "weight": 4, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 16, "max": 24}}]},
-        {"type": "minecraft:item", "name": "minecraft:diamond_helmet", "weight": 4, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 16, "max": 24}}]},
-        {"type": "minecraft:item", "name": "minecraft:netherite_chestplate", "weight": 1, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 14, "max": 20}}]},
-        {"type": "minecraft:item", "name": "minecraft:netherite_leggings", "weight": 1, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 14, "max": 20}}]},
-        {"type": "minecraft:item", "name": "minecraft:netherite_boots", "weight": 1, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 14, "max": 20}}]},
-        {"type": "minecraft:item", "name": "minecraft:netherite_helmet", "weight": 1, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 14, "max": 20}}]},
-        {"type": "minecraft:item", "name": "minecraft:enchanted_book", "weight": 2, "functions": [{"function": "minecraft:enchant_with_levels", "levels": {"type": "minecraft:uniform", "min": 18, "max": 26}, "options": ["minecraft:sharpness", "minecraft:protection", "minecraft:power", "minecraft:punch", "minecraft:lunge", "minecraft:wind_burst"]}]},
-        {"type": "minecraft:item", "name": "minecraft:golden_apple", "weight": 3, "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 3}}]},
-        {"type": "minecraft:item", "name": "minecraft:ender_pearl", "weight": 3, "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 2, "max": 4}}]},
-        {"type": "minecraft:item", "name": "minecraft:wind_charge", "weight": 3, "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 10, "max": 18}}]},
-        {"type": "minecraft:item", "name": "minecraft:cobweb", "weight": 3, "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 5, "max": 10}}]},
-        {"type": "minecraft:item", "name": "minecraft:tipped_arrow", "weight": 3, "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 4, "max": 8}}, {"function": "minecraft:set_potion", "id": "minecraft:strong_harming"}]}
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:enchanted_book",
+          "weight": 2,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 14,
+                "max": 21
+              },
+              "options": [
+                "minecraft:sharpness",
+                "minecraft:protection",
+                "minecraft:power",
+                "minecraft:punch",
+                "minecraft:lunge",
+                "minecraft:wind_burst"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:experience_bottle",
+          "weight": 2,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 8,
+                "max": 16
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond",
+          "weight": 2,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 2,
+                "max": 4
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:golden_apple",
+          "weight": 3,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 1,
+                "max": 2
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:ender_pearl",
+          "weight": 3,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 2,
+                "max": 4
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:wind_charge",
+          "weight": 3,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 10,
+                "max": 18
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:cobweb",
+          "weight": 3,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 5,
+                "max": 9
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:tipped_arrow",
+          "weight": 2,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 4,
+                "max": 8
+              }
+            },
+            {
+              "function": "minecraft:set_potion",
+              "id": "minecraft:strong_harming"
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:splash_potion",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:set_potion",
+              "id": "minecraft:strong_strength"
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:splash_potion",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:set_potion",
+              "id": "minecraft:strong_swiftness"
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:splash_potion",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:set_potion",
+              "id": "minecraft:strong_healing"
+            }
+          ]
+        }
       ]
     },
     {
       "rolls": 1,
       "entries": [
-        {"type": "minecraft:empty", "weight": 6},
-        {"type": "minecraft:item", "name": "minecraft:totem_of_undying", "weight": 2},
-        {"type": "minecraft:item", "name": "minecraft:enchanted_golden_apple", "weight": 1},
-        {"type": "minecraft:item", "name": "minecraft:golden_apple", "weight": 2, "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 2, "max": 3}}]}
+        {
+          "type": "minecraft:empty",
+          "weight": 20
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:totem_of_undying",
+          "weight": 2
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:enchanted_golden_apple",
+          "weight": 1
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_chestplate",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 10,
+                "max": 16
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_leggings",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 10,
+                "max": 16
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_boots",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 10,
+                "max": 16
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_helmet",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "minecraft:enchant_with_levels",
+              "levels": {
+                "type": "minecraft:uniform",
+                "min": 10,
+                "max": 16
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond",
+          "weight": 2,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 3,
+                "max": 5
+              }
+            }
+          ]
+        }
       ]
     }
   ]

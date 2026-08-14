@@ -39,11 +39,24 @@ public class GameWorld {
     }
 
     public GameLocation spawnLocation() {
+        return worldSpawn();
+    }
+
+    public void setWorldSpawn(GameLocation location) {
+        requireLocation(location);
+        bukkitWorld.setSpawnLocation(location.toBukkit(bukkitWorld));
+    }
+
+    public GameLocation worldSpawn() {
         return GameLocation.fromBukkit(bukkitWorld.getSpawnLocation());
     }
 
     public void setPvp(boolean enabled) {
         bukkitWorld.setGameRule(GameRules.PVP, enabled);
+    }
+
+    public void setFallDamage(boolean enabled) {
+        bukkitWorld.setGameRule(GameRules.FALL_DAMAGE, enabled);
     }
 
     public void addPoint(GameLocation location, String pointName) {
@@ -74,6 +87,10 @@ public class GameWorld {
     }
 
     public GameLocation point(String pointName) {
+        return getPoint(pointName);
+    }
+
+    public GameLocation getPoint(String pointName) {
         List<GameLocation> matches = points.get(pointName);
         return matches == null || matches.isEmpty() ? null : matches.getFirst();
     }
@@ -92,6 +109,10 @@ public class GameWorld {
     }
 
     public GameRegion region(String regionName) {
+        return getRegion(regionName);
+    }
+
+    public GameRegion getRegion(String regionName) {
         List<GameRegion> matches = regions.get(regionName);
         return matches == null || matches.isEmpty() ? null : matches.getFirst();
     }
@@ -120,13 +141,37 @@ public class GameWorld {
         setBlock(location, material.createBlockData());
     }
 
+    public void setBlock(double x, double y, double z, Material material) {
+        setBlock(new GameLocation(x, y, z), material);
+    }
+
     public void setBlock(GameLocation location, BlockData blockData) {
         requireLocation(location);
         bukkitWorld.getBlockAt(location.toBukkit(bukkitWorld)).setBlockData(blockData, false);
     }
 
+    public void setBlock(double x, double y, double z, BlockData blockData) {
+        setBlock(new GameLocation(x, y, z), blockData);
+    }
+
+    public CompletableFuture<Void> fill(double x0, double y0, double z0, double x1, double y1, double z1, Material material) {
+        return fill(new GameLocation(x0, y0, z0), new GameLocation(x1, y1, z1), material);
+    }
+
+    public CompletableFuture<Void> fill(GameLocation pos1, GameLocation pos2, Material material) {
+        return fill(new GameRegion(pos1, pos2), material);
+    }
+
     public CompletableFuture<Void> fill(GameRegion region, Material material) {
         return fill(region, material.createBlockData());
+    }
+
+    public CompletableFuture<Void> fill(double x0, double y0, double z0, double x1, double y1, double z1, BlockData blockData) {
+        return fill(new GameLocation(x0, y0, z0), new GameLocation(x1, y1, z1), blockData);
+    }
+
+    public CompletableFuture<Void> fill(GameLocation pos1, GameLocation pos2, BlockData blockData) {
+        return fill(new GameRegion(pos1, pos2), blockData);
     }
 
     public CompletableFuture<Void> fill(GameRegion region, BlockData blockData) {
@@ -140,9 +185,21 @@ public class GameWorld {
         return new GameEntity(this, entity.getUniqueId(), entity.getType());
     }
 
+    public GameEntity summon(EntityType entityType, double x, double y, double z) {
+        return summon(entityType, new GameLocation(x, y, z));
+    }
+
     public GameChest placeChest(GameLocation location) {
+        return newChest(location);
+    }
+
+    public GameChest newChest(GameLocation location) {
         setBlock(location, Material.CHEST);
         return new GameChest(this, location);
+    }
+
+    public GameChest newChest(double x, double y, double z) {
+        return newChest(new GameLocation(x, y, z));
     }
 
     public GameEntity entity(Entity entity) {

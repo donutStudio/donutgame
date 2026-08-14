@@ -76,13 +76,21 @@ public class BorderManager {
     }
 
     public void setBorderDamage(double damage, int interval) {
+        setBorderDamage(damage);
+        setBorderInterval(interval);
+    }
+
+    public void setBorderDamage(double damage) {
         if (damage < 0) {
             throw new IllegalArgumentException("Border damage cannot be negative.");
         }
+        this.borderDamage = damage;
+    }
+
+    public void setBorderInterval(int interval) {
         if (interval <= 0) {
             throw new IllegalArgumentException("Border damage interval must be greater than zero.");
         }
-        this.borderDamage = damage;
         this.borderDamageInterval = interval;
         if (borderDamageTimer != null) {
             borderDamageTimer.cancel();
@@ -119,7 +127,7 @@ public class BorderManager {
                         )
                     );
                     bukkitPlayer.damage(
-                        damage,
+                        borderDamage,
                         DamageSource.builder(DamageType.OUTSIDE_BORDER).build()
                     );
                 }

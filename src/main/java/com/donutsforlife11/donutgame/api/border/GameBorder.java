@@ -48,6 +48,10 @@ public class GameBorder {
         return setCenter(target, 0);
     }
 
+    public GameBorder setCenter(double x, double y, double z) {
+        return setCenter(new GameLocation(x, y, z));
+    }
+
     public GameBorder setCenter(GameLocation target, int ticks) {
         if (centerTimer != null) {
             centerTimer.cancel();
@@ -70,8 +74,16 @@ public class GameBorder {
         return this;
     }
 
+    public GameBorder setCenter(double x, double y, double z, int ticks) {
+        return setCenter(new GameLocation(x, y, z), ticks);
+    }
+
     public GameBorder setDimensions(Vector target) {
         return setDimensions(target, 0);
+    }
+
+    public GameBorder setDimensions(double x, double y, double z) {
+        return setDimensions(new Vector(x, y, z));
     }
 
     public GameBorder setDimensions(Vector target, int ticks) {
@@ -96,6 +108,10 @@ public class GameBorder {
             );
         }).onFinish(ignored -> dimensions = end).start();
         return this;
+    }
+
+    public GameBorder setDimensions(double x, double y, double z, int ticks) {
+        return setDimensions(new Vector(x, y, z), ticks);
     }
 
     public boolean containsLocation(GameLocation location) {

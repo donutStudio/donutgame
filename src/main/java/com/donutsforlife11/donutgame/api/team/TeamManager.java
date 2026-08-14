@@ -37,7 +37,7 @@ public class TeamManager {
     }
 
     public GameTeam newTeam() {
-        GameTeam team = new GameTeam(this, scoreboard);
+        GameTeam team = new GameTeam(this, scoreboard, teams.size());
         teams.add(team);
         return team;
     }

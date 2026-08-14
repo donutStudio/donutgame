@@ -15,7 +15,6 @@ import org.bukkit.GameRules;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
-import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.BoundingBox;
 
@@ -44,6 +43,7 @@ public class WorldService {
     private final Plugin plugin;
     private final PlayerStateStore playerStateStore;
     private final Map<String, String> playerStateIds = new ConcurrentHashMap<>();
+    private final Map<String, Integer> playerStateReferences = new ConcurrentHashMap<>();
     private final Map<Path, CachedClipboard> clipboardCache = new ConcurrentHashMap<>();
 
     public WorldService(Plugin plugin, PlayerStateStore playerStateStore) {
@@ -51,7 +51,7 @@ public class WorldService {
         this.playerStateStore = playerStateStore;
     }
 
-    public CompletableFuture<World> loadSlimeWorld(Path slimeFile, String instanceWorldName, String playerStateId) {
+    public CompletableFuture<World> loadSlimeWorld(Path slimeFile, String instanceWorldName, String logicalWorldId) {
         Objects.requireNonNull(slimeFile, "Slime world can't be null!");
         CompletableFuture<World> future = new CompletableFuture<>();
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -62,7 +62,9 @@ public class WorldService {
                     SlimeWorldInstance instance = asp.loadWorld(template.clone(instanceWorldName), true);
                     World world = instance.getBukkitWorld();
                     configureWorld(world);
+                    String playerStateId = createPlayerStateId(logicalWorldId, world.getName());
                     playerStateIds.put(world.getName(), playerStateId);
+                    playerStateReferences.merge(playerStateId, 1, (current, added) -> current + added);
                     future.complete(world);
                 }, future);
             } catch (Throwable throwable) {
@@ -120,14 +122,18 @@ public class WorldService {
         CompletableFuture<Void> future = new CompletableFuture<>();
         runSync(() -> {
             try {
-                boolean tracked = playerStateIds.remove(worldName) != null;
+                String playerStateId = playerStateIds.remove(worldName);
                 World world = Bukkit.getWorld(worldName);
-                if (world != null) {
-                    Location fallback = Bukkit.getWorlds().getFirst().getSpawnLocation();
-                    for (Player player : world.getPlayers()) player.teleport(fallback);
-                    Bukkit.unloadWorld(world, false);
+                if (world == null) {
+                    releasePlayerState(playerStateId);
+                    if (playerStateId != null) deleteWorldFolder(worldName);
+                    future.complete(null);
+                    return;
                 }
-                if (tracked || world != null) deleteWorldFolder(worldName);
+                if (!world.getPlayers().isEmpty()) throw new IllegalStateException("Cannot unload world " + worldName + " while players are still inside it.");
+                Bukkit.unloadWorld(world, false);
+                releasePlayerState(playerStateId);
+                deleteWorldFolder(worldName);
                 future.complete(null);
             } catch (Throwable throwable) {
                 future.completeExceptionally(throwable);
@@ -154,6 +160,7 @@ public class WorldService {
             Bukkit.unloadWorld(instance.getBukkitWorld(), false);
         }
         playerStateIds.clear();
+        playerStateReferences.clear();
     }
 
     private void configureWorld(World world) {
@@ -231,6 +238,16 @@ public class WorldService {
     private String stripExtension(String fileName) {
         int extensionIndex = fileName.lastIndexOf('.');
         return extensionIndex == -1 ? fileName : fileName.substring(0, extensionIndex);
+    }
+
+    private String createPlayerStateId(String logicalWorldId, String worldName) {
+        return logicalWorldId;
+    }
+
+    private void releasePlayerState(String playerStateId) {
+        if (playerStateId == null) return;
+        playerStateReferences.computeIfPresent(playerStateId, (ignored, count) -> count <= 1 ? null : count - 1);
+        if (!playerStateReferences.containsKey(playerStateId)) playerStateStore.clearWorld(playerStateId);
     }
 
     private record CachedClipboard(long lastModified, Clipboard clipboard, SchematicMetadata metadata) {}

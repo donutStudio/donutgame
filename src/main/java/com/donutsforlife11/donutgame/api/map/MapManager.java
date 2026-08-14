@@ -5,8 +5,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
+import org.bukkit.entity.Player;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.util.BoundingBox;
+import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 import com.donutsforlife11.donutgame.internal.map.GameMapDescriptor;
@@ -44,10 +47,11 @@ public class MapManager {
         String worldId = module.id() + "_" + module.index();
         String stagedName = existingWorld == null ? worldId : worldId + "__staged_" + System.nanoTime();
         module.log("Loading map " + map.id() + " for active game " + module.index() + ".");
+        module.setTransitioning(true);
         return worldService.loadSlimeWorld(template.assetPath(), stagedName, worldId).thenCompose(bukkitWorld -> {
             GameWorld stagedWorld = new GameWorld(worldId, bukkitWorld, worldService);
             return prepareWorld(stagedWorld, map, descriptor).thenCompose(unused -> activateWorld(map, stagedWorld, existingWorld));
-        });
+        }).whenComplete((ignored, throwable) -> module.setTransitioning(false));
     }
 
     public CompletableFuture<Void> placeMap(String mapId, Location location) {
@@ -80,14 +84,16 @@ public class MapManager {
     }
 
     public CompletableFuture<Void> unloadCurrentWorld() {
+        return unloadWorld();
+    }
+
+    public CompletableFuture<Void> unloadWorld() {
         GameWorld world = currentWorld;
         if (world == null) {
             currentMap = null;
             return CompletableFuture.completedFuture(null);
         }
-        String playerStateId = worldService.getPlayerStateId(world.bukkitWorld());
         return worldService.unloadWorld(world.bukkitWorld().getName()).thenRun(() -> {
-            worldService.clearPlayerState(playerStateId);
             if (currentWorld == world) {
                 currentWorld = null;
                 currentMap = null;
@@ -96,10 +102,18 @@ public class MapManager {
     }
 
     public GameWorld currentWorld() {
+        return world();
+    }
+
+    public GameWorld world() {
         return currentWorld;
     }
 
     public GameMap currentMap() {
+        return map();
+    }
+
+    public GameMap map() {
         return currentMap;
     }
 
@@ -129,16 +143,61 @@ public class MapManager {
     }
 
     private CompletableFuture<Void> teleportPlayers(GameWorld world) {
-        GameLocation spawn = world.point("spawn");
-        if (spawn == null) spawn = world.spawnLocation();
-        List<CompletableFuture<Boolean>> teleports = new ArrayList<>();
-        for (GamePlayer player : module.playerManager().getPlayers()) {
-            if (player.player() == null) continue;
-            player.setRespawnLocation(spawn);
-            module.log("Teleporting registered player " + player.player().getName() + " to map spawn " + spawn.x() + ", " + spawn.y() + ", " + spawn.z() + ".");
-            teleports.add(player.player().teleportAsync(spawn.toBukkit(world.bukkitWorld())));
-        }
-        return CompletableFuture.allOf(teleports.toArray(new CompletableFuture[0]));
+        GameLocation spawn = world.getPoint("spawn");
+        if (spawn == null) spawn = world.worldSpawn();
+        GameLocation targetSpawn = spawn;
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        module.plugin().getServer().getScheduler().runTask(module.plugin(), () -> {
+            try {
+                List<Player> movedPlayers = new ArrayList<>();
+                List<CompletableFuture<Boolean>> teleports = new ArrayList<>();
+                World bukkitWorld = world.bukkitWorld();
+                Location destination = targetSpawn.toBukkit(bukkitWorld);
+                destination.getChunk().load();
+                for (GamePlayer player : module.playerManager().getPlayers()) {
+                    Player bukkitPlayer = player.player();
+                    if (bukkitPlayer == null) continue;
+                    player.setSpawnPoint(targetSpawn);
+                    module.log("Teleporting registered player " + bukkitPlayer.getName() + " to map spawn " + targetSpawn.x() + ", " + targetSpawn.y() + ", " + targetSpawn.z() + ".");
+                    bukkitPlayer.closeInventory();
+                    movedPlayers.add(bukkitPlayer);
+                    resetTransientPlayerState(bukkitPlayer);
+                    teleports.add(bukkitPlayer.teleportAsync(destination.clone()).exceptionally(throwable -> false));
+                }
+                CompletableFuture.allOf(teleports.toArray(CompletableFuture[]::new)).whenComplete((ignored, throwable) ->
+                    module.plugin().getServer().getScheduler().runTaskLater(module.plugin(), () -> {
+                        if (throwable != null) {
+                            future.completeExceptionally(throwable);
+                            return;
+                        }
+                        for (int i = 0; i < movedPlayers.size(); i++) {
+                            Player movedPlayer = movedPlayers.get(i);
+                            if (!Boolean.TRUE.equals(teleports.get(i).getNow(false))) {
+                                future.completeExceptionally(new IllegalStateException("Failed to teleport player " + movedPlayer.getName() + " during map handoff."));
+                                return;
+                            }
+                            resetTransientPlayerState(movedPlayer);
+                            movedPlayer.updateInventory();
+                        }
+                        module.uiManager().refreshPlayerStateAfterTrackingReset();
+                        future.complete(null);
+                    }, 2L)
+                );
+            } catch (Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        });
+        return future;
+    }
+
+    private void resetTransientPlayerState(Player player) {
+        player.setVelocity(new Vector());
+        player.setFallDistance(0);
+        player.setFireTicks(0);
+        player.setFreezeTicks(0);
+        player.setNoDamageTicks(40);
+        player.setRemainingAir(player.getMaximumAir());
+        player.setExhaustion(0);
     }
 
     private void registerMapData(GameWorld world, GameMap map, Location origin, MapRotation rotation, WorldService.SchematicMetadata schematicMetadata) {

@@ -47,13 +47,17 @@ public class GlowService {
         initializationAttempted = false;
     }
 
+    public void clearAppliedCache() {
+        activeGlows.clear();
+    }
+
     @SuppressWarnings("deprecation")
     public void glowEntity(
         Entity entity,
         Collection<Player> viewers,
         NamedTextColor color
     ) {
-        if (!isAvailable()) {
+        if (entity == null || !entity.isValid() || !isAvailable()) {
             return;
         }
 
@@ -84,6 +88,8 @@ public class GlowService {
                 activeGlows.put(key, color);
             } catch (ReflectiveOperationException exception) {
                 exception.printStackTrace();
+            } catch (IllegalArgumentException | IllegalStateException exception) {
+                activeGlows.remove(key);
             }
         }
     }
@@ -92,7 +98,7 @@ public class GlowService {
         Entity entity,
         Collection<Player> viewers
     ) {
-        if (!isAvailable()) {
+        if (entity == null || !isAvailable()) {
             return;
         }
 
@@ -119,6 +125,8 @@ public class GlowService {
                 activeGlows.remove(key);
             } catch (ReflectiveOperationException exception) {
                 exception.printStackTrace();
+            } catch (IllegalArgumentException | IllegalStateException exception) {
+                activeGlows.remove(key);
             }
         }
     }

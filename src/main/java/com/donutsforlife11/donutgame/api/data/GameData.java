@@ -9,8 +9,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.loot.LootTable;
 
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
@@ -30,6 +33,22 @@ public class GameData {
 
     public YamlConfiguration configuration(String name) {
         return configurations.computeIfAbsent(name, key -> loadConfiguration(key + ".yml"));
+    }
+
+    public GameItemPool itemPool(List<String> pool) {
+        return new GameItemPool(itemService, pool);
+    }
+
+    public LootTable lootTable(String key) {
+        NamespacedKey namespacedKey = NamespacedKey.fromString(normalizeKey(key));
+        if (namespacedKey == null) {
+            throw new IllegalArgumentException("Invalid loot table key: " + key);
+        }
+        LootTable lootTable = Bukkit.getLootTable(namespacedKey);
+        if (lootTable == null) {
+            throw new IllegalArgumentException("Unknown loot table: " + namespacedKey);
+        }
+        return lootTable;
     }
 
     public ItemStack item(String input) {
@@ -74,5 +93,12 @@ public class GameData {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to load module configuration " + path, e);
         }
+    }
+
+    private String normalizeKey(String key) {
+        if (key == null || key.isBlank()) {
+            throw new IllegalArgumentException("Loot table key cannot be blank.");
+        }
+        return key.contains(":") ? key : "minecraft:" + key;
     }
 }

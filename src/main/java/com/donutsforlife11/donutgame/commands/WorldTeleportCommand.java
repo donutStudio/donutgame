@@ -18,6 +18,7 @@ public class WorldTeleportCommand implements PluginCommand {
     @Override
     public LiteralCommandNode<CommandSourceStack> node() {
         return Commands.literal("worldtp")
+            .requires(source -> source.getSender().hasPermission(PluginCommand.PERMISSION))
             .executes(ctx -> {
                 ctx.getSource().getSender().sendMessage(
                     Component.text("Usage: /worldtp <world_name>", NamedTextColor.RED)

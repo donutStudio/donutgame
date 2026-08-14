@@ -44,22 +44,38 @@ public class VoidWarsPlayers {
         for (int i = 0; i < teamCount; i++) game.teamManager().newColoredTeam();
         List<GameTeam> teams = new ArrayList<>(game.teamManager().getTeams());
         for (int i = 0; i < players.size(); i++) teams.get(i % teamCount).addPlayer(players.get(i));
+        updateSpectatorTargets();
+    }
+
+    public void updateSpectatorTargets() {
+        if (game.config().getInt("team_size") <= 1) {
+            for (GamePlayer player : game.playerManager().getPlayers()) {
+                player.setSpectatablePlayers(game.playerManager().getPlayers());
+                player.setSpectatableTeams(List.of());
+            }
+            return;
+        }
+        for (GamePlayer player : game.playerManager().getPlayers()) {
+            player.setSpectatablePlayers(List.of());
+            player.setSpectatableTeams(game.teamManager().getTeams());
+        }
     }
 
     public void prepareRoundPlayers() {
         for (GamePlayer player : game.playerManager().getPlayers()) {
             setupPlayer(player);
-            player.addEffect(PotionEffectType.INVISIBILITY, PotionEffect.INFINITE_DURATION, 1);
+            player.addEffect(PotionEffectType.INVISIBILITY, PotionEffect.INFINITE_DURATION, 0, true);
         }
     }
 
     public void handleRegisteredPlayer(GamePlayer player) {
+        int teamSize = Math.max(1, game.config().getInt("team_size"));
         if (player.team() == null) {
-            int teamSize = Math.max(1, game.config().getInt("team_size"));
             GameTeam team = smallestTeam();
             if (team == null || team.getMembers().size() >= teamSize) team = game.teamManager().newColoredTeam();
             team.addPlayer(player);
         }
+        updateSpectatorTargets();
         setupPlayer(player);
         game.refreshAliveCounts();
         game.checkRoundEnd();
@@ -69,31 +85,41 @@ public class VoidWarsPlayers {
         GameTeam team = player.team();
         if (team != null) team.removePlayer(player);
         game.clearReconnectRespawn(player);
+        updateSpectatorTargets();
         game.refreshAliveCounts();
         if (team != null && game.teamEliminated(team)) game.cancelTeamRespawns(team);
         game.checkRoundEnd();
     }
 
-    private void onDeath(GamePlayerEvent<PlayerDeathEvent> wrapped) {
-        GamePlayer player = wrapped.player();
-        GameLocation deathLocation = GameLocation.fromBukkit(wrapped.event().getPlayer().getLocation());
-        player.setRespawnLocation(game.respawnPointAfterDeath(deathLocation));
-        player.setSpectator(game.spectatorLocationFor(deathLocation));
-        if (!game.roundActive()) {
-            player.respawn(0, () -> game.spawn());
+    private void onDeath(GamePlayerEvent<PlayerDeathEvent> event) {
+        GamePlayer player = event.player();
+        GameLocation deathLocation = GameLocation.fromBukkit(event.event().getPlayer().getLocation());
+        GameLocation spectatorLocation = game.spectatorLocationFor(deathLocation);
+        player.setSpawnPoint(game.respawnPointAfterDeath(deathLocation));
+        event.event().setKeepInventory(true);
+        event.event().setKeepLevel(true);
+        event.event().setDroppedExp(0);
+        event.event().getDrops().clear();
+        if (!game.roundActive() || game.isTransitioning()) {
+            game.plugin().getServer().getScheduler().runTask(game.plugin(), () -> {
+                resetForRound(player, GameMode.ADVENTURE);
+                player.addEffect(PotionEffectType.INVISIBILITY, PotionEffect.INFINITE_DURATION, 0, true);
+            });
             return;
         }
-        if (wrapped.event().getDamageSource().getCausingEntity() instanceof org.bukkit.entity.Player killerEntity) {
+        if (event.event().getDamageSource().getCausingEntity() instanceof org.bukkit.entity.Player killerEntity) {
             GamePlayer killer = game.playerManager().getPlayer(killerEntity);
             if (killer != null && !killer.uuid().equals(player.uuid())) game.addKill(killer);
         }
         if (game.respawnPossible(player)) {
-            wrapped.event().setKeepInventory(true);
-            wrapped.event().setKeepLevel(true);
-            wrapped.event().setDroppedExp(0);
-            wrapped.event().getDrops().clear();
-            player.respawn(game.respawnTicks(player), () -> game.respawnLocationFor(player));
-        } else eliminateTeam(player.team());
+            int respawnTicks = game.respawnTicks(player);
+            game.plugin().getServer().getScheduler().runTask(game.plugin(), () -> {
+                player.setSpectator(true, spectatorLocation);
+                player.respawn(respawnTicks, () -> game.respawnLocationFor(player));
+            });
+        } else {
+            game.plugin().getServer().getScheduler().runTask(game.plugin(), () -> eliminateTeam(player.team()));
+        }
     }
 
     private void onJoin(GamePlayerEvent<PlayerJoinEvent> wrapped) {
@@ -109,7 +135,7 @@ public class VoidWarsPlayers {
         GamePlayer player = wrapped.player();
         player.cancelRespawn();
         if (!player.isSpectator()) {
-            player.setSpectator(game.spectatorLocationFor(player.location()));
+            player.setSpectator(true, game.spectatorLocationFor(player.location()));
             game.markReconnectRespawn(player);
             GameTeam team = player.team();
             game.refreshAliveCounts();
@@ -126,27 +152,33 @@ public class VoidWarsPlayers {
     }
 
     private void setupPlayer(GamePlayer player) {
-        player.cancelRespawn();
-        player.setNonSpectator();
-        player.setRespawnLocation(game.spawn());
-        player.setGameMode(GameMode.ADVENTURE);
-        player.clearInventory();
-        player.clearExperience();
-        player.clearEffects();
-        player.setFoodLevel(20);
-        player.setSaturation(20);
-        player.setHealth(20);
-        if (player.isOnline()) player.teleport(game.spawn());
+        resetForRound(player, GameMode.ADVENTURE);
     }
 
     private void eliminateTeam(GameTeam team) {
         if (team == null) return;
         game.cancelTeamRespawns(team);
-        for (GamePlayer teammate : team.getMembers()) teammate.setSpectator(game.spectatorLocationFor(teammate.location()));
+        for (GamePlayer teammate : team.getMembers()) teammate.setSpectator(true, game.spectatorLocationFor(teammate.location()));
         game.refreshAliveCounts();
         game.checkRoundEnd();
         if (game.roundEnding()) return;
         for (GamePlayer teammate : team.getMembers()) game.uiManager().title(teammate, Component.text(game.config().getInt("team_size") == 1 ? "Eliminated!" : "Team Eliminated!", NamedTextColor.RED).decorate(TextDecoration.BOLD));
+    }
+
+    private void resetForRound(GamePlayer player, GameMode gameMode) {
+        player.cancelRespawn();
+        player.setSpectator(false, game.spawn());
+        player.setSpawnPoint(game.spawn());
+        player.clearItems();
+        player.clearEffects();
+        player.setLevel(0);
+        player.setExp(0);
+        player.setTotalExperience(0);
+        player.setHunger(20);
+        player.setSaturation(20);
+        player.heal();
+        player.setGameMode(gameMode);
+        player.teleport(game.spawn());
     }
 
     private GameTeam smallestTeam() {

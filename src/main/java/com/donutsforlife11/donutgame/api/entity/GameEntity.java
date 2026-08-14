@@ -1,23 +1,28 @@
 package com.donutsforlife11.donutgame.api.entity;
 
 import java.util.Objects;
+import java.util.List;
 import java.util.UUID;
 
 import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.attribute.Attributable;
 import org.bukkit.entity.Damageable;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 
 public class GameEntity {
+    private static final int DEFAULT_EFFECT_DURATION_TICKS = 30 * 20;
     private final GameWorld world;
     private final UUID uuid;
     private final EntityType type;
@@ -38,6 +43,14 @@ public class GameEntity {
 
     public boolean teleport(GameLocation location) {
         return requireEntity().teleport(location.toBukkit(world.bukkitWorld()));
+    }
+
+    public boolean teleport(double x, double y, double z) {
+        return teleport(new GameLocation(x, y, z));
+    }
+
+    public boolean teleport(double x, double y, double z, double pitch, double yaw) {
+        return teleport(new GameLocation(x, y, z, pitch, yaw));
     }
 
     public void remove() {
@@ -65,13 +78,100 @@ public class GameEntity {
         }
     }
 
+    public void heal() {
+        if (requireEntity() instanceof Damageable damageable) {
+            damageable.setHealth(Math.min(maxHealth(damageable), maxHealth(damageable)));
+        }
+    }
+
+    public void heal(double health) {
+        if (requireEntity() instanceof Damageable damageable) {
+            damageable.setHealth(Math.min(damageable.getHealth() + health, maxHealth(damageable)));
+        }
+    }
+
+    public void addEffect(PotionEffectType effect) {
+        addEffect(effect, DEFAULT_EFFECT_DURATION_TICKS);
+    }
+
+    public void addEffect(PotionEffectType effect, int ticks) {
+        addEffect(effect, ticks, 0);
+    }
+
+    public void addEffect(PotionEffectType effect, int ticks, int amplifier) {
+        addEffect(effect, ticks, amplifier, false);
+    }
+
+    public void addEffect(PotionEffectType effect, int ticks, int amplifier, boolean hideParticles) {
+        if (effect == null) throw new IllegalArgumentException("Effect cannot be null.");
+        if (ticks < 0 && ticks != PotionEffect.INFINITE_DURATION) throw new IllegalArgumentException("Effect duration cannot be negative.");
+        if (amplifier < 0) throw new IllegalArgumentException("Effect amplifier cannot be negative.");
+        addEffect(new PotionEffect(effect, ticks, amplifier, false, !hideParticles, !hideParticles));
+    }
+
+    public void addVanillaEffect(PotionEffectType effect) {
+        addVanillaEffect(effect, 30);
+    }
+
+    public void addVanillaEffect(PotionEffectType effect, int seconds) {
+        addVanillaEffect(effect, seconds, 0);
+    }
+
+    public void addVanillaEffect(PotionEffectType effect, int seconds, int amplifier) {
+        addVanillaEffect(effect, seconds, amplifier, false);
+    }
+
+    public void addVanillaEffect(PotionEffectType effect, int seconds, int amplifier, boolean hideParticles) {
+        int durationTicks = seconds == PotionEffect.INFINITE_DURATION ? PotionEffect.INFINITE_DURATION : seconds * 20;
+        addEffect(effect, durationTicks, amplifier, hideParticles);
+    }
+
+    public void effect(PotionEffectType effect) {
+        addVanillaEffect(effect);
+    }
+
+    public void effect(PotionEffectType effect, int seconds) {
+        addVanillaEffect(effect, seconds);
+    }
+
+    public void effect(PotionEffectType effect, int seconds, int amplifier) {
+        addVanillaEffect(effect, seconds, amplifier);
+    }
+
+    public void effect(PotionEffectType effect, int seconds, int amplifier, boolean hideParticles) {
+        addVanillaEffect(effect, seconds, amplifier, hideParticles);
+    }
+
     public void addEffect(PotionEffect effect) {
-        if (requireEntity() instanceof org.bukkit.entity.LivingEntity livingEntity) {
+        if (requireEntity() instanceof LivingEntity livingEntity) {
             livingEntity.addPotionEffect(effect);
         }
     }
 
     public void setAttributeBaseValue(Attribute attribute, double value) {
+        setAttributeBase(attribute, value);
+    }
+
+    public double getAttribute(Attribute attribute) {
+        if (requireEntity() instanceof Attributable attributable) {
+            AttributeInstance instance = attributable.getAttribute(attribute);
+            if (instance != null) {
+                return instance.getValue();
+            }
+        }
+        return 0.0;
+    }
+
+    public void resetAttribute(Attribute attribute) {
+        if (requireEntity() instanceof Attributable attributable) {
+            AttributeInstance instance = attributable.getAttribute(attribute);
+            if (instance == null) return;
+            instance.setBaseValue(instance.getDefaultValue());
+            for (AttributeModifier modifier : List.copyOf(instance.getModifiers())) instance.removeModifier(modifier);
+        }
+    }
+
+    public void setAttributeBase(Attribute attribute, double value) {
         if (requireEntity() instanceof Attributable attributable) {
             AttributeInstance instance = attributable.getAttribute(attribute);
             if (instance != null) {
@@ -81,13 +181,34 @@ public class GameEntity {
     }
 
     public Double getAttributeValue(Attribute attribute) {
+        return getAttributeBase(attribute);
+    }
+
+    public double getAttributeBase(Attribute attribute) {
         if (requireEntity() instanceof Attributable attributable) {
             AttributeInstance instance = attributable.getAttribute(attribute);
             if (instance != null) {
-                return instance.getValue();
+                return instance.getBaseValue();
             }
         }
-        return null;
+        return 0.0;
+    }
+
+    public void resetAttributeBase(Attribute attribute) {
+        if (requireEntity() instanceof Attributable attributable) {
+            AttributeInstance instance = attributable.getAttribute(attribute);
+            if (instance != null) instance.setBaseValue(instance.getDefaultValue());
+        }
+    }
+
+    public void clearEffects(PotionEffectType effect) {
+        if (requireEntity() instanceof LivingEntity livingEntity) livingEntity.removePotionEffect(effect);
+    }
+
+    public void clearEffects() {
+        if (requireEntity() instanceof LivingEntity livingEntity) {
+            for (PotionEffect effect : livingEntity.getActivePotionEffects()) livingEntity.removePotionEffect(effect.getType());
+        }
     }
 
     public PersistentDataContainer persistentData() {
@@ -129,6 +250,14 @@ public class GameEntity {
 
     public EntityType type() {
         return type;
+    }
+
+    private double maxHealth(Damageable damageable) {
+        if (damageable instanceof Attributable attributable) {
+            AttributeInstance instance = attributable.getAttribute(Attribute.MAX_HEALTH);
+            if (instance != null) return instance.getValue();
+        }
+        return 20.0;
     }
 
     @Override

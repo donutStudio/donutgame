@@ -99,11 +99,20 @@ public class GameTimer {
         return elapsedTicks;
     }
 
+    public double getElapsedSeconds() {
+        return elapsedTicks / 20.0;
+    }
+
     public int getRemainingTicks() {
         if (maxTicks < 0) {
             return -1;
         }
         return Math.max(maxTicks - elapsedTicks, 0);
+    }
+
+    public double getRemainingSeconds() {
+        int remaining = getRemainingTicks();
+        return remaining < 0 ? -1 : remaining / 20.0;
     }
 
     public boolean isPaused() {

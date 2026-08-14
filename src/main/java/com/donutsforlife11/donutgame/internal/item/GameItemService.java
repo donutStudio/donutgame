@@ -8,7 +8,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -36,7 +35,10 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionType;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.loot.LootContext;
+import org.bukkit.loot.LootTable;
 
+import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
@@ -80,6 +82,19 @@ public class GameItemService {
     }
 
     public Collection<ItemStack> loot(GameModule module, String path, GamePlayer player) {
+        return loot(module, path, player == null ? null : player.location());
+    }
+
+    public Collection<ItemStack> loot(GameModule module, String path, GameLocation location) {
+        String key = namespacedLootKey(module, path);
+        LootTable lootTable = Bukkit.getLootTable(NamespacedKey.fromString(key));
+        if (lootTable != null && location != null) {
+            return lootTable.populateLoot(ThreadLocalRandom.current(), new LootContext.Builder(location.toBukkit(module.world().bukkitWorld())).build());
+        }
+        return legacyLoot(module, path);
+    }
+
+    private Collection<ItemStack> legacyLoot(GameModule module, String path) {
         ThreadLocalRandom random = ThreadLocalRandom.current();
         YamlConfiguration lootTable = lootTables.computeIfAbsent(module.id() + ":" + path, ignored -> loadLootTable(module, path));
         List<Map<?, ?>> pools = lootTable.getMapList("pools");
@@ -102,19 +117,20 @@ public class GameItemService {
         return items;
     }
 
+    private String namespacedLootKey(GameModule module, String path) {
+        if (path == null || path.isBlank()) throw new IllegalArgumentException("Loot table path cannot be blank.");
+        return path.contains(":") ? path : module.id() + ":" + path;
+    }
+
     public void give(GamePlayer player, Collection<ItemStack> items) {
         Player bukkitPlayer = player.player();
-        if (bukkitPlayer == null || items.isEmpty()) {
-            return;
-        }
+        if (bukkitPlayer == null || items.isEmpty()) return;
         List<ItemStack> normalizedItems = new ArrayList<>(items.size());
-        for (ItemStack item : items) {
-            normalizedItems.add(normalizeForInventory(player, item.clone()));
-        }
-        Map<Integer, ItemStack> leftovers = bukkitPlayer.getInventory().addItem(normalizedItems.toArray(ItemStack[]::new));
-        for (ItemStack leftover : leftovers.values()) {
-            bukkitPlayer.getWorld().dropItemNaturally(bukkitPlayer.getLocation(), leftover);
-        }
+        for (ItemStack item : items) normalizedItems.add(normalizeForInventory(player, item.clone()));
+        Map<Integer, ItemStack> leftovers = player.isSpectator()
+            ? player.addToStoredInventory(normalizedItems)
+            : bukkitPlayer.getInventory().addItem(normalizedItems.toArray(ItemStack[]::new));
+        for (ItemStack leftover : leftovers.values()) bukkitPlayer.getWorld().dropItemNaturally(bukkitPlayer.getLocation(), leftover);
     }
 
     public void normalizeInventory(GamePlayer player) {
@@ -139,7 +155,6 @@ public class GameItemService {
         if (changed) {
             inventory.setContents(contents);
         }
-        removeFiniteDuplicates(inventory);
     }
 
     public void replenishPlacedBlock(GamePlayer player, ItemStack placedItem, org.bukkit.inventory.EquipmentSlot hand) {
@@ -176,6 +191,10 @@ public class GameItemService {
             return meta.itemName();
         }
         return Bukkit.getItemFactory().displayName(item);
+    }
+
+    public Material mappedDyeMaterial(NamedTextColor color) {
+        return Material.getMaterial(mappedDyeColor(color).name() + "_DYE");
     }
 
     private YamlConfiguration loadLootTable(GameModule module, String path) {
@@ -299,7 +318,6 @@ public class GameItemService {
     }
 
     private ItemStack normalizeForInventory(GamePlayer player, ItemStack item) {
-        mirrorCustomData(item);
         applyDefaults(item);
         GameTeam team = player.team();
         if (team == null || !getBoolean(item, teamSyncKey)) {
@@ -395,39 +413,13 @@ public class GameItemService {
         return Color.fromRGB(rgb & 0xFFFFFF);
     }
 
-    private void removeFiniteDuplicates(PlayerInventory inventory) {
-        Set<Material> infiniteTypes = EnumSet.noneOf(Material.class);
-        for (ItemStack item : inventory.getContents()) {
-            if (item != null && item.getType() != Material.AIR && hasInfiniteBuild(item)) {
-                infiniteTypes.add(item.getType());
-            }
-        }
-        if (infiniteTypes.isEmpty()) {
-            return;
-        }
-        ItemStack[] contents = inventory.getContents();
-        boolean changed = false;
-        for (int i = 0; i < contents.length; i++) {
-            ItemStack item = contents[i];
-            if (item == null || item.getType() == Material.AIR || hasInfiniteBuild(item) || !infiniteTypes.contains(item.getType())) {
-                continue;
-            }
-            contents[i] = null;
-            changed = true;
-        }
-        if (changed) {
-            inventory.setContents(contents);
-        }
-    }
-
     private void applyDefaults(ItemStack item) {
-        mirrorCustomData(item);
         item.editMeta(meta -> {
-            if ((persistentBoolean(meta, infiniteBuildKey) || persistentBoolean(meta, infiniteBlocksKey))
+            if ((getBoolean(item, infiniteBuildKey) || getBoolean(item, infiniteBlocksKey))
                 && !meta.hasMaxStackSize()) {
                 meta.setMaxStackSize(65);
             }
-            if (persistentInt(meta, autoIgniteKey) != null
+            if (getInt(item, autoIgniteKey) > 0
                 && !meta.hasItemName()
                 && !persistentBoolean(meta, autoIgniteNamedKey)) {
                 meta.itemName(Component.text("Auto Ignite " + plainItemName(item)));
@@ -441,27 +433,19 @@ public class GameItemService {
     }
 
     private int getInt(ItemStack item, NamespacedKey key) {
-        mirrorCustomData(item);
+        Integer customValue = lookupInteger(item, key);
+        if (customValue != null) return customValue;
         ItemMeta meta = item.getItemMeta();
-        if (meta == null) {
-            Integer value = lookupInteger(item, key);
-            return value == null ? 0 : value;
-        }
+        if (meta == null) return 0;
         Integer value = persistentInt(meta, key);
-        if (value != null) {
-            return value;
-        }
-        Integer mirroredValue = lookupInteger(item, key);
-        return mirroredValue == null ? 0 : mirroredValue;
+        return value == null ? 0 : value;
     }
 
     private boolean getBoolean(ItemStack item, NamespacedKey key) {
-        mirrorCustomData(item);
+        Boolean customValue = lookupBoolean(item, key);
+        if (customValue != null) return customValue;
         ItemMeta meta = item.getItemMeta();
-        if (meta != null && persistentBoolean(meta, key)) {
-            return true;
-        }
-        return lookupBoolean(item, key);
+        return meta != null && persistentBoolean(meta, key);
     }
 
     private void setHandItem(PlayerInventory inventory, org.bukkit.inventory.EquipmentSlot hand, ItemStack item) {
@@ -580,80 +564,26 @@ public class GameItemService {
         });
     }
 
-    private void mirrorCustomData(ItemStack item) {
-        Map<NamespacedKey, Object> mirroredValues = new LinkedHashMap<>();
-        collectMirroredValue(item, teamSyncKey, mirroredValues);
-        collectMirroredValue(item, infiniteBuildKey, mirroredValues);
-        collectMirroredValue(item, infiniteBlocksKey, mirroredValues);
-        collectMirroredValue(item, autoIgniteKey, mirroredValues);
-        if (mirroredValues.isEmpty()) {
-            return;
-        }
-        item.editMeta(meta -> {
-            PersistentDataContainer data = meta.getPersistentDataContainer();
-            for (Map.Entry<NamespacedKey, Object> entry : mirroredValues.entrySet()) {
-                if (entry.getValue() instanceof Boolean bool) {
-                    setBoolean(data, entry.getKey(), bool);
-                } else if (entry.getValue() instanceof Integer number) {
-                    data.set(entry.getKey(), PersistentDataType.INTEGER, number);
-                }
-            }
-        });
-    }
-
-    private void collectMirroredValue(ItemStack item, NamespacedKey key, Map<NamespacedKey, Object> mirroredValues) {
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            Object componentValue = findCustomValue(meta.getAsComponentString(), key);
-            if (componentValue != null) {
-                mirroredValues.put(key, componentValue);
-                return;
-            }
-            Object nbtValue = findCustomValue(meta.getAsString(), key);
-            if (nbtValue != null) {
-                mirroredValues.put(key, nbtValue);
-                return;
-            }
-        }
-        Boolean bool = findBoolean(item.serialize(), key.toString());
-        if (bool != null) {
-            mirroredValues.put(key, bool);
-            return;
-        }
-        Integer integer = findInteger(item.serialize(), key.toString());
-        if (integer != null) {
-            mirroredValues.put(key, integer);
-        }
-    }
-
     private Integer lookupInteger(ItemStack item, NamespacedKey key) {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             Integer componentValue = parseInteger(findCustomValue(meta.getAsComponentString(), key));
-            if (componentValue != null) {
-                return componentValue;
-            }
+            if (componentValue != null) return componentValue;
             Integer nbtValue = parseInteger(findCustomValue(meta.getAsString(), key));
-            if (nbtValue != null) {
-                return nbtValue;
-            }
+            if (nbtValue != null) return nbtValue;
         }
         return findInteger(item.serialize(), key.toString());
     }
 
-    private boolean lookupBoolean(ItemStack item, NamespacedKey key) {
+    private Boolean lookupBoolean(ItemStack item, NamespacedKey key) {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             Boolean componentValue = parseBoolean(findCustomValue(meta.getAsComponentString(), key));
-            if (Boolean.TRUE.equals(componentValue)) {
-                return true;
-            }
+            if (componentValue != null) return componentValue;
             Boolean nbtValue = parseBoolean(findCustomValue(meta.getAsString(), key));
-            if (Boolean.TRUE.equals(nbtValue)) {
-                return true;
-            }
+            if (nbtValue != null) return nbtValue;
         }
-        return Boolean.TRUE.equals(findBoolean(item.serialize(), key.toString()));
+        return findBoolean(item.serialize(), key.toString());
     }
 
     private Integer findInteger(Object node, String key) {

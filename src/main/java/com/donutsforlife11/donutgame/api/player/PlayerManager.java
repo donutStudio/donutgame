@@ -10,9 +10,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
@@ -26,6 +29,10 @@ public class PlayerManager {
     private final Set<GamePlayer> players = new LinkedHashSet<>();
     private final Map<UUID, GamePlayer> playersById = new LinkedHashMap<>();
     private final Set<UUID> pendingPlayers = new LinkedHashSet<>();
+    private final Set<GamePlayer> spectatablePlayers = new LinkedHashSet<>();
+    private final Set<com.donutsforlife11.donutgame.api.team.GameTeam> spectatableTeams = new LinkedHashSet<>();
+    private final Map<UUID, Set<GamePlayer>> spectatablePlayersByViewer = new LinkedHashMap<>();
+    private final Map<UUID, Set<com.donutsforlife11.donutgame.api.team.GameTeam>> spectatableTeamsByViewer = new LinkedHashMap<>();
 
     public PlayerManager(GameModule module) {
         this.module = module;
@@ -73,6 +80,28 @@ public class PlayerManager {
         return player == null ? null : getPlayer(player.getUniqueId());
     }
 
+    public void setSpectatablePlayers(Collection<GamePlayer> players) {
+        spectatablePlayers.clear();
+        if (players == null) return;
+        for (GamePlayer player : players) if (isRegistered(player)) spectatablePlayers.add(player);
+    }
+
+    public void setSpectatableTeams(Collection<com.donutsforlife11.donutgame.api.team.GameTeam> teams) {
+        spectatableTeams.clear();
+        if (teams == null) return;
+        for (com.donutsforlife11.donutgame.api.team.GameTeam team : teams) {
+            if (team != null && module.teamManager().getTeams().contains(team)) spectatableTeams.add(team);
+        }
+    }
+
+    public Collection<GamePlayer> spectatablePlayers() {
+        return Collections.unmodifiableSet(spectatablePlayers);
+    }
+
+    public Collection<com.donutsforlife11.donutgame.api.team.GameTeam> spectatableTeams() {
+        return Collections.unmodifiableSet(spectatableTeams);
+    }
+
     public boolean register(Player player) {
         Objects.requireNonNull(player);
         UUID uuid = player.getUniqueId();
@@ -103,6 +132,10 @@ public class PlayerManager {
         GamePlayer gamePlayer = playersById.remove(player.getUniqueId());
         if (gamePlayer == null) return false;
         players.remove(gamePlayer);
+        spectatablePlayers.remove(gamePlayer);
+        spectatablePlayersByViewer.remove(gamePlayer.uuid());
+        spectatableTeamsByViewer.remove(gamePlayer.uuid());
+        spectatablePlayersByViewer.values().forEach(targets -> targets.remove(gamePlayer));
         gamePlayer.cancelRespawn();
         gamePlayer.setNonSpectator();
         module.log("Unregistered player " + player.getName() + " from active game " + module.index() + ".");
@@ -122,8 +155,79 @@ public class PlayerManager {
         }
     }
 
+    public CompletableFuture<Void> evacuateForShutdown() {
+        Location destination = shutdownDestination();
+        List<CompletableFuture<Boolean>> teleports = new ArrayList<>();
+        for (GamePlayer gamePlayer : List.copyOf(players)) {
+            Player player = gamePlayer.player();
+            gamePlayer.cancelRespawn();
+            if (player == null) continue;
+            player.closeInventory();
+            gamePlayer.setNonSpectator();
+            teleports.add(player.teleportAsync(destination).exceptionally(throwable -> false));
+        }
+        return CompletableFuture.allOf(teleports.toArray(CompletableFuture[]::new));
+    }
+
+    public void clearForShutdown() {
+        pendingPlayers.clear();
+        players.clear();
+        playersById.clear();
+        spectatablePlayers.clear();
+        spectatableTeams.clear();
+        spectatablePlayersByViewer.clear();
+        spectatableTeamsByViewer.clear();
+    }
+
     public GameModule module() {
         return module;
+    }
+
+    public void setPlayerSpectatable(GamePlayer player, boolean spectatable) {
+        if (player == null || !isRegistered(player)) return;
+        if (spectatable) spectatablePlayers.add(player);
+        else spectatablePlayers.remove(player);
+    }
+
+    public void setTeamSpectatable(com.donutsforlife11.donutgame.api.team.GameTeam team, boolean spectatable) {
+        if (team == null || !module.teamManager().getTeams().contains(team)) return;
+        if (spectatable) spectatableTeams.add(team);
+        else spectatableTeams.remove(team);
+    }
+
+    public void removeSpectatableTeam(com.donutsforlife11.donutgame.api.team.GameTeam team) {
+        spectatableTeams.remove(team);
+        spectatableTeamsByViewer.values().forEach(targets -> targets.remove(team));
+    }
+
+    public void setSpectatablePlayers(GamePlayer viewer, Collection<GamePlayer> players) {
+        if (viewer == null || !isRegistered(viewer)) return;
+        Set<GamePlayer> targets = spectatablePlayersByViewer.computeIfAbsent(viewer.uuid(), ignored -> new LinkedHashSet<>());
+        targets.clear();
+        if (players == null) return;
+        for (GamePlayer player : players) if (isRegistered(player)) targets.add(player);
+    }
+
+    public void setSpectatableTeams(GamePlayer viewer, Collection<com.donutsforlife11.donutgame.api.team.GameTeam> teams) {
+        if (viewer == null || !isRegistered(viewer)) return;
+        Set<com.donutsforlife11.donutgame.api.team.GameTeam> targets = spectatableTeamsByViewer.computeIfAbsent(viewer.uuid(), ignored -> new LinkedHashSet<>());
+        targets.clear();
+        if (teams == null) return;
+        for (com.donutsforlife11.donutgame.api.team.GameTeam team : teams) {
+            if (team != null && module.teamManager().getTeams().contains(team)) targets.add(team);
+        }
+    }
+
+    public Collection<GamePlayer> spectatablePlayers(GamePlayer viewer) {
+        if (viewer == null) return List.of();
+        Set<GamePlayer> targets = spectatablePlayersByViewer.get(viewer.uuid());
+        return targets == null ? spectatablePlayers() : Collections.unmodifiableSet(targets);
+    }
+
+    public Collection<com.donutsforlife11.donutgame.api.team.GameTeam> spectatableTeams(GamePlayer viewer) {
+        if (viewer == null) return List.of();
+        Set<com.donutsforlife11.donutgame.api.team.GameTeam> targets = spectatableTeamsByViewer.get(viewer.uuid());
+        return targets == null ? spectatableTeams() : Collections.unmodifiableSet(targets);
     }
 
     private void registerNow(Player player) {
@@ -149,7 +253,15 @@ public class PlayerManager {
     }
 
     private GameLocation defaultSpawnLocation() {
-        return module.world().point("spawn") != null ? module.world().point("spawn") : module.world().spawnLocation();
+        return module.world().getPoint("spawn") != null ? module.world().getPoint("spawn") : module.world().worldSpawn();
+    }
+
+    private Location shutdownDestination() {
+        World currentWorld = module.world() == null ? null : module.world().bukkitWorld();
+        for (World world : Bukkit.getWorlds()) {
+            if (!world.equals(currentWorld)) return world.getSpawnLocation();
+        }
+        throw new IllegalStateException("Cannot unload game " + module.index() + " because no non-game destination world is loaded.");
     }
 
     private String formatLocation(GameLocation location) {

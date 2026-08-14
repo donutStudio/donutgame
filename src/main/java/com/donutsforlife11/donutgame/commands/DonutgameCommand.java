@@ -23,6 +23,7 @@ public class DonutgameCommand implements PluginCommand {
     @Override
     public LiteralCommandNode<CommandSourceStack> node() {
         return Commands.literal("donutgame")
+            .requires(source -> source.getSender().hasPermission(PluginCommand.PERMISSION))
             .then(reloadCommand())
             .build();
     }

@@ -8,6 +8,8 @@ import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 
 public interface PluginCommand {
+    String PERMISSION = "donutgame.command";
+
     LiteralCommandNode<CommandSourceStack> node();
     
     default String description() {

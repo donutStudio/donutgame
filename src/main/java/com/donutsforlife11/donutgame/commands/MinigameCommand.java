@@ -57,6 +57,7 @@ public class MinigameCommand implements PluginCommand {
     @Override
     public LiteralCommandNode<CommandSourceStack> node() {
         return Commands.literal("minigame")
+            .requires(source -> source.getSender().hasPermission(PluginCommand.PERMISSION))
             .then(loadCommand())
             .then(joinCommand())
             .then(leaveCommand())

@@ -1,11 +1,15 @@
 package com.donutsforlife11.donutgame.internal.game;
 
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.util.logging.Level;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Sound;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Event;
@@ -45,6 +49,7 @@ public abstract class GameModule {
     private int index;
     private String id;
     private String name;
+    private volatile boolean transitioning;
 
     private final Set<Listener> registeredListeners = new LinkedHashSet<>();
 
@@ -54,6 +59,10 @@ public abstract class GameModule {
     }
 
     public void onLoad() {
+    }
+
+    public void onReload() {
+        onLoad();
     }
 
     public void onStart() {
@@ -72,13 +81,43 @@ public abstract class GameModule {
         }
     }
 
+    public void reload() {
+        onReload();
+    }
+
     protected final CompletableFuture<Void> shutdown() {
-        timeManager.cancelAll();
-        uiManager.clear();
-        for (Listener listener : registeredListeners.toArray(Listener[]::new)) {
-            unregisterEvents(listener);
-        }
-        return mapManager.unloadCurrentWorld();
+        transitioning = true;
+        return runSync(() -> {
+            timeManager.cancelAll();
+            for (Listener listener : registeredListeners.toArray(Listener[]::new)) {
+                unregisterEvents(listener);
+            }
+            uiManager.resetPlayerStateForShutdown();
+            uiManager.clear();
+        }).thenCompose(ignored -> playerManager.evacuateForShutdown())
+            .thenCompose(ignored -> runSync(() -> {
+                teamManager.clear();
+                playerManager.clearForShutdown();
+            }))
+            .thenCompose(ignored -> mapManager.unloadWorld())
+            .whenComplete((ignored, throwable) -> {
+                transitioning = false;
+            });
+    }
+
+    private CompletableFuture<Void> runSync(Runnable action) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        Runnable task = () -> {
+            try {
+                action.run();
+                future.complete(null);
+            } catch (Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        };
+        if (Bukkit.isPrimaryThread()) task.run();
+        else plugin.getServer().getScheduler().runTask(plugin, task);
+        return future;
     }
 
     protected final void registerEvents(Listener listener) {
@@ -138,20 +177,20 @@ public abstract class GameModule {
             uiManager().title(playerManager().getPlayers(), Component.text(name(), NamedTextColor.LIGHT_PURPLE));
             timeManager().newTimer(50).onFinish(ignoredTimer -> {
                 uiManager().title(playerManager().getPlayers(), Component.text(countdownTicks / 20, NamedTextColor.DARK_RED).decorate(TextDecoration.BOLD));
-                uiManager().sound(playerManager().getPlayers(), Sound.UI_BUTTON_CLICK, 0.7f, 1.1f);
+                uiManager().playSound(playerManager().getPlayers(), Sound.UI_BUTTON_CLICK, 0.7f, 1.1f);
                 ValueFormatter.countdown(timeManager(), countdownTicks, formattedNumber -> {
                     uiManager().title(playerManager().getPlayers(), formattedNumber);
-                    uiManager().sound(playerManager().getPlayers(), Sound.UI_BUTTON_CLICK, 0.7f, 1.1f);
+                    uiManager().playSound(playerManager().getPlayers(), Sound.UI_BUTTON_CLICK, 0.7f, 1.1f);
                 }).onFinish(ignored2 -> {
                     uiManager().title(playerManager().getPlayers(), Component.text("> START <").decorate(TextDecoration.BOLD));
-                    uiManager().sound(playerManager().getPlayers(), Sound.ENTITY_PLAYER_LEVELUP, 0.9f, 1.2f);
+                    uiManager().playSound(playerManager().getPlayers(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.9f, 2f);
                     action.run();
                 }).start();
             }).start();
         }).start();
     }
 
-    public CompletableFuture<Boolean> unloadSelf() {
+    public CompletableFuture<Boolean> unload() {
         return plugin.moduleService().unloadModule(index);
     }
 
@@ -175,6 +214,14 @@ public abstract class GameModule {
         return config;
     }
 
+    public YamlConfiguration config(String path) {
+        try (Reader reader = new InputStreamReader(resource(path), StandardCharsets.UTF_8)) {
+            return YamlConfiguration.loadConfiguration(reader);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to load module configuration " + path, e);
+        }
+    }
+
     public GameData data() {
         return data;
     }
@@ -184,7 +231,15 @@ public abstract class GameModule {
     }
 
     public GameWorld world() {
-        return mapManager().currentWorld();
+        return mapManager().world();
+    }
+
+    public final boolean isTransitioning() {
+        return transitioning;
+    }
+
+    public final void setTransitioning(boolean transitioning) {
+        this.transitioning = transitioning;
     }
 
     public PlayerManager playerManager() {
