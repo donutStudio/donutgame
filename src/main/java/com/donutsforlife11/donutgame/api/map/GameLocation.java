@@ -66,4 +66,14 @@ public class GameLocation {
     public double yaw() {
         return yaw;
     }
+
+    public int getBlockX() {
+        return (int) Math.floor(x);
+    }
+    public int getBlockY() {
+        return (int) Math.floor(y);
+    }
+    public int getBlockZ() {
+        return (int) Math.floor(z);
+    }
 }

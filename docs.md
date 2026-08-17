@@ -11,6 +11,7 @@ void onStart() // Runs when the module starts
 void onUnload() // Runs when the module unloads
 void reload() // Performs a "reload" of the module (the reload basically calls onReload, starts the load sequence and countdown and stuff again in startLoadSequence, etc. This would be used for things like say multiple rounds in a game like Void Wars)
 CompletableFuture<Boolean> unload() // Unloads this module instance
+void registerEventHandlers(Object target) // Registers @GameEventHandler methods from a helper object owned by the module
 InputStream resource(String path) // Returns a resource from the module jar
 Donutgame plugin() // Returns the base Donutgame plugin
 String id() // Returns module id
@@ -26,18 +27,25 @@ UiManager uiManager() // Returns module UiManager
 TimeManager timeManager() // Returns module TimeManager
 TeamManager teamManager() // Returns module TeamManager
 BorderManager borderManager() // Returns module BorderManager
-GameEventRegistrar events() // Returns module event registrar
 void log(String message) // Logs an info message for this module
 void logWarning(String message) // Logs a warning message for this module
 void logError(String message, Throwable throwable) // Logs an error message for this module
 ```
 **GameData**
 ```java
-LootTable lootTable(String key) // Returns loot table from a namespaced key id (for example, "void_wars:chest/base"). Search the web for information on datapacks/data driven stuff as of the latest Minecraft Java Edition version to understand what I mean- I don't want the plugin to be internally parsing JSON, rather using the vanilla data driven systems for stuff like this
+LootTable lootTable(String key) // Returns loot table from a namespaced key id, defaulting to the module namespace when omitted
+LootTable lootTable(List<ItemStack> items) // Wraps a compact equal-weight item pool as a loot table. Duplicates are allowed and increase weight
 // Later on in GameData we will add built in support for other data driven registries in minecraft like advancement, item_modifier, recipe, predicate, function, etc
-// The reason we are adding and enforcing namespaces is just to simplify and keep in line with vanilla parsing, but there will be some protection/fencing enforced to avoid game modules from clashing namespaces with stuff. An omitted namespace defaults to a minecraft namespace, and a minecraft namespace is just default minecraft stuff no need for it to exist in the module data folder
+// The reason we are adding and enforcing namespaces is just to simplify and keep in line with vanilla parsing, but there will be some protection/fencing enforced to avoid game modules from clashing namespaces with stuff. An omitted loot table namespace defaults to the current module namespace.
 ```
-
+**GameItems**
+```java
+static ItemStack item(String input) // Parses a compact item string into an ItemStack
+static List<ItemStack> items(List<String> inputs) // Parses compact item strings into ItemStacks
+static Collection<ItemStack> items(LootTable lootTable) // Generates items from a loot table with a random seed
+static Collection<ItemStack> items(LootTable lootTable, long seed) // Generates items from a loot table with a specified seed
+static Component displayName(ItemStack item) // Returns item_name when set, otherwise the Bukkit display name
+```
 ## TEAMS
 
 **TeamManager**
@@ -45,6 +53,8 @@ LootTable lootTable(String key) // Returns loot table from a namespaced key id (
 GameTeam newTeam() // Creates a team with default properties
 GameTeam newColoredTeam() // Creates a team with the next default color
 Collection<GameTeam> getTeams() // Returns current teams
+Collection<GameTeam> getSpectatorTeams() // Returns teams whose members are all spectators
+Collection<GameTeam> getNonSpectatorTeams() // Returns teams who have at least one non spectator member
 void clear() // Removes all teams
 ```
 **GameTeam**
@@ -53,6 +63,9 @@ GameTeam addPlayer(GamePlayer player) // Adds a player to the team
 GameTeam removePlayer(GamePlayer player) // Removes a player from the team
 void remove() // Removes and unregisters the team
 Collection<GamePlayer> getMembers() // Returns online registered team members
+Collection<GamePlayer> getSpectatorMembers() // Returns spectating team members
+Collection<GamePlayer> getNonSpectatorMembers() // Returns non spectating team members
+boolean allMembersSpectators() // Returns whether or not all members on the team are spectating
 GameTeam setColor(NamedTextColor color) // Sets team color
 GameTeam setDisplayName(Component displayName) // Sets team display name
 Component displayName() // Returns team display name
@@ -62,6 +75,9 @@ GameTeam setTeamGlow(boolean teamGlow) // Sets whether teammates glow for each o
 GameTeam setPrefix(Component prefix) // Sets team prefix
 GameTeam setSuffix(Component suffix) // Sets team suffix
 GameTeam setFriendlyFire(boolean friendlyFire) // Sets friendly fire
+GameTeam setFriendlyFireDamageTypes(Collection<DamageType> damageTypes) // Sets teammate damage types allowed even when friendly fire is false
+GameTeam allowFriendlyFireDamageTypes(DamageType... damageTypes) // Adds teammate damage types allowed even when friendly fire is false
+GameTeam denyFriendlyFireDamageTypes(DamageType... damageTypes) // Removes teammate damage types from the friendly-fire exception set
 GameTeam setSeeFriendlyInvisibles(boolean seeFriendlyInvisibles) // Sets whether invisible teammates are visible
 GameTeam setNametagVisibility(Team.OptionStatus nametagVisibility) // Sets nametag visibility
 GameTeam setCollisionRule(Team.OptionStatus collisionRule) // Sets collision rule
@@ -70,10 +86,13 @@ boolean teamGlow() // Returns whether teammate glow is enabled
 Component prefix() // Returns team prefix
 Component suffix() // Returns team suffix
 boolean friendlyFire() // Returns whether friendly fire is enabled
+Set<DamageType> friendlyFireDamageTypes() // Returns allowed teammate damage types while friendlyFire is false
+boolean allowsFriendlyFireDamage(DamageType damageType) // Returns whether this team allows the damage type against teammates
 boolean seeFriendlyInvisibles() // Returns whether invisible teammates are visible
 Team.OptionStatus nametagVisibility() // Returns nametag visibility
 Team.OptionStatus collisionRule() // Returns collision rule
 ```
+`friendlyFire` defaults to `false`. By default, direct damage and thrown projectile damage from teammates is blocked, while teammate-caused `DamageType.EXPLOSION` and `DamageType.PLAYER_EXPLOSION` damage is still allowed. Set `friendlyFire(true)` to allow all teammate damage, or adjust the allowed set with `setFriendlyFireDamageTypes(...)`.
 
 ## TIME MANAGEMENT
 **TimeManager**
@@ -90,8 +109,8 @@ GameTimer setUnlimitedMaxTicks() // Makes the timer run indefinitely
 GameTimer pause() // Pauses the timer
 GameTimer resume() // Resumes the timer
 void cancel() // Cancels the timer
-GameTimer onTick(Consumer<GameTimer> action) // Runs an action every tick
-GameTimer onTick(int interval, Consumer<GameTimer> action) // Runs an action every interval ticks
+GameTimer onTick(Consumer<GameTimer> action) // Runs an action at elapsed tick 0, then every tick
+GameTimer onTick(int interval, Consumer<GameTimer> action) // Runs an action at elapsed tick 0, then every interval ticks
 GameTimer onFinish(Consumer<GameTimer> action) // Runs an action when the timer finishes
 boolean isStarted() // Returns whether the timer has started
 int getMaxTicks() // Returns max timer duration in ticks
@@ -154,6 +173,9 @@ void setTotalExperience(int xp) // Sets total experience points of a player
 int level() // Returns exp level of player
 float exp() // Returns exp progress of player
 int totalExperience() // Returns total exp of player
+void setArrowsInBody(int arrows) // Sets the number of arrows visually stuck in the player
+int arrowsInBody() // Returns the number of arrows stored for the player
+void clearArrowsInBody() // Clears arrows visually stuck in the player
 GameTeam team() // Returns player's team, null if player is not on a team
 ```
 
@@ -188,8 +210,8 @@ GameSidebar setViewers(Collection<GamePlayer> viewers) // Sets sidebar viewers
 GameSidebar setViewers(Supplier<Collection<GamePlayer>> viewersSupplier) // Sets sidebar viewers from supplier
 GameSidebar setTitle(Component title) // Sets sidebar title
 GameSidebar setTitle(Supplier<Component> titleSupplier) // Sets sidebar title from supplier
-GameSidebar setLabel(String label) // Changes label name of a label
-GameSidebar setLabel(Supplier<String> labelSupplier) // Changes label name of a label from supplier
+GameSidebar setLabel(String label, String newLabel) // Changes label name of a label
+GameSidebar setLabel(String label, Supplier<String> newLabelSupplier) // Changes label name of a label from supplier
 GameSidebar addLine() // Adds an empty line
 GameSidebar addLine(Component component) // Adds a line just containing a component
 GameSidebar addInteger(String label, int value) // Adds a global integer line
@@ -216,6 +238,7 @@ void clear() // Clears the glow effect
 ```java
 CompletableFuture<GameMap> setMap(String mapId) // Loads and sets map by id
 CompletableFuture<GameMap> setMap(GameMap map) // Loads and sets map
+CompletableFuture<GameMap> resetMap() // Reloads the initially selected map
 CompletableFuture<Void> placeMap(String mapId, Location location) // Places map by id in the current world
 CompletableFuture<Void> placeMap(String mapId, Location location, MapRotation rotation) // Places map by id with rotation
 CompletableFuture<Void> placeMap(GameMap map, Location location) // Places map in the current world
@@ -232,6 +255,7 @@ void setWorldSpawn(GameLocation location) // Sets world spawn
 GameLocation worldSpawn() // Returns world spawn location
 void setPvp(boolean enabled) // Sets PvP game rule
 void setFallDamage(boolean enabled) // Sets fall damage game rule
+void setHungerEnabled(boolean enabled) // Sets whether hunger changes are allowed for registered players in this game world
 void addPoint(GameLocation location, String pointName) // Adds a named point
 void removePoint(GameLocation location, String pointName) // Removes a named point
 void addRegion(GameRegion region, String regionName) // Adds a named region
@@ -257,6 +281,19 @@ GameEntity summon(EntityType entityType, double x, double y, double z) // Summon
 GameChest newChest(GameLocation location) // Places a game chest
 GameChest newChest(double x, double y, double z) // Places a game chest
 ```
+**GameChest**
+```java
+void clear() // Clears chest contents
+void setLootTable(LootTable lootTable) // Replaces chest contents with generated loot table items using a random seed
+void setLootTable(LootTable lootTable, long seed) // Replaces chest contents with generated loot table items using a specified seed
+void addLootTable(LootTable lootTable) // Adds generated loot table items using a random seed
+void addLootTable(LootTable lootTable, long seed) // Adds generated loot table items using a specified seed
+void setItems(Collection<ItemStack> items) // Replaces chest contents with items
+void addItems(Collection<ItemStack> items) // Adds items into random empty chest slots, falling back to normal inventory stacking
+GameLocation location() // Returns chest location
+boolean exists() // Returns whether the chest block exists
+GameChest ensurePresent() // Places the chest block if missing
+```
 **GameMap**
 ```java
 String id() // Returns map id
@@ -274,6 +311,9 @@ double y() // Returns y coordinate
 double z() // Returns z coordinate
 double pitch() // Returns pitch
 double yaw() // Returns yaw
+int getBlockX() // Returns floored x coordinate
+int getBlockY() // Returns floored y coordinate
+int getBlockZ() // Returns floored z coordinate
 ```
 **GameRegion**
 ```java
@@ -325,12 +365,123 @@ EntityType type() // Returns entity type
 ```
 
 ## EVENTS
-**GameEventRegistrar**
+
+Put `@GameEventHandler` on a method in the `GameModule`. The method does not need `Listener`, and you do not register or bind it manually. For helper objects, call `registerEventHandlers(helper)` from the module. The parameter type decides the Bukkit event type and the game-scoped wrapper.
+
 ```java
-<T extends Event> void player(Class<T> eventType, Function<T, Player> playerGetter, Consumer<GamePlayerEvent<T>> handler) // Registers a player event handler
-<T extends Event> void entity(Class<T> eventType, Function<T, Entity> entityGetter, Consumer<GameEntityEvent<T>> handler) // Registers an entity event handler
-<T extends Event> void location(Class<T> eventType, Function<T, Location> locationGetter, Consumer<GameLocationEvent<T>> handler) // Registers a location event handler
-<T extends Event> void block(Class<T> eventType, Function<T, Location> locationGetter, Consumer<GameBlockEvent<T>> handler) // Registers a block location event handler
+@GameEventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+public void onExplosion(GameEvent<EntityExplodeEvent> event) {
+    event.blockList().removeIf(location -> !world().posInRegion(location, "mutable"));
+}
+```
+
+The generic property methods use event method names like `blockList`, `yield`, `damage`, or `clickedBlock`. They try `property`, `getProperty`, and `isProperty`, so `event.locations("blockList")` reaches Paper's `blockList()` and `event.get("yield", Float.class)` reaches `getYield()`.
+
+```java
+GameEvent<T extends Event> // Base scoped wrapper for any Bukkit event type
+GamePlayerEvent<T extends Event> // Delivers only when the event has a registered GamePlayer
+GameEntityEvent<T extends Event> // Delivers only when the event entity is in the game world
+GameLocationEvent<T extends Event> // Delivers only when the event location/entity/block is in the game world
+GameBlockEvent<T extends Event> // Delivers only when the event block/clicked block is in the game world
+```
+**GameEventHandler**
+```java
+EventPriority priority() default EventPriority.NORMAL // Same priority concept as Bukkit events
+boolean ignoreCancelled() default false // Skips already-cancelled cancellable events
+```
+**GameEvent**
+```java
+boolean isCancelled() // Returns cancellation state for cancellable events, false otherwise
+void setCancelled(boolean cancelled) // Sets cancellation state if the wrapped event is cancellable
+Class<? extends Event> getEventType() // Returns underlying Bukkit event class
+GamePlayer getPlayer() // Returns scoped GamePlayer from getPlayer() or player getEntity(), null if not in this game
+GameEntity getEntity() // Returns scoped GameEntity from getEntity() or getPlayer(), null if not in this game world
+GameEntity getDamager() // Returns scoped GameEntity from getDamager(), null if not in this game world
+GameEntity getProjectile() // Returns scoped projectile entity when supported
+GameEntity getHitEntity() // Returns scoped hit entity when supported
+GameEntity getRightClicked() // Returns scoped right-clicked entity when supported
+GameEntity getVehicle() // Returns scoped vehicle when supported
+GameEntity getLeashHolder() // Returns scoped leash holder when supported
+GameLocation getLocation() // Returns scoped location from getLocation(), block/clicked block, or entity location
+GameLocation getBlockLocation() // Returns scoped block/clicked-block location
+GameLocation getClickedBlockLocation() // Returns scoped clicked block location when supported
+GameLocation getHitBlockLocation() // Returns scoped hit block location when supported
+GameLocation getFrom() // Returns scoped from location for movement/teleport events
+GameLocation getTo() // Returns scoped to location for movement/teleport events
+void setTo(GameLocation location) // Sets to location inside the game world when supported
+List<GameLocation> blockList() // Returns live scoped block list for events like EntityExplodeEvent and BlockExplodeEvent
+GameLocation getRespawnLocation() // Returns scoped respawn location when the Bukkit event supports it
+void setRespawnLocation(GameLocation location) // Sets respawn location inside the game world when supported
+ItemStack getItem() // Returns a clone of getItem() or getItemStack() when supported
+ItemStack getItemInHand() // Returns a clone of getItemInHand() when supported
+ItemStack getItemDrop() // Returns a clone of dropped item stack when supported
+Material getBlockType() // Returns getBlock().getType() when supported
+Material getClickedBlockType() // Returns getClickedBlock().getType() when supported
+Action getAction() // Returns player interaction action when supported
+EquipmentSlot getHand() // Returns interaction hand when supported
+BlockFace getBlockFace() // Returns block face when supported
+Event.Result getResult() // Returns event result when supported
+void setResult(Event.Result result) // Sets event result when supported
+double getDamage() // Returns getDamage() when supported, otherwise 0
+void setDamage(double damage) // Calls setDamage(double) when supported
+double getFinalDamage() // Returns final computed damage when supported
+DamageCause getDamageCause() // Returns damage cause when supported
+float getYield() // Returns explosion/block drop yield when supported
+void setYield(float yield) // Sets explosion/block drop yield when supported
+int getDroppedExp() // Returns getDroppedExp() when supported, otherwise 0
+void setDroppedExp(int droppedExp) // Calls setDroppedExp(int) when supported
+int getExpToDrop() // Returns block exp to drop when supported
+void setExpToDrop(int expToDrop) // Sets block exp to drop when supported
+int getAmount() // Returns amount for events like PlayerExpChangeEvent when supported
+void setAmount(int amount) // Sets amount when supported
+int getFoodLevel() // Returns food level when supported
+void setFoodLevel(int foodLevel) // Sets food level when supported
+int getLevel() // Returns level when supported
+int getOldLevel() // Returns old level when supported
+int getNewLevel() // Returns new level when supported
+int getSlot() // Returns inventory/hotbar slot when supported
+int getRawSlot() // Returns raw inventory slot when supported
+int getPreviousSlot() // Returns previous held slot when supported
+int getNewSlot() // Returns new held slot when supported
+boolean shouldDropItems() // Returns drop-items flag when supported
+void setDropItems(boolean dropItems) // Sets drop-items flag when supported
+boolean getKeepInventory() // Returns keep-inventory flag when supported
+void setKeepInventory(boolean keepInventory) // Sets keep-inventory flag when supported
+boolean getKeepLevel() // Returns keep-level flag when supported
+void setKeepLevel(boolean keepLevel) // Sets keep-level flag when supported
+Component getDeathMessage() // Returns death message Component when supported
+void setDeathMessage(Component deathMessage) // Calls setDeathMessage(Component) when supported
+Component getMessage() // Returns message Component when supported
+void setMessage(Component message) // Sets message Component when supported
+Component getJoinMessage() // Returns join message when supported
+void setJoinMessage(Component joinMessage) // Sets join message when supported
+Component getQuitMessage() // Returns quit message when supported
+void setQuitMessage(Component quitMessage) // Sets quit message when supported
+<V> V get(String property, Class<V> valueType) // Reads safe scalar/enum/Component/ItemStack values, for example get("cause", DamageCause.class)
+void set(String property, Object value) // Writes safe scalar/enum/Component/ItemStack values by setter, for example set("yield", 0.5f)
+List<GameLocation> locations(String property) // Reads a Location/Block/Entity property or live List of them as GameLocations
+List<GameEntity> entities(String property) // Reads an Entity property or live List of entities as GameEntities
+List<GamePlayer> players(String property) // Reads a Player property or live List of players as GamePlayers
+GameLocation location(String property) // Reads one Location/Block/Entity property as a GameLocation
+GameEntity entity(String property) // Reads one Entity property as a GameEntity
+GamePlayer player(String property) // Reads one Player property as a GamePlayer
+```
+**GamePlayerEvent**
+```java
+GamePlayer getPlayer() // Returns the registered player for this game
+```
+**GameEntityEvent**
+```java
+GameEntity getEntity() // Returns the game-scoped event entity
+GameEntity getDamager() // Returns the game-scoped damager when supported
+```
+**GameLocationEvent**
+```java
+GameLocation getLocation() // Returns the game-scoped event location
+```
+**GameBlockEvent**
+```java
+GameLocation getLocation() // Returns the game-scoped block location
 ```
 
 ## BORDERS

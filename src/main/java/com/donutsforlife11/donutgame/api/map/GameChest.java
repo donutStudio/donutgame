@@ -10,6 +10,9 @@ import org.bukkit.Material;
 import org.bukkit.block.Chest;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.loot.LootTable;
+
+import com.donutsforlife11.donutgame.api.data.GameItems;
 
 public class GameChest {
     private final GameWorld world;
@@ -24,7 +27,31 @@ public class GameChest {
         chest().getBlockInventory().clear();
     }
 
+    public void setLootTable(LootTable lootTable) {
+        setLootTable(lootTable, ThreadLocalRandom.current().nextLong());
+    }
+
+    public void setLootTable(LootTable lootTable, long seed) {
+        setItems(GameItems.items(lootTable, seed));
+    }
+
+    public void addLootTable(LootTable lootTable) {
+        addLootTable(lootTable, ThreadLocalRandom.current().nextLong());
+    }
+
+    public void addLootTable(LootTable lootTable, long seed) {
+        addItems(GameItems.items(lootTable, seed));
+    }
+
+    public void setItems(Collection<ItemStack> items) {
+        clear();
+        addItems(items);
+    }
+
     public void addItems(Collection<ItemStack> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
         Inventory inventory = chest().getBlockInventory();
         List<Integer> emptySlots = new ArrayList<>();
         for (int slot = 0; slot < inventory.getSize(); slot++) {
@@ -39,10 +66,10 @@ public class GameChest {
                 continue;
             }
             if (emptySlots.isEmpty()) {
-                inventory.addItem(item);
+                inventory.addItem(item.clone());
                 continue;
             }
-            inventory.setItem(emptySlots.removeLast(), item);
+            inventory.setItem(emptySlots.removeLast(), item.clone());
         }
     }
 

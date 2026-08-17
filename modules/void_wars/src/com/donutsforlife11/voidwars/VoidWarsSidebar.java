@@ -2,35 +2,30 @@ package com.donutsforlife11.voidwars;
 
 import com.donutsforlife11.donutgame.api.ui.sidebar.GameSidebar;
 
-final class VoidWarsSidebar {
+public class VoidWarsSidebar {
     private final VoidWars game;
-    private GameSidebar sidebar;
+    private final GameSidebar sidebar;
 
-    VoidWarsSidebar(VoidWars game) {
+    public VoidWarsSidebar(VoidWars game) {
         this.game = game;
+        this.sidebar = game.uiManager().newSidebar();
     }
 
-    void show() {
-        sidebar = game.uiManager().newSidebar()
-            .addFraction("Round", game::round, game::maxRounds)
+    public void createSidebar() {
+        sidebar
+            .addFraction("Round", () -> game.round(), game.maxRounds)
             .addLine()
-            .dynamicTime(() -> {
-                VoidWarsEvents.SidebarEvent event = game.roundEvents().sidebarEvent();
-                return event == null ? "Overtime" : event.label();
-            }, () -> {
-                VoidWarsEvents.SidebarEvent event = game.roundEvents().sidebarEvent();
-                return event == null ? 0 : event.remainingSeconds();
-            })
-            .addLine()
-            .addFraction("Alive Players", game::alivePlayers, game::totalPlayers);
-        if (game.config().getInt("team_size") > 1) sidebar.addFraction("Alive Teams", game::aliveTeams, game::totalTeams);
-        sidebar.addLine().addInteger("Kills", game::kills).show();
-    }
-
-    void clear() {
-        if (sidebar != null) {
-            sidebar.remove();
-            sidebar = null;
+            .addTime("Next Event", () -> game.voidWarsEvents().nextEventTime())
+            .addLine();
+        if (game.teamSize > 1) {
+            sidebar.addFraction("Alive Teams", () -> game.teamManager().getNonSpectatorTeams().size(), game.teamManager().getTeams().size());
         }
+        sidebar
+            .addFraction("Alive Players", () -> game.playerManager().getNonSpectators().size(), game.playerManager().getPlayers().size())
+            .addLine()
+            .addInteger("Kills", player -> game.voidWarsPlayers().getPlayerKills(player));
+        
+        sidebar.setLabel("Next Event", () -> game.voidWarsEvents().nextEventLabel());
+        sidebar.show();
     }
 }

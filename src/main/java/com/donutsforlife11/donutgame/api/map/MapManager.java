@@ -25,7 +25,9 @@ public class MapManager {
     private final MapService mapService;
     private final WorldService worldService;
     private volatile GameMap currentMap;
+    private volatile GameMap initialMap;
     private volatile GameWorld currentWorld;
+    private volatile CompletableFuture<GameMap> pendingMapLoad;
 
     public MapManager(GameModule module, MapService mapService, WorldService worldService) {
         this.module = module;
@@ -40,6 +42,31 @@ public class MapManager {
 
     public CompletableFuture<GameMap> setMap(GameMap map) {
         Objects.requireNonNull(map, "map");
+        CompletableFuture<GameMap> future = loadMap(map);
+        pendingMapLoad = future;
+        return future;
+    }
+
+    public CompletableFuture<GameMap> resetMap() {
+        GameMap map = initialMap;
+        if (map == null) {
+            return CompletableFuture.failedFuture(new IllegalStateException("No initial map has been loaded."));
+        }
+        return setMap(map);
+    }
+
+    public CompletableFuture<GameMap> whenReady() {
+        CompletableFuture<GameMap> future = pendingMapLoad;
+        if (future != null) {
+            return future;
+        }
+        GameMap map = currentMap;
+        return map == null
+            ? CompletableFuture.failedFuture(new IllegalStateException("Module did not load a map before onLoad. Configure a maps list or call mapManager().setMap(...) in beforeLoad()."))
+            : CompletableFuture.completedFuture(map);
+    }
+
+    private CompletableFuture<GameMap> loadMap(GameMap map) {
         GameMapDescriptor descriptor = mapService.getGameMapDescriptor(map.id());
         GameMapDescriptor template = descriptor.backingType() == BackingType.WORLD ? descriptor : mapService.getGameMapDescriptor(DEFAULT_MAP_ID);
         if (template.backingType() != BackingType.WORLD) return CompletableFuture.failedFuture(new IllegalStateException("Default map " + DEFAULT_MAP_ID + " must be world-backed."));
@@ -83,10 +110,6 @@ public class MapManager {
         return worldService.pasteSchematic(descriptor.assetPath(), world.bukkitWorld(), location, rotation).thenAccept(metadata -> registerMapData(world, map, location, rotation, metadata));
     }
 
-    public CompletableFuture<Void> unloadCurrentWorld() {
-        return unloadWorld();
-    }
-
     public CompletableFuture<Void> unloadWorld() {
         GameWorld world = currentWorld;
         if (world == null) {
@@ -101,16 +124,8 @@ public class MapManager {
         });
     }
 
-    public GameWorld currentWorld() {
-        return world();
-    }
-
     public GameWorld world() {
         return currentWorld;
-    }
-
-    public GameMap currentMap() {
-        return map();
     }
 
     public GameMap map() {
@@ -137,9 +152,18 @@ public class MapManager {
             stagedWorld.copyRegions().forEach((name, entries) -> entries.forEach(region -> existingWorld.addRegion(region, name)));
         }
         currentMap = map;
+        if (initialMap == null) {
+            initialMap = map;
+        }
         currentWorld = liveWorld;
         module.log("Map " + map.id() + " loaded into world " + liveWorld.name() + " (" + liveWorld.bukkitWorld().getName() + ").");
-        return teleportPlayers(liveWorld).thenRun(() -> module.playerManager().activatePendingPlayers()).thenCompose(unused -> oldWorldName == null || oldWorldName.equals(liveWorld.bukkitWorld().getName()) ? CompletableFuture.completedFuture(map) : worldService.unloadWorld(oldWorldName).thenApply(result -> map));
+        return teleportPlayers(liveWorld).thenRun(() -> {
+            if (module.hasStarted()) {
+                module.playerManager().activatePostStartPlayers();
+            } else {
+                module.playerManager().activatePendingPlayers();
+            }
+        }).thenCompose(unused -> oldWorldName == null || oldWorldName.equals(liveWorld.bukkitWorld().getName()) ? CompletableFuture.completedFuture(map) : worldService.unloadWorld(oldWorldName).thenApply(result -> map));
     }
 
     private CompletableFuture<Void> teleportPlayers(GameWorld world) {

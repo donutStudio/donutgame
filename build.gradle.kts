@@ -1,3 +1,6 @@
+import org.gradle.api.GradleException
+import org.gradle.jvm.tasks.Jar
+
 plugins {
     java
     id("com.gradleup.shadow") version "8.3.10"
@@ -12,7 +15,7 @@ dependencies {
     compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.3.12")
     compileOnly("com.infernalsuite.asp:api:4.0.0-SNAPSHOT")
     implementation("fr.skytasul:glowingentities:2.0.0")
-    implementation("fr.mrmicky:fastboard:2.2.0")
+    implementation("fr.mrmicky:fastboard:2.2.1")
     implementation("com.infernalsuite.asp:file-loader:4.0.0-SNAPSHOT") {
         exclude(group = "com.infernalsuite.asp", module = "api")
     }
@@ -20,6 +23,23 @@ dependencies {
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(21))
+    }
+}
+
+allprojects {
+    tasks.withType<Jar>().configureEach {
+        isPreserveFileTimestamps = false
+        isReproducibleFileOrder = true
+        outputs.upToDateWhen { false }
+        outputs.cacheIf { false }
+        doFirst {
+            val existingArchive = archiveFile.get().asFile
+            if (existingArchive.exists() && !existingArchive.delete()) {
+                throw GradleException(
+                    "Cannot replace ${existingArchive.absolutePath}. Close programs that may be holding it open, then rebuild."
+                )
+            }
+        }
     }
 }
 

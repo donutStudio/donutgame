@@ -6,8 +6,11 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.logging.Level;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Sound;
@@ -49,6 +52,7 @@ public abstract class GameModule {
     private int index;
     private String id;
     private String name;
+    private volatile boolean started;
     private volatile boolean transitioning;
 
     private final Set<Listener> registeredListeners = new LinkedHashSet<>();
@@ -56,6 +60,10 @@ public abstract class GameModule {
     private YamlConfiguration config;
 
     public void beforeLoad() {
+        List<String> maps = config().getStringList("maps");
+        if (!maps.isEmpty()) {
+            mapManager().setMap(maps.get(ThreadLocalRandom.current().nextInt(maps.size())));
+        }
     }
 
     public void onLoad() {
@@ -71,18 +79,50 @@ public abstract class GameModule {
     public void onUnload() {
     }
 
-    protected final CompletableFuture<GameModule> startLoadSequence() {
+    protected final CompletableFuture<GameModule> startLoadSequence(Runnable beforeCountdown) {
         try {
+            started = false;
             beforeLoad();
-            onLoad();
-            return CompletableFuture.completedFuture(this);
+            return mapManager.whenReady().thenCompose(ignored -> {
+                try {
+                    if (beforeCountdown != null) {
+                        beforeCountdown.run();
+                    }
+                    onLoad();
+                    eventRegistrar.registerAnnotated(this);
+                    startCountdownSequence().exceptionally(throwable -> {
+                        logError("Start sequence failed.", throwable);
+                        return null;
+                    });
+                    return CompletableFuture.completedFuture(this);
+                } catch (Throwable throwable) {
+                    return CompletableFuture.failedFuture(throwable);
+                }
+            });
         } catch (Throwable throwable) {
             return CompletableFuture.failedFuture(throwable);
         }
     }
 
     public void reload() {
-        onReload();
+        try {
+            started = false;
+            mapManager.resetMap()
+                .thenCompose(ignored -> {
+                    try {
+                        onReload();
+                        return startCountdownSequence();
+                    } catch (Throwable throwable) {
+                        return CompletableFuture.failedFuture(throwable);
+                    }
+                })
+                .exceptionally(throwable -> {
+                logError("Reload start sequence failed.", throwable);
+                return null;
+            });
+        } catch (Throwable throwable) {
+            logError("Reload failed.", throwable);
+        }
     }
 
     protected final CompletableFuture<Void> shutdown() {
@@ -135,12 +175,20 @@ public abstract class GameModule {
         }
     }
 
+    protected final void registerEventHandlers(Object target) {
+        eventRegistrar.registerAnnotated(target);
+    }
+
     public final void registerDynamicEvent(Listener listener, Class<? extends Event> eventType, EventExecutor executor) {
+        registerDynamicEvent(listener, eventType, executor, EventPriority.NORMAL, false);
+    }
+
+    public final void registerDynamicEvent(Listener listener, Class<? extends Event> eventType, EventExecutor executor, EventPriority priority, boolean ignoreCancelled) {
         if (listener == null || eventType == null || executor == null) {
             throw new IllegalArgumentException("Listener, event type, and executor cannot be null.");
         }
         if (registeredListeners.add(listener)) {
-            plugin.getServer().getPluginManager().registerEvent(eventType, listener, EventPriority.NORMAL, executor, plugin);
+            plugin.getServer().getPluginManager().registerEvent(eventType, listener, priority, executor, plugin, ignoreCancelled);
         }
     }
 
@@ -190,6 +238,25 @@ public abstract class GameModule {
         }).start();
     }
 
+    private CompletableFuture<GameModule> startCountdownSequence() {
+        CompletableFuture<GameModule> future = new CompletableFuture<>();
+        AtomicBoolean completed = new AtomicBoolean();
+        startCountdown(config().getInt("countdown_ticks", 200), () -> {
+            if (!completed.compareAndSet(false, true)) {
+                return;
+            }
+            try {
+                onStart();
+                started = true;
+                playerManager.activatePostStartPlayers();
+                future.complete(this);
+            } catch (Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        });
+        return future;
+    }
+
     public CompletableFuture<Boolean> unload() {
         return plugin.moduleService().unloadModule(index);
     }
@@ -215,7 +282,11 @@ public abstract class GameModule {
     }
 
     public YamlConfiguration config(String path) {
-        try (Reader reader = new InputStreamReader(resource(path), StandardCharsets.UTF_8)) {
+        InputStream stream = resource(path);
+        if (stream == null) {
+            throw new IllegalStateException("Missing module configuration " + path);
+        }
+        try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
             return YamlConfiguration.loadConfiguration(reader);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to load module configuration " + path, e);
@@ -236,6 +307,10 @@ public abstract class GameModule {
 
     public final boolean isTransitioning() {
         return transitioning;
+    }
+
+    public final boolean hasStarted() {
+        return started;
     }
 
     public final void setTransitioning(boolean transitioning) {
@@ -264,10 +339,6 @@ public abstract class GameModule {
 
     public BorderManager borderManager() {
         return borderManager;
-    }
-
-    public GameEventRegistrar events() {
-        return eventRegistrar;
     }
 
     public final void log(String message) {

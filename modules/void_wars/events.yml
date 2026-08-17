@@ -37,7 +37,7 @@ item_drops:
   - {time: 960, pool: ["rail 64"]}
   - {time: 960, pool: ["tnt_minecart 3"]}
 
-borders:
+border_shrinks:
   - {time: 75, scale: 0.9}
   - {time: 180, scale: 0.889}
   - {time: 270, scale: 0.875}

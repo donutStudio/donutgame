@@ -37,10 +37,6 @@ public class GameSidebar {
         this.titleSupplier = () -> Component.text(module.name(), NamedTextColor.GOLD, TextDecoration.BOLD).shadowColor(ShadowColor.shadowColor(0, 0, 0, 128));
     }
 
-    public GameSidebar viewers(Supplier<Collection<GamePlayer>> viewersSupplier) {
-        return setViewers(viewersSupplier);
-    }
-
     public GameSidebar setViewers(Collection<GamePlayer> viewers) {
         this.viewersSupplier = () -> List.copyOf(viewers);
         return this;
@@ -49,10 +45,6 @@ public class GameSidebar {
     public GameSidebar setViewers(Supplier<Collection<GamePlayer>> viewersSupplier) {
         this.viewersSupplier = Objects.requireNonNull(viewersSupplier);
         return this;
-    }
-
-    public GameSidebar title(Supplier<Component> titleSupplier) {
-        return setTitle(titleSupplier);
     }
 
     public GameSidebar setTitle(Component title) {
@@ -65,10 +57,6 @@ public class GameSidebar {
         return this;
     }
 
-    public GameSidebar blank() {
-        return addLine();
-    }
-
     public GameSidebar addLine() {
         entries.add(player -> new RenderedEntry(Component.empty(), Component.empty()));
         return this;
@@ -79,65 +67,65 @@ public class GameSidebar {
         return this;
     }
 
-    public GameSidebar integer(String label, IntSupplier valueSupplier) {
-        return addInteger(label, valueSupplier);
-    }
-
     public GameSidebar addInteger(String label, int value) {
         return addInteger(label, () -> value);
     }
 
     public GameSidebar addInteger(String label, IntSupplier valueSupplier) {
-        entries.add(new StaticEntry(label, player -> new RenderedEntry(labelComponent(label), Component.text(valueSupplier.getAsInt(), NamedTextColor.AQUA).shadowColor(ShadowColor.shadowColor(0, 0, 0, 128)))));
+        entries.add(new LabeledValueEntry(
+            label,
+            () -> label,
+            player -> valueComponent(valueSupplier.getAsInt(), NamedTextColor.YELLOW)
+        ));
         return this;
-    }
-
-    public GameSidebar integer(String label, Function<GamePlayer, Integer> valueSupplier) {
-        return addInteger(label, valueSupplier);
     }
 
     public GameSidebar addInteger(String label, Function<GamePlayer, Integer> valueSupplier) {
-        entries.add(new StaticEntry(label, player -> new RenderedEntry(
-            labelComponent(label).append(Component.text(valueSupplier.apply(player), NamedTextColor.AQUA).shadowColor(ShadowColor.shadowColor(0, 0, 0, 128))),
-            Component.empty()
-        )));
+        entries.add(new LabeledLineEntry(
+            label,
+            () -> label,
+            (player, labelSupplier) -> new RenderedEntry(
+                labelComponent(labelSupplier.get()).append(valueComponent(valueSupplier.apply(player), NamedTextColor.AQUA)),
+                Component.empty()
+            )
+        ));
         return this;
-    }
-
-    public GameSidebar fraction(String label, IntSupplier numeratorSupplier, IntSupplier denominatorSupplier) {
-        return addFraction(label, numeratorSupplier, denominatorSupplier);
     }
 
     public GameSidebar addFraction(String label, int numerator, int denominator) {
         return addFraction(label, () -> numerator, () -> denominator);
     }
+    public GameSidebar addFraction(String label, IntSupplier numeratorSupplier, int denominator) {
+        return addFraction(label, numeratorSupplier, () -> denominator);
+    }
 
     public GameSidebar addFraction(String label, IntSupplier numeratorSupplier, IntSupplier denominatorSupplier) {
-        entries.add(new StaticEntry(label, player -> new RenderedEntry(
-            labelComponent(label),
-            Component.text()
-                .append(Component.text(numeratorSupplier.getAsInt(), NamedTextColor.YELLOW).shadowColor(ShadowColor.shadowColor(0, 0, 0, 128)))
-                .append(Component.text("/", NamedTextColor.GRAY).shadowColor(ShadowColor.shadowColor(0, 0, 0, 128)))
-                .append(Component.text(denominatorSupplier.getAsInt(), NamedTextColor.GRAY).shadowColor(ShadowColor.shadowColor(0, 0, 0, 128)))
+        entries.add(new LabeledValueEntry(
+            label,
+            () -> label,
+            player -> Component.text()
+                .append(valueComponent(numeratorSupplier.getAsInt(), NamedTextColor.YELLOW))
+                .append(slashComponent())
+                .append(valueComponent(denominatorSupplier.getAsInt(), NamedTextColor.GRAY))
                 .build()
-        )));
+        ));
         return this;
     }
 
     public GameSidebar addFraction(String label, Function<GamePlayer, Integer> numeratorSupplier, Function<GamePlayer, Integer> denominatorSupplier) {
-        entries.add(new StaticEntry(label, player -> new RenderedEntry(
-            labelComponent(label),
-            Component.text()
-                .append(Component.text(numeratorSupplier.apply(player), NamedTextColor.YELLOW).shadowColor(ShadowColor.shadowColor(0, 0, 0, 128)))
-                .append(Component.text("/", NamedTextColor.GRAY).shadowColor(ShadowColor.shadowColor(0, 0, 0, 128)))
-                .append(Component.text(denominatorSupplier.apply(player), NamedTextColor.GRAY).shadowColor(ShadowColor.shadowColor(0, 0, 0, 128)))
-                .build()
-        )));
+        entries.add(new LabeledLineEntry(
+            label,
+            () -> label,
+            (player, labelSupplier) -> new RenderedEntry(
+                labelComponent(labelSupplier.get()).append(Component.text()
+                    .append(valueComponent(numeratorSupplier.apply(player), NamedTextColor.AQUA))
+                    .append(slashComponent())
+                    .append(valueComponent(denominatorSupplier.apply(player), NamedTextColor.GRAY))
+                    .build()),
+                Component.empty()
+            )
+        ));
         return this;
-    }
-
-    public GameSidebar time(String label, IntSupplier secondsSupplier) {
-        return addTime(label, secondsSupplier);
     }
 
     public GameSidebar addTime(String label, int ticks) {
@@ -145,33 +133,34 @@ public class GameSidebar {
     }
 
     public GameSidebar addTime(String label, IntSupplier ticksSupplier) {
-        entries.add(new StaticEntry(label, player -> new RenderedEntry(labelComponent(label), formatTime(ticksSupplier.getAsInt() / 20))));
+        entries.add(new LabeledValueEntry(label, () -> label, player -> formatTime(ticksSupplier.getAsInt() / 20)));
         return this;
     }
 
     public GameSidebar addTime(String label, Function<GamePlayer, Integer> ticksSupplier) {
-        entries.add(new StaticEntry(label, player -> new RenderedEntry(labelComponent(label), formatTime(ticksSupplier.apply(player) / 20))));
+        entries.add(new LabeledLineEntry(
+            label,
+            () -> label,
+            (player, labelSupplier) -> new RenderedEntry(
+                labelComponent(labelSupplier.get()).append(formatTime(ticksSupplier.apply(player) / 20, NamedTextColor.LIGHT_PURPLE)),
+                Component.empty()
+            )
+        ));
         return this;
     }
 
-    public GameSidebar timeSeconds(String label, IntSupplier secondsSupplier) {
-        entries.add(new StaticEntry(label, player -> new RenderedEntry(labelComponent(label), formatTime(secondsSupplier.getAsInt()))));
-        return this;
+    public GameSidebar setLabel(String label, String newLabel) {
+        return setLabel(label, () -> newLabel);
     }
 
-    public GameSidebar dynamicTime(Supplier<String> labelSupplier, IntSupplier secondsSupplier) {
-        entries.add(new DynamicLabelEntry(labelSupplier, player -> new RenderedEntry(labelComponent(labelSupplier.get()), formatTime(secondsSupplier.getAsInt()))));
-        return this;
-    }
-
-    public GameSidebar setLabel(String label) {
-        return setLabel(() -> label);
-    }
-
-    public GameSidebar setLabel(Supplier<String> labelSupplier) {
-        if (entries.isEmpty()) return this;
-        Entry previous = entries.removeLast();
-        entries.add(new DynamicLabelEntry(labelSupplier, previous::render));
+    public GameSidebar setLabel(String label, Supplier<String> newLabelSupplier) {
+        for (int i = 0; i < entries.size(); i++) {
+            Entry entry = entries.get(i);
+            if (entry instanceof LabeledEntry labeled && labeled.label().equals(label)) {
+                entries.set(i, labeled.withLabel(newLabelSupplier));
+                return this;
+            }
+        }
         return this;
     }
 
@@ -205,13 +194,13 @@ public class GameSidebar {
         hide();
     }
 
-    public void delete() {
-        remove();
-    }
-
     private void refresh() {
         Map<UUID, GamePlayer> viewers = new LinkedHashMap<>();
-        for (GamePlayer viewer : viewersSupplier.get()) {
+        Collection<GamePlayer> suppliedViewers = viewersSupplier.get();
+        if (suppliedViewers == null) {
+            suppliedViewers = List.of();
+        }
+        for (GamePlayer viewer : suppliedViewers) {
             if (viewer != null && viewer.player() != null) {
                 viewers.put(viewer.uuid(), viewer);
             }
@@ -225,27 +214,47 @@ public class GameSidebar {
         });
         for (GamePlayer viewer : viewers.values()) {
             FastBoard board = boards.computeIfAbsent(viewer.uuid(), ignored -> new FastBoard(viewer.player()));
-            board.updateTitle(titleSupplier.get());
+            Component title = titleSupplier.get();
+            board.updateTitle(title == null ? Component.empty() : title);
             List<Component> lines = new ArrayList<>();
             List<Component> scores = new ArrayList<>();
             lines.add(Component.empty());
             scores.add(Component.empty());
             for (Entry entry : entries) {
                 RenderedEntry rendered = entry.render(viewer);
-                lines.add(rendered.line());
-                scores.add(rendered.score());
+                if (rendered == null) {
+                    continue;
+                }
+                lines.add(componentOrEmpty(rendered.line()));
+                scores.add(componentOrEmpty(rendered.score()));
             }
             board.updateLines(lines, scores);
         }
     }
 
-    private Component labelComponent(String label) {
+    private static Component componentOrEmpty(Component component) {
+        return component == null ? Component.empty() : component;
+    }
+
+    private static Component labelComponent(String label) {
         return Component.text(label + ": ", NamedTextColor.WHITE).shadowColor(ShadowColor.shadowColor(0, 0, 0, 128));
     }
 
     private Component formatTime(int seconds) {
+        return formatTime(seconds, NamedTextColor.GREEN);
+    }
+
+    private Component formatTime(int seconds, NamedTextColor color) {
         int clampedSeconds = Math.max(0, seconds);
-        return Component.text(String.format("%02d:%02d", clampedSeconds / 60, clampedSeconds % 60), NamedTextColor.GREEN).shadowColor(ShadowColor.shadowColor(0, 0, 0, 128));
+        return Component.text(String.format("%02d:%02d", clampedSeconds / 60, clampedSeconds % 60), color).shadowColor(ShadowColor.shadowColor(0, 0, 0, 128));
+    }
+
+    private static Component valueComponent(int value, NamedTextColor color) {
+        return Component.text(value, color).shadowColor(ShadowColor.shadowColor(0, 0, 0, 128));
+    }
+
+    private static Component slashComponent() {
+        return Component.text("/", NamedTextColor.GRAY).shadowColor(ShadowColor.shadowColor(0, 0, 0, 128));
     }
 
     private interface Entry {
@@ -254,25 +263,36 @@ public class GameSidebar {
 
     private interface LabeledEntry extends Entry {
         String label();
+
+        LabeledEntry withLabel(Supplier<String> labelSupplier);
     }
 
-    private record StaticEntry(String label, Entry delegate) implements LabeledEntry {
+    private record LabeledValueEntry(String label, Supplier<String> labelSupplier, Function<GamePlayer, Component> valueSupplier) implements LabeledEntry {
         @Override
-        public RenderedEntry render(GamePlayer player) {
-            return delegate.render(player);
-        }
-    }
-
-    private record DynamicLabelEntry(Supplier<String> labelSupplier, Entry delegate) implements LabeledEntry {
-        @Override
-        public String label() {
-            return labelSupplier.get();
+        public LabeledEntry withLabel(Supplier<String> labelSupplier) {
+            return new LabeledValueEntry(label, Objects.requireNonNull(labelSupplier), valueSupplier);
         }
 
         @Override
         public RenderedEntry render(GamePlayer player) {
-            return delegate.render(player);
+            return new RenderedEntry(labelComponent(labelSupplier.get()), valueSupplier.apply(player));
         }
+    }
+
+    private record LabeledLineEntry(String label, Supplier<String> labelSupplier, LabeledRenderer renderer) implements LabeledEntry {
+        @Override
+        public LabeledEntry withLabel(Supplier<String> labelSupplier) {
+            return new LabeledLineEntry(label, Objects.requireNonNull(labelSupplier), renderer);
+        }
+
+        @Override
+        public RenderedEntry render(GamePlayer player) {
+            return renderer.render(player, labelSupplier);
+        }
+    }
+
+    private interface LabeledRenderer {
+        RenderedEntry render(GamePlayer player, Supplier<String> labelSupplier);
     }
 
     private record RenderedEntry(Component line, Component score) {

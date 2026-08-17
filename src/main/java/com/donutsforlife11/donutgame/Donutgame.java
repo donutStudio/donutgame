@@ -19,6 +19,7 @@ import com.donutsforlife11.donutgame.internal.map.WorldService;
 import com.donutsforlife11.donutgame.internal.player.PlayerEvents;
 import com.donutsforlife11.donutgame.internal.player.PlayerStateStore;
 import com.donutsforlife11.donutgame.internal.ui.GlowService;
+import com.donutsforlife11.donutgame.internal.ui.SpectatorTabListService;
 
 public final class Donutgame extends JavaPlugin {
     private FileService fileService;
@@ -29,6 +30,7 @@ public final class Donutgame extends JavaPlugin {
     private final GameItemService itemService = new GameItemService();
     private final PlayerEvents playerEvents = new PlayerEvents(playerStateStore);
     private GlowService glowService;
+    private SpectatorTabListService spectatorTabListService;
 
     @Override
     public void onEnable() {
@@ -40,6 +42,12 @@ public final class Donutgame extends JavaPlugin {
         fileService.reload();
         glowService = new GlowService(this);
         glowService.enable();
+        if (getServer().getPluginManager().getPlugin("ProtocolLib") != null) {
+            spectatorTabListService = new SpectatorTabListService(this, moduleService);
+            spectatorTabListService.enable();
+        } else {
+            getLogger().info("ProtocolLib is not installed; fake spectators will use the fallback tab-list name styling.");
+        }
 
         getServer().getPluginManager().registerEvents(playerEvents, this);
         getServer().getPluginManager().registerEvents(new GamePlayerEvents(moduleService), this);
@@ -64,6 +72,7 @@ public final class Donutgame extends JavaPlugin {
         }
         fileService.closeModuleLoaders();
         worldService.unloadAll();
+        if (spectatorTabListService != null) spectatorTabListService.disable();
         if (glowService != null) glowService.disable();
     }
 

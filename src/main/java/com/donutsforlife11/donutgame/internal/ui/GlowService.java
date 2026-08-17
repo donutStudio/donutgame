@@ -57,11 +57,25 @@ public class GlowService {
         Collection<Player> viewers,
         NamedTextColor color
     ) {
+        applyGlow(entity, viewers, color, toChatColor(color));
+    }
+
+    public void glowEntityUsingTeamColor(
+        Entity entity,
+        Collection<Player> viewers
+    ) {
+        applyGlow(entity, viewers, null, null);
+    }
+
+    private void applyGlow(
+        Entity entity,
+        Collection<Player> viewers,
+        NamedTextColor color,
+        ChatColor chatColor
+    ) {
         if (entity == null || !entity.isValid() || !isAvailable()) {
             return;
         }
-
-        ChatColor chatColor = toChatColor(color);
 
         for (Player viewer : viewers) {
             if (viewer == null || !viewer.isOnline()) {
@@ -79,12 +93,16 @@ public class GlowService {
             * Client already has exactly the glow we want.
             * Don't send another packet.
             */
-            if (color.equals(currentColor)) {
+            if (activeGlows.containsKey(key) && java.util.Objects.equals(color, currentColor)) {
                 continue;
             }
 
             try {
-                glowingEntities.setGlowing(entity, viewer, chatColor);
+                if (chatColor == null) {
+                    glowingEntities.setGlowing(entity, viewer);
+                } else {
+                    glowingEntities.setGlowing(entity, viewer, chatColor);
+                }
                 activeGlows.put(key, color);
             } catch (ReflectiveOperationException exception) {
                 exception.printStackTrace();

@@ -3,13 +3,17 @@ package com.donutsforlife11.donutgame.api.ui;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
 
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.entity.GameEntity;
@@ -28,6 +32,15 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.title.TitlePart;
 
 public class UiManager {
+    private static final Map<EquipmentSlot, ItemStack> HIDDEN_EQUIPMENT = Map.of(
+        EquipmentSlot.HAND, ItemStack.of(Material.AIR),
+        EquipmentSlot.OFF_HAND, ItemStack.of(Material.AIR),
+        EquipmentSlot.HEAD, ItemStack.of(Material.AIR),
+        EquipmentSlot.CHEST, ItemStack.of(Material.AIR),
+        EquipmentSlot.LEGS, ItemStack.of(Material.AIR),
+        EquipmentSlot.FEET, ItemStack.of(Material.AIR)
+    );
+
     private final Set<GameSidebar> sidebars = ConcurrentHashMap.newKeySet();
     private final Set<GameGlow> glows = ConcurrentHashMap.newKeySet();
     private final GameModule module;
@@ -91,22 +104,6 @@ public class UiManager {
         chat(players, Component.text().append(Component.text("Game > ", NamedTextColor.GREEN, TextDecoration.BOLD)).append(message).build());
     }
 
-    public void sound(GamePlayer player, Sound sound, float volume, float pitch) {
-        playSound(player, sound, volume, pitch);
-    }
-
-    public void sound(GamePlayer player, Sound sound) {
-        playSound(player, sound);
-    }
-
-    public void sound(Collection<GamePlayer> players, Sound sound) {
-        playSound(players, sound);
-    }
-
-    public void sound(Collection<GamePlayer> players, Sound sound, float volume, float pitch) {
-        playSound(players, sound, volume, pitch);
-    }
-
     public void playSound(GamePlayer player, Sound sound, float volume, float pitch) {
         playSound(Set.of(player), sound, volume, pitch);
     }
@@ -123,101 +120,11 @@ public class UiManager {
         playSound(players, sound, SoundCategory.MASTER, null, volume, pitch, 0f);
     }
 
-    public void sound(GamePlayer player, Sound sound, SoundCategory category) {
-        sound(Set.of(player), sound, category);
-    }
-
-    public void sound(Collection<GamePlayer> players, Sound sound, SoundCategory category) {
-        sound(players, sound, category, null, 1f, 1f, 0f);
-    }
-
-    public void sound(GamePlayer player, Sound sound, SoundCategory category, GameLocation location) {
-        sound(Set.of(player), sound, category, location);
-    }
-
-    public void sound(Collection<GamePlayer> players, Sound sound, SoundCategory category, GameLocation location) {
-        sound(players, sound, category, location, 1f, 1f, 0f);
-    }
-
-    public void sound(GamePlayer player, Sound sound, SoundCategory category, GameLocation location, float volume) {
-        sound(Set.of(player), sound, category, location, volume);
-    }
-
-    public void sound(Collection<GamePlayer> players, Sound sound, SoundCategory category, GameLocation location, float volume) {
-        sound(players, sound, category, location, volume, 1f, 0f);
-    }
-
-    public void sound(GamePlayer player, Sound sound, SoundCategory category, GameLocation location, float volume, float pitch) {
-        sound(Set.of(player), sound, category, location, volume, pitch);
-    }
-
-    public void sound(Collection<GamePlayer> players, Sound sound, SoundCategory category, GameLocation location, float volume, float pitch) {
-        sound(players, sound, category, location, volume, pitch, 0f);
-    }
-
-    public void sound(GamePlayer player, Sound sound, SoundCategory category, GameLocation location, float volume, float pitch, float minVolume) {
-        sound(Set.of(player), sound, category, location, volume, pitch, minVolume);
-    }
-
-    public void sound(Collection<GamePlayer> players, Sound sound, SoundCategory category, GameLocation location, float volume, float pitch, float minVolume) {
-        playSound(players, sound, category, location, volume, pitch, minVolume);
-    }
-
     public void playSound(GamePlayer player, Sound sound, SoundCategory category, GameLocation location, float volume, float pitch, float minVolume) {
         playSound(Set.of(player), sound, category, location, volume, pitch, minVolume);
     }
 
     public void playSound(Collection<GamePlayer> players, Sound sound, SoundCategory category, GameLocation location, float volume, float pitch, float minVolume) {
-        for (Player player : resolvePlayers(players)) {
-            playSound(player, sound, category, location, volume, pitch, minVolume);
-        }
-    }
-
-    public void sound(GamePlayer player, String sound) {
-        sound(Set.of(player), sound);
-    }
-
-    public void sound(Collection<GamePlayer> players, String sound) {
-        sound(players, sound, SoundCategory.MASTER, null, 1f, 1f, 0f);
-    }
-
-    public void sound(GamePlayer player, String sound, SoundCategory category) {
-        sound(Set.of(player), sound, category);
-    }
-
-    public void sound(Collection<GamePlayer> players, String sound, SoundCategory category) {
-        sound(players, sound, category, null, 1f, 1f, 0f);
-    }
-
-    public void sound(GamePlayer player, String sound, SoundCategory category, GameLocation location) {
-        sound(Set.of(player), sound, category, location);
-    }
-
-    public void sound(Collection<GamePlayer> players, String sound, SoundCategory category, GameLocation location) {
-        sound(players, sound, category, location, 1f, 1f, 0f);
-    }
-
-    public void sound(GamePlayer player, String sound, SoundCategory category, GameLocation location, float volume) {
-        sound(Set.of(player), sound, category, location, volume);
-    }
-
-    public void sound(Collection<GamePlayer> players, String sound, SoundCategory category, GameLocation location, float volume) {
-        sound(players, sound, category, location, volume, 1f, 0f);
-    }
-
-    public void sound(GamePlayer player, String sound, SoundCategory category, GameLocation location, float volume, float pitch) {
-        sound(Set.of(player), sound, category, location, volume, pitch);
-    }
-
-    public void sound(Collection<GamePlayer> players, String sound, SoundCategory category, GameLocation location, float volume, float pitch) {
-        sound(players, sound, category, location, volume, pitch, 0f);
-    }
-
-    public void sound(GamePlayer player, String sound, SoundCategory category, GameLocation location, float volume, float pitch, float minVolume) {
-        sound(Set.of(player), sound, category, location, volume, pitch, minVolume);
-    }
-
-    public void sound(Collection<GamePlayer> players, String sound, SoundCategory category, GameLocation location, float volume, float pitch, float minVolume) {
         for (Player player : resolvePlayers(players)) {
             playSound(player, sound, category, location, volume, pitch, minVolume);
         }
@@ -233,10 +140,6 @@ public class UiManager {
         return sidebars;
     }
 
-    public GameGlow glow(GameEntity entity, Collection<GamePlayer> viewers, NamedTextColor color) {
-        return newGlow(entity, viewers, color);
-    }
-
     public GameGlow newGlow(GameEntity entity, Collection<GamePlayer> viewers, NamedTextColor color) {
         if (entity == null || entity.bukkitEntity() == null) {
             return new GameGlow(() -> {});
@@ -248,26 +151,14 @@ public class UiManager {
         return glow;
     }
 
-    public GameGlow glow(GameEntity entity, GamePlayer viewer, NamedTextColor color) {
-        return newGlow(entity, viewer, color);
-    }
-
     public GameGlow newGlow(GameEntity entity, GamePlayer viewer, NamedTextColor color) {
         return newGlow(entity, Set.of(viewer), color);
-    }
-
-    public GameGlow glow(GameLocation location, org.bukkit.block.data.BlockData blockData, Collection<GamePlayer> viewers, NamedTextColor color) {
-        return newGlow(location, blockData, viewers, color);
     }
 
     public GameGlow newGlow(GameLocation location, org.bukkit.block.data.BlockData blockData, Collection<GamePlayer> viewers, NamedTextColor color) {
         GameGlow glow = glowService.glowBlock(module.world(), location, blockData, resolvePlayers(viewers), color);
         glows.add(glow);
         return glow;
-    }
-
-    public GameGlow glow(GameLocation location, org.bukkit.block.data.BlockData blockData, GamePlayer viewer, NamedTextColor color) {
-        return newGlow(location, blockData, viewer, color);
     }
 
     public GameGlow newGlow(GameLocation location, org.bukkit.block.data.BlockData blockData, GamePlayer viewer, NamedTextColor color) {
@@ -314,16 +205,18 @@ public class UiManager {
                 if (viewer.uuid().equals(subject.uuid())) continue;
                 Player subjectPlayer = subject.player();
                 if (subjectPlayer == null || !subjectPlayer.isOnline() || !viewerPlayer.getWorld().equals(subjectPlayer.getWorld())) continue;
-                if (forceTrackingReset) viewerPlayer.showPlayer(module.plugin(), subjectPlayer);
                 if (subject.isSpectator()) {
-                    viewerPlayer.showPlayer(module.plugin(), subjectPlayer);
                     glowService.clearEntityGlow(subjectPlayer, Set.of(viewerPlayer));
+                    viewerPlayer.showPlayer(module.plugin(), subjectPlayer);
+                    viewerPlayer.showEntity(module.plugin(), subjectPlayer);
+                    viewerPlayer.sendEquipmentChange(subjectPlayer, HIDDEN_EQUIPMENT);
                     continue;
                 }
                 viewerPlayer.showPlayer(module.plugin(), subjectPlayer);
+                viewerPlayer.showEntity(module.plugin(), subjectPlayer);
                 GameTeam viewerTeam = viewer.team();
                 GameTeam subjectTeam = subject.team();
-                if (viewerTeam != null && viewerTeam == subjectTeam && subjectTeam.teamGlow()) glowService.glowEntity(subjectPlayer, Set.of(viewerPlayer), subjectTeam.color());
+                if (viewerTeam != null && viewerTeam == subjectTeam && shouldGlowTeammate(subjectTeam)) glowService.glowEntityUsingTeamColor(subjectPlayer, Set.of(viewerPlayer));
                 else glowService.clearEntityGlow(subjectPlayer, Set.of(viewerPlayer));
             }
         }
@@ -333,7 +226,7 @@ public class UiManager {
         playerStateTrackingResetQueued = false;
         playerStateRefreshScheduled = false;
         for (GameSidebar sidebar : Set.copyOf(sidebars)) {
-            sidebar.delete();
+            sidebar.remove();
             sidebars.remove(sidebar);
         }
         for (GameGlow glow : Set.copyOf(glows)) {
@@ -356,6 +249,7 @@ public class UiManager {
                 if (subjectPlayer == null || !subjectPlayer.isOnline()) continue;
                 glowService.clearEntityGlow(subjectPlayer, Set.of(viewerPlayer));
                 viewerPlayer.showPlayer(module.plugin(), subjectPlayer);
+                viewerPlayer.showEntity(module.plugin(), subjectPlayer);
             }
         }
     }
@@ -382,17 +276,6 @@ public class UiManager {
         player.playSound(source, sound, category, volume, pitch);
     }
 
-    private void playSound(Player player, String sound, SoundCategory category, GameLocation location, float volume, float pitch, float minVolume) {
-        Location source = resolveSoundLocation(player, location);
-        if (source == null) return;
-        if (!canHearSoundNormally(player, source, volume)) {
-            if (minVolume <= 0f) return;
-            player.playSound(player.getLocation(), sound, category, minVolume, pitch);
-            return;
-        }
-        player.playSound(source, sound, category, volume, pitch);
-    }
-
     private Location resolveSoundLocation(Player player, GameLocation location) {
         if (location == null) return player.getLocation();
         if (module.world() == null) return null;
@@ -403,5 +286,9 @@ public class UiManager {
         if (!player.getWorld().equals(source.getWorld())) return false;
         float audibleRadius = volume > 1f ? 16f * volume : 16f;
         return player.getLocation().distanceSquared(source) <= audibleRadius * audibleRadius;
+    }
+
+    private boolean shouldGlowTeammate(GameTeam team) {
+        return team.teamGlow();
     }
 }

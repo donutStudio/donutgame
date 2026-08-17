@@ -1,42 +1,22 @@
 package com.donutsforlife11.donutgame.api.data;
 
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.nio.charset.StandardCharsets;
-import java.util.Collection;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.loot.LootTable;
 
-import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 import com.donutsforlife11.donutgame.internal.item.GameItemService;
-
-import net.kyori.adventure.text.Component;
 
 public class GameData {
     private final GameModule module;
     private final GameItemService itemService;
-    private final Map<String, YamlConfiguration> configurations = new ConcurrentHashMap<>();
 
     public GameData(GameModule module, GameItemService itemService) {
         this.module = module;
         this.itemService = itemService;
-    }
-
-    public YamlConfiguration configuration(String name) {
-        return configurations.computeIfAbsent(name, key -> loadConfiguration(key + ".yml"));
-    }
-
-    public GameItemPool itemPool(List<String> pool) {
-        return new GameItemPool(itemService, pool);
     }
 
     public LootTable lootTable(String key) {
@@ -46,59 +26,19 @@ public class GameData {
         }
         LootTable lootTable = Bukkit.getLootTable(namespacedKey);
         if (lootTable == null) {
-            throw new IllegalArgumentException("Unknown loot table: " + namespacedKey);
+            lootTable = itemService.lootTable(module, namespacedKey);
         }
         return lootTable;
     }
 
-    public ItemStack item(String input) {
-        return itemService.parseItem(input);
-    }
-
-    public ItemStack randomPool(List<String> pool) {
-        return itemService.randomPool(pool);
-    }
-
-    public Collection<ItemStack> loot(String path) {
-        return loot(path, null);
-    }
-
-    public Collection<ItemStack> loot(String path, GamePlayer player) {
-        return itemService.loot(module, path, player);
-    }
-
-    public void give(GamePlayer player, Collection<ItemStack> items) {
-        itemService.give(player, items);
-    }
-
-    public void give(GamePlayer player, ItemStack... items) {
-        give(player, List.of(items));
-    }
-
-    public Component itemName(ItemStack item) {
-        return itemService.displayName(item);
-    }
-
-    public Reader reader(String path) {
-        InputStream stream = module.resource(path);
-        if (stream == null) {
-            throw new IllegalArgumentException("Missing module resource: " + path);
-        }
-        return new InputStreamReader(stream, StandardCharsets.UTF_8);
-    }
-
-    private YamlConfiguration loadConfiguration(String path) {
-        try (Reader reader = reader(path)) {
-            return YamlConfiguration.loadConfiguration(reader);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to load module configuration " + path, e);
-        }
+    public LootTable lootTable(List<ItemStack> items) {
+        return itemService.lootTable(items);
     }
 
     private String normalizeKey(String key) {
         if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("Loot table key cannot be blank.");
         }
-        return key.contains(":") ? key : "minecraft:" + key;
+        return key.contains(":") ? key : module.id() + ":" + key;
     }
 }

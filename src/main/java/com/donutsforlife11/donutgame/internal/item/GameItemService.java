@@ -1,17 +1,19 @@
 package com.donutsforlife11.donutgame.internal.item;
 
 import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
@@ -22,8 +24,10 @@ import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.Damageable;
@@ -33,12 +37,11 @@ import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.potion.PotionType;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.loot.LootContext;
 import org.bukkit.loot.LootTable;
+import org.bukkit.potion.PotionType;
 
-import com.donutsforlife11.donutgame.api.map.GameLocation;
+import com.donutsforlife11.donutgame.api.data.GameItems;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
@@ -64,50 +67,41 @@ public class GameItemService {
     private final NamespacedKey infiniteBlocksKey = new NamespacedKey("donutgame", "infinite_blocks");
     private final NamespacedKey autoIgniteKey = new NamespacedKey("donutgame", "auto_ignite");
     private final NamespacedKey autoIgniteNamedKey = new NamespacedKey("donutgame", "auto_ignite_named");
-    private final Map<String, YamlConfiguration> lootTables = new HashMap<>();
 
     public ItemStack parseItem(String input) {
-        ParsedItem parsedItem = normalizeInput(input);
-        ItemStack item = Bukkit.getItemFactory().createItemStack(parsedItem.definition());
-        applyInlineCustomData(item, parsedItem.definition());
-        if (parsedItem.amount() > 0) {
-            item.setAmount(parsedItem.amount());
-        }
+        ItemStack item = GameItems.item(input);
         applyDefaults(item);
         return item;
     }
 
-    public ItemStack randomPool(List<String> pool) {
-        return parseItem(pool.get(ThreadLocalRandom.current().nextInt(pool.size())));
-    }
-
-    public Collection<ItemStack> loot(GameModule module, String path, GamePlayer player) {
-        return loot(module, path, player == null ? null : player.location());
-    }
-
-    public Collection<ItemStack> loot(GameModule module, String path, GameLocation location) {
-        String key = namespacedLootKey(module, path);
-        LootTable lootTable = Bukkit.getLootTable(NamespacedKey.fromString(key));
-        if (lootTable != null && location != null) {
-            return lootTable.populateLoot(ThreadLocalRandom.current(), new LootContext.Builder(location.toBukkit(module.world().bukkitWorld())).build());
+    public LootTable lootTable(List<ItemStack> items) {
+        if (items == null) {
+            throw new IllegalArgumentException("Loot table items cannot be null.");
         }
-        return legacyLoot(module, path);
+        List<ItemStack> normalizedItems = new ArrayList<>(items.size());
+        for (ItemStack item : items) {
+            if (item == null || item.getType() == Material.AIR) {
+                continue;
+            }
+            ItemStack clone = item.clone();
+            applyDefaults(clone);
+            normalizedItems.add(clone);
+        }
+        return new ItemPoolLootTable(normalizedItems);
     }
 
-    private Collection<ItemStack> legacyLoot(GameModule module, String path) {
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        YamlConfiguration lootTable = lootTables.computeIfAbsent(module.id() + ":" + path, ignored -> loadLootTable(module, path));
-        List<Map<?, ?>> pools = lootTable.getMapList("pools");
+    public LootTable lootTable(GameModule module, NamespacedKey key) {
+        YamlConfiguration lootTable = loadLootTable(module, key);
+        return new ConfigLootTable(key, lootTable);
+    }
+
+    private Collection<ItemStack> populateLoot(YamlConfiguration lootTable, Random random) {
         List<ItemStack> items = new ArrayList<>();
-        for (Map<?, ?> pool : pools) {
+        for (Map<?, ?> pool : lootTable.getMapList("pools")) {
             int rolls = value(pool.get("rolls"), random);
             List<Map<?, ?>> entries = mapList(pool.get("entries"));
             for (int i = 0; i < rolls; i++) {
-                Map<?, ?> entry = weighted(entries, random);
-                if (entry == null) {
-                    continue;
-                }
-                ItemStack item = createLootItem(entry, random);
+                ItemStack item = createLootItem(weighted(entries, random), random);
                 if (item != null) {
                     applyDefaults(item);
                     items.add(item);
@@ -117,19 +111,12 @@ public class GameItemService {
         return items;
     }
 
-    private String namespacedLootKey(GameModule module, String path) {
-        if (path == null || path.isBlank()) throw new IllegalArgumentException("Loot table path cannot be blank.");
-        return path.contains(":") ? path : module.id() + ":" + path;
-    }
-
     public void give(GamePlayer player, Collection<ItemStack> items) {
         Player bukkitPlayer = player.player();
         if (bukkitPlayer == null || items.isEmpty()) return;
         List<ItemStack> normalizedItems = new ArrayList<>(items.size());
         for (ItemStack item : items) normalizedItems.add(normalizeForInventory(player, item.clone()));
-        Map<Integer, ItemStack> leftovers = player.isSpectator()
-            ? player.addToStoredInventory(normalizedItems)
-            : bukkitPlayer.getInventory().addItem(normalizedItems.toArray(ItemStack[]::new));
+        Map<Integer, ItemStack> leftovers = player.addToStoredInventory(normalizedItems);
         for (ItemStack leftover : leftovers.values()) bukkitPlayer.getWorld().dropItemNaturally(bukkitPlayer.getLocation(), leftover);
     }
 
@@ -186,27 +173,31 @@ public class GameItemService {
     }
 
     public Component displayName(ItemStack item) {
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null && meta.hasItemName()) {
-            return meta.itemName();
-        }
-        return Bukkit.getItemFactory().displayName(item);
+        return GameItems.displayName(item);
     }
 
     public Material mappedDyeMaterial(NamedTextColor color) {
         return Material.getMaterial(mappedDyeColor(color).name() + "_DYE");
     }
 
-    private YamlConfiguration loadLootTable(GameModule module, String path) {
-        try (Reader reader = module.data().reader("data/loot_table/" + path + ".json")) {
+    private YamlConfiguration loadLootTable(GameModule module, NamespacedKey key) {
+        String path = "data/" + key.namespace() + "/loot_table/" + key.value() + ".json";
+        InputStream stream = module.resource(path);
+        if (stream == null) {
+            throw new IllegalArgumentException("Unknown loot table: " + key + " (missing " + path + ")");
+        }
+        try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
             String text = new BufferedReader(reader).lines().reduce("", (left, right) -> left + right + "\n");
             return YamlConfiguration.loadConfiguration(new java.io.StringReader(text));
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to load loot table " + path + " for module " + module.id(), e);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("Unknown loot table: " + key, exception);
         }
     }
 
-    private ItemStack createLootItem(Map<?, ?> entry, ThreadLocalRandom random) {
+    private ItemStack createLootItem(Map<?, ?> entry, Random random) {
+        if (entry == null) {
+            return null;
+        }
         String type = string(entry.get("type"));
         if ("minecraft:empty".equals(type)) {
             return null;
@@ -229,7 +220,7 @@ public class GameItemService {
         return item;
     }
 
-    private void applyFunction(ItemStack item, Map<?, ?> function, ThreadLocalRandom random) {
+    private void applyFunction(ItemStack item, Map<?, ?> function, Random random) {
         String name = string(function.get("function"));
         if (name == null) {
             return;
@@ -237,7 +228,7 @@ public class GameItemService {
         switch (name) {
             case "minecraft:set_count" -> item.setAmount(value(function.get("count"), random));
             case "minecraft:set_damage" -> item.editMeta(Damageable.class, meta -> meta.setDamage(value(function.get("damage"), random)));
-            case "minecraft:set_potion" -> item.editMeta(PotionMeta.class, meta -> meta.setBasePotionType(PotionType.valueOf(string(function.get("id")).toUpperCase(Locale.ROOT))));
+            case "minecraft:set_potion" -> item.editMeta(PotionMeta.class, meta -> meta.setBasePotionType(potionType(function.get("id"))));
             case "minecraft:set_components" -> applyComponents(item, asMap(function.get("components")));
             case "minecraft:set_enchantments" -> item.setItemMeta(withEnchantments(item.getItemMeta(), asMap(function.get("enchantments")), random));
             case "minecraft:enchant_with_levels" -> applyEnchantWithLevels(item, function, random);
@@ -247,36 +238,57 @@ public class GameItemService {
     }
 
     private void applyComponents(ItemStack item, Map<?, ?> components) {
-        if (components.isEmpty()) {
-            return;
+        Object customData = component(components, "minecraft:custom_data", "custom_data");
+        if (customData instanceof Map<?, ?> dataMap) {
+            item.editMeta(meta -> applyCustomData(meta.getPersistentDataContainer(), dataMap));
         }
-        item.editMeta(meta -> {
-            Object maxStackSize = components.get("minecraft:max_stack_size");
-            if (maxStackSize instanceof Number number) {
-                meta.setMaxStackSize(number.intValue());
-            }
-            Object customData = components.get("minecraft:custom_data");
-            if (customData instanceof Map<?, ?> customDataMap) {
-                PersistentDataContainer data = meta.getPersistentDataContainer();
-                for (Map.Entry<?, ?> entry : customDataMap.entrySet()) {
-                    NamespacedKey key = NamespacedKey.fromString(String.valueOf(entry.getKey()));
-                    Object value = entry.getValue();
-                    if (key == null || value == null) {
-                        continue;
-                    }
-                    if (value instanceof Boolean bool) {
-                        setBoolean(data, key, bool);
-                        continue;
-                    }
-                    if (value instanceof Number number) {
-                        data.set(key, PersistentDataType.INTEGER, number.intValue());
-                    }
-                }
-            }
-        });
+        Object potionContents = component(components, "minecraft:potion_contents", "potion_contents");
+        Object potion = potionContents instanceof Map<?, ?> potionMap
+            ? component(potionMap, "minecraft:potion", "potion")
+            : potionContents;
+        if (potion != null) {
+            item.editMeta(PotionMeta.class, meta -> meta.setBasePotionType(potionType(potion)));
+        }
     }
 
-    private ItemMeta withEnchantments(ItemMeta meta, Map<?, ?> enchantments, ThreadLocalRandom random) {
+    private void applyCustomData(PersistentDataContainer data, Map<?, ?> dataMap) {
+        for (Map.Entry<?, ?> entry : dataMap.entrySet()) {
+            NamespacedKey key = NamespacedKey.fromString(String.valueOf(entry.getKey()));
+            if (key == null) {
+                continue;
+            }
+            Object value = entry.getValue();
+            if (value instanceof Boolean bool) {
+                data.set(key, PersistentDataType.BYTE, bool ? (byte) 1 : (byte) 0);
+            } else if (value instanceof Number number) {
+                data.set(key, PersistentDataType.INTEGER, number.intValue());
+            } else if (value instanceof String string) {
+                data.set(key, PersistentDataType.STRING, string);
+            }
+        }
+    }
+
+    private PotionType potionType(Object value) {
+        String raw = string(value);
+        if (raw == null || raw.isBlank()) {
+            throw new IllegalArgumentException("Potion type cannot be blank.");
+        }
+        NamespacedKey key = namespacedKey(raw);
+        if (key != null) {
+            PotionType registered = Registry.POTION.get(key);
+            if (registered != null) {
+                return registered;
+            }
+        }
+        String enumName = stripNamespace(raw).replace('-', '_').toUpperCase(Locale.ROOT);
+        try {
+            return PotionType.valueOf(enumName);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Unknown potion type " + raw + " (normalized as " + enumName + ").", exception);
+        }
+    }
+
+    private ItemMeta withEnchantments(ItemMeta meta, Map<?, ?> enchantments, Random random) {
         for (Map.Entry<?, ?> entry : enchantments.entrySet()) {
             Enchantment enchantment = RegistryAccess.registryAccess().getRegistry(RegistryKey.ENCHANTMENT)
                 .get(NamespacedKey.fromString(String.valueOf(entry.getKey())));
@@ -293,12 +305,12 @@ public class GameItemService {
         return meta;
     }
 
-    private void applyEnchantWithLevels(ItemStack item, Map<?, ?> function, ThreadLocalRandom random) {
+    private void applyEnchantWithLevels(ItemStack item, Map<?, ?> function, Random random) {
         int levels = Math.max(1, Math.min(30, value(function.get("levels"), random)));
         List<?> options = list(function.get("options"));
         if (options.isEmpty()) {
             ItemStack enchanted = item.enchantWithLevels(levels, false, random);
-            item.setItemMeta(Objects.requireNonNull(enchanted.getItemMeta()));
+            item.setItemMeta(enchanted.getItemMeta());
             return;
         }
         Object selectedOption = options.get(random.nextInt(options.size()));
@@ -456,114 +468,6 @@ public class GameItemService {
         inventory.setItemInOffHand(item);
     }
 
-    private Map<?, ?> weighted(List<Map<?, ?>> entries, ThreadLocalRandom random) {
-        int totalWeight = 0;
-        for (Map<?, ?> entry : entries) {
-            totalWeight += Math.max(1, number(entry.get("weight"), 1));
-        }
-        if (totalWeight <= 0) {
-            return null;
-        }
-        int target = random.nextInt(totalWeight);
-        int currentWeight = 0;
-        for (Map<?, ?> entry : entries) {
-            currentWeight += Math.max(1, number(entry.get("weight"), 1));
-            if (target < currentWeight) {
-                return entry;
-            }
-        }
-        return null;
-    }
-
-    private int value(Object value, ThreadLocalRandom random) {
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        if (value instanceof Map<?, ?> map && "minecraft:uniform".equals(string(map.get("type")))) {
-            int min = number(map.get("min"), 1);
-            int max = number(map.get("max"), min);
-            return random.nextInt(min, max + 1);
-        }
-        return 1;
-    }
-
-    private int number(Object value, int fallback) {
-        return value instanceof Number number ? number.intValue() : fallback;
-    }
-
-    private ParsedItem normalizeInput(String input) {
-        String normalized = input.trim();
-        int amount = 1;
-        int lastSpace = normalized.lastIndexOf(' ');
-        if (lastSpace > 0) {
-            String trailing = normalized.substring(lastSpace + 1);
-            try {
-                amount = Integer.parseInt(trailing);
-                normalized = normalized.substring(0, lastSpace);
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        if (normalized.contains("custom_data={") && normalized.endsWith("]") && !normalized.contains("}]")) {
-            normalized = normalized.replace("]", "}]");
-        }
-        return new ParsedItem(normalized, amount);
-    }
-
-    private List<?> list(Object value) {
-        return value instanceof List<?> list ? list : Collections.emptyList();
-    }
-
-    private List<Map<?, ?>> mapList(Object value) {
-        if (!(value instanceof List<?> list)) {
-            return Collections.emptyList();
-        }
-        List<Map<?, ?>> maps = new ArrayList<>();
-        for (Object entry : list) {
-            if (entry instanceof Map<?, ?> map) {
-                maps.add(map);
-            }
-        }
-        return maps;
-    }
-
-    private Map<?, ?> asMap(Object value) {
-        return value instanceof Map<?, ?> map ? map : Collections.emptyMap();
-    }
-
-    private String string(Object value) {
-        return value == null ? null : String.valueOf(value);
-    }
-
-    private void applyInlineCustomData(ItemStack item, String definition) {
-        int start = definition.indexOf("custom_data={");
-        if (start < 0) {
-            return;
-        }
-        int dataStart = start + "custom_data={".length();
-        int depth = 1;
-        int end = -1;
-        for (int i = dataStart; i < definition.length(); i++) {
-            char current = definition.charAt(i);
-            if (current == '{') {
-                depth++;
-            } else if (current == '}') {
-                depth--;
-                if (depth == 0) {
-                    end = i;
-                    break;
-                }
-            }
-        }
-        if (end < 0) {
-            return;
-        }
-        String customData = definition.substring(dataStart, end);
-        item.editMeta(meta -> {
-            PersistentDataContainer data = meta.getPersistentDataContainer();
-            applyCustomDataString(data, customData);
-        });
-    }
-
     private Integer lookupInteger(ItemStack item, NamespacedKey key) {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
@@ -691,20 +595,86 @@ public class GameItemService {
         return null;
     }
 
-    private void applyCustomDataString(PersistentDataContainer data, String customData) {
-        Matcher matcher = CUSTOM_DATA_ENTRY_PATTERN.matcher(customData);
-        while (matcher.find()) {
-            NamespacedKey key = NamespacedKey.fromString(matcher.group(1));
-            String rawValue = matcher.group(2);
-            if (key == null) {
-                continue;
-            }
-            if ("true".equalsIgnoreCase(rawValue) || "false".equalsIgnoreCase(rawValue)) {
-                setBoolean(data, key, Boolean.parseBoolean(rawValue));
-            } else {
-                data.set(key, PersistentDataType.INTEGER, Integer.parseInt(rawValue));
+    private Map<?, ?> weighted(List<Map<?, ?>> entries, Random random) {
+        int totalWeight = 0;
+        for (Map<?, ?> entry : entries) {
+            totalWeight += Math.max(1, number(entry.get("weight"), 1));
+        }
+        if (totalWeight <= 0) {
+            return null;
+        }
+        int target = random.nextInt(totalWeight);
+        int currentWeight = 0;
+        for (Map<?, ?> entry : entries) {
+            currentWeight += Math.max(1, number(entry.get("weight"), 1));
+            if (target < currentWeight) {
+                return entry;
             }
         }
+        return null;
+    }
+
+    private int value(Object value, Random random) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof Map<?, ?> map && "minecraft:uniform".equals(string(map.get("type")))) {
+            int min = number(map.get("min"), 1);
+            int max = number(map.get("max"), min);
+            return random.nextInt(min, max + 1);
+        }
+        return 1;
+    }
+
+    private int number(Object value, int fallback) {
+        return value instanceof Number number ? number.intValue() : fallback;
+    }
+
+    private List<?> list(Object value) {
+        return value instanceof List<?> list ? list : Collections.emptyList();
+    }
+
+    private List<Map<?, ?>> mapList(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return Collections.emptyList();
+        }
+        List<Map<?, ?>> maps = new ArrayList<>();
+        for (Object entry : list) {
+            if (entry instanceof Map<?, ?> map) {
+                maps.add(map);
+            }
+        }
+        return maps;
+    }
+
+    private Map<?, ?> asMap(Object value) {
+        return value instanceof Map<?, ?> map ? map : Collections.emptyMap();
+    }
+
+    private String string(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private Object component(Map<?, ?> map, String namespacedKey, String plainKey) {
+        if (map.containsKey(namespacedKey)) {
+            return map.get(namespacedKey);
+        }
+        return map.get(plainKey);
+    }
+
+    private NamespacedKey namespacedKey(String value) {
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        NamespacedKey key = NamespacedKey.fromString(normalized);
+        if (key != null) {
+            return key;
+        }
+        return NamespacedKey.minecraft(stripNamespace(normalized));
+    }
+
+    private String stripNamespace(String value) {
+        String normalized = value.trim();
+        int separator = normalized.indexOf(':');
+        return separator < 0 ? normalized : normalized.substring(separator + 1);
     }
 
     private void setBoolean(PersistentDataContainer data, NamespacedKey key, boolean value) {
@@ -787,6 +757,31 @@ public class GameItemService {
             .collect(java.util.stream.Collectors.joining(" "));
     }
 
-    private record ParsedItem(String definition, int amount) {
+    private class ConfigLootTable implements LootTable {
+        private final NamespacedKey key;
+        private final YamlConfiguration config;
+
+        private ConfigLootTable(NamespacedKey key, YamlConfiguration config) {
+            this.key = key;
+            this.config = config;
+        }
+
+        @Override
+        public Collection<ItemStack> populateLoot(Random random, LootContext context) {
+            return GameItemService.this.populateLoot(config, random == null ? ThreadLocalRandom.current() : random);
+        }
+
+        @Override
+        public void fillInventory(Inventory inventory, Random random, LootContext context) {
+            for (ItemStack item : populateLoot(random, context)) {
+                inventory.addItem(item);
+            }
+        }
+
+        @Override
+        public NamespacedKey getKey() {
+            return key;
+        }
     }
+
 }

@@ -23,6 +23,7 @@ public class GameWorld {
     private final Map<String, List<GameLocation>> points = new LinkedHashMap<>();
     private final Map<String, List<GameRegion>> regions = new LinkedHashMap<>();
     private volatile World bukkitWorld;
+    private boolean hungerEnabled = true;
 
     public GameWorld(String name, World bukkitWorld, WorldService worldService) {
         this.name = name;
@@ -36,10 +37,6 @@ public class GameWorld {
 
     public String name() {
         return name;
-    }
-
-    public GameLocation spawnLocation() {
-        return worldSpawn();
     }
 
     public void setWorldSpawn(GameLocation location) {
@@ -57,6 +54,14 @@ public class GameWorld {
 
     public void setFallDamage(boolean enabled) {
         bukkitWorld.setGameRule(GameRules.FALL_DAMAGE, enabled);
+    }
+
+    public void setHungerEnabled(boolean enabled) {
+        hungerEnabled = enabled;
+    }
+
+    public boolean hungerEnabled() {
+        return hungerEnabled;
     }
 
     public void addPoint(GameLocation location, String pointName) {
@@ -83,11 +88,7 @@ public class GameWorld {
 
     public List<GameLocation> getPoints(String pointName) {
         List<GameLocation> matches = points.get(pointName);
-        return matches == null ? List.of() : List.copyOf(matches);
-    }
-
-    public GameLocation point(String pointName) {
-        return getPoint(pointName);
+        return matches == null ? new ArrayList<>() : new ArrayList<>(matches);
     }
 
     public GameLocation getPoint(String pointName) {
@@ -105,11 +106,7 @@ public class GameWorld {
 
     public List<GameRegion> getRegions(String regionName) {
         List<GameRegion> matches = regions.get(regionName);
-        return matches == null ? List.of() : List.copyOf(matches);
-    }
-
-    public GameRegion region(String regionName) {
-        return getRegion(regionName);
+        return matches == null ? new ArrayList<>() : new ArrayList<>(matches);
     }
 
     public GameRegion getRegion(String regionName) {
@@ -189,10 +186,6 @@ public class GameWorld {
         return summon(entityType, new GameLocation(x, y, z));
     }
 
-    public GameChest placeChest(GameLocation location) {
-        return newChest(location);
-    }
-
     public GameChest newChest(GameLocation location) {
         setBlock(location, Material.CHEST);
         return new GameChest(this, location);
@@ -217,14 +210,14 @@ public class GameWorld {
 
     public Map<String, List<GameLocation>> copyPoints() {
         Map<String, List<GameLocation>> copy = new LinkedHashMap<>();
-        points.forEach((name, entries) -> copy.put(name, List.copyOf(entries)));
-        return Map.copyOf(copy);
+        points.forEach((name, entries) -> copy.put(name, new ArrayList<>(entries)));
+        return copy;
     }
 
     public Map<String, List<GameRegion>> copyRegions() {
         Map<String, List<GameRegion>> copy = new LinkedHashMap<>();
-        regions.forEach((name, entries) -> copy.put(name, List.copyOf(entries)));
-        return Map.copyOf(copy);
+        regions.forEach((name, entries) -> copy.put(name, new ArrayList<>(entries)));
+        return copy;
     }
 
     private void requireRegion(GameRegion region) {

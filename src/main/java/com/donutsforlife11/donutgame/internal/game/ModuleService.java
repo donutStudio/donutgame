@@ -7,6 +7,8 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.Collection;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -37,6 +39,10 @@ public class ModuleService {
     }
 
     public CompletableFuture<GameModule> loadModule(GameModuleDescriptor descriptor, YamlConfiguration config) throws Exception {
+        return loadModule(descriptor, config, List.of());
+    }
+
+    public CompletableFuture<GameModule> loadModule(GameModuleDescriptor descriptor, YamlConfiguration config, Collection<Player> initialPlayers) throws Exception {
         int index = freeIndexes.isEmpty() ? nextIndex++ : freeIndexes.poll();
         GameModule module = descriptor.createModule();
         activeGames.put(index, module);
@@ -57,22 +63,37 @@ public class ModuleService {
             );
             module.borderManager().initialize();
             plugin.getLogger().info("Loading module " + descriptor.id() + " as active game " + index + ".");
-            return module.startLoadSequence()
+            return module.startLoadSequence(() -> playerManager.register(initialPlayers))
                 .thenApply(unused -> module)
-                .whenComplete((ignored, throwable) -> {
+                .<CompletableFuture<GameModule>>handle((loaded, throwable) -> {
                     if (throwable == null) {
                         plugin.getLogger().info("Module " + descriptor.id() + " loaded as active game " + index + ".");
-                        return;
+                        return CompletableFuture.completedFuture(loaded);
                     }
                     plugin.getLogger().log(Level.SEVERE, "Failed to load module " + descriptor.id() + " as active game " + index + ".", throwable);
-                    activeGames.remove(index, module);
-                    freeIndexes.offer(index);
-                });
+                    return cleanupFailedLoad(module, index).handle((ignored, cleanupThrowable) -> {
+                        if (cleanupThrowable != null) {
+                            plugin.getLogger().log(Level.SEVERE, "Failed to clean up module " + descriptor.id() + " after load failure.", cleanupThrowable);
+                        }
+                        throw new CompletionException(throwable);
+                    });
+                })
+                .thenCompose(future -> future);
         } catch (Exception e) {
             activeGames.remove(index);
             freeIndexes.offer(index);
             throw e;
         }
+    }
+
+    private CompletableFuture<Void> cleanupFailedLoad(GameModule module, int index) {
+        module.setTransitioning(true);
+        return module.shutdown().whenComplete((ignored, throwable) -> {
+            activeGames.remove(index, module);
+            if (!freeIndexes.contains(index)) {
+                freeIndexes.offer(index);
+            }
+        });
     }
 
     public CompletableFuture<Boolean> unloadModule(int index) {

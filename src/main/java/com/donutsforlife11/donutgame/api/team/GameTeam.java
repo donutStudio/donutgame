@@ -2,11 +2,13 @@ package com.donutsforlife11.donutgame.api.team;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
 
 import org.bukkit.Bukkit;
+import org.bukkit.damage.DamageType;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 
@@ -28,6 +30,7 @@ public class GameTeam {
     private Component displayName;
     private boolean defaultDisplayName = true;
     private boolean friendlyFire;
+    private Set<DamageType> friendlyFireDamageTypes = new LinkedHashSet<>(Set.of(DamageType.EXPLOSION, DamageType.PLAYER_EXPLOSION));
     private boolean seeFriendlyInvisibles = true;
     private Team.OptionStatus nametagVisibility = Team.OptionStatus.ALWAYS;
     private Team.OptionStatus collisionRule = Team.OptionStatus.FOR_OWN_TEAM;
@@ -95,6 +98,32 @@ public class GameTeam {
         }
         return Collections.unmodifiableSet(players);
     }
+    public Collection<GamePlayer> getSpectatorMembers() {
+        Set<GamePlayer> players = new HashSet<>();
+        for (GamePlayer player : getMembers()) {
+            if (player.isSpectator()) {
+                players.add(player);
+            }
+        }
+        return players;
+    }
+    public Collection<GamePlayer> getNonSpectatorMembers() {
+        Set<GamePlayer> players = new HashSet<>();
+        for (GamePlayer player : getMembers()) {
+            if (!player.isSpectator()) {
+                players.add(player);
+            }
+        }
+        return players;
+    }
+    public boolean allMembersSpectators() {
+        for (GamePlayer player : getMembers()) {
+            if (!player.isSpectator()) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     void applyProperties() {
         if (removed) {
@@ -103,7 +132,7 @@ public class GameTeam {
         bukkitTeam.color(color);
         bukkitTeam.prefix(prefix);
         bukkitTeam.suffix(suffix);
-        bukkitTeam.setAllowFriendlyFire(friendlyFire);
+        bukkitTeam.setAllowFriendlyFire(true);
         bukkitTeam.setCanSeeFriendlyInvisibles(seeFriendlyInvisibles);
         bukkitTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, nametagVisibility);
         bukkitTeam.setOption(Team.Option.COLLISION_RULE, collisionRule);
@@ -168,6 +197,33 @@ public class GameTeam {
         return this;
     }
 
+    public GameTeam setFriendlyFireDamageTypes(Collection<DamageType> damageTypes) {
+        this.friendlyFireDamageTypes = new LinkedHashSet<>();
+        if (damageTypes != null) {
+            for (DamageType damageType : damageTypes) {
+                if (damageType != null) friendlyFireDamageTypes.add(damageType);
+            }
+        }
+        return this;
+    }
+
+    public GameTeam allowFriendlyFireDamageTypes(DamageType... damageTypes) {
+        if (damageTypes != null) {
+            Collections.addAll(friendlyFireDamageTypes, damageTypes);
+            friendlyFireDamageTypes.remove(null);
+        }
+        return this;
+    }
+
+    public GameTeam denyFriendlyFireDamageTypes(DamageType... damageTypes) {
+        if (damageTypes != null) {
+            for (DamageType damageType : damageTypes) {
+                friendlyFireDamageTypes.remove(damageType);
+            }
+        }
+        return this;
+    }
+
     public GameTeam setSeeFriendlyInvisibles(boolean seeFriendlyInvisibles) {
         this.seeFriendlyInvisibles = seeFriendlyInvisibles;
         applyProperties();
@@ -203,7 +259,15 @@ public class GameTeam {
     }
 
     public boolean friendlyFire() {
-        return bukkitTeam.allowFriendlyFire();
+        return friendlyFire;
+    }
+
+    public Set<DamageType> friendlyFireDamageTypes() {
+        return Collections.unmodifiableSet(friendlyFireDamageTypes);
+    }
+
+    public boolean allowsFriendlyFireDamage(DamageType damageType) {
+        return friendlyFire || friendlyFireDamageTypes.contains(damageType);
     }
 
     public boolean seeFriendlyInvisibles() {
@@ -229,4 +293,5 @@ public class GameTeam {
     private Component defaultDisplayName() {
         return Component.text("Team " + (defaultIndex + 1), color);
     }
+
 }

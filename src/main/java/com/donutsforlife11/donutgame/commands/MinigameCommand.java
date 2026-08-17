@@ -133,13 +133,12 @@ public class MinigameCommand implements PluginCommand {
         }
 
         try {
-            moduleService.loadModule(descriptor, mergedConfig(descriptor, configOverrideText))
+            moduleService.loadModule(descriptor, mergedConfig(descriptor, configOverrideText), players)
                 .thenAccept(module -> {
-                    int registered = module.playerManager().register(players);
                     sendSuccess(
                         sender,
                         "Loaded " + descriptor.id() + " as active game " + module.index()
-                            + (players.isEmpty() ? "." : " and queued " + registered + " player(s).")
+                            + (players.isEmpty() ? "." : " with " + module.playerManager().getPlayers().size() + " player(s).")
                     );
                 })
                 .exceptionally(error -> {

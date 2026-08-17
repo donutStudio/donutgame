@@ -2,6 +2,7 @@ package com.donutsforlife11.donutgame.api.team;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -48,6 +49,24 @@ public class TeamManager {
 
     public Collection<GameTeam> getTeams() {
         return Collections.unmodifiableSet(teams);
+    }
+    public Collection<GameTeam> getSpectatorTeams() {
+        Set<GameTeam> spectatorTeams = new HashSet<>();
+        for (GameTeam team : teams) {
+            if (team.allMembersSpectators()) {
+                spectatorTeams.add(team);
+            }
+        }
+        return spectatorTeams;
+    }
+    public Collection<GameTeam> getNonSpectatorTeams() {
+        Set<GameTeam> nonSpectatorTeams = new HashSet<>();
+        for (GameTeam team : teams) {
+            if (!team.allMembersSpectators()) {
+                nonSpectatorTeams.add(team);
+            }
+        }
+        return nonSpectatorTeams;
     }
 
     public GameTeam getPlayerTeam(GamePlayer player) {

@@ -32,7 +32,7 @@ public class GameBorder {
         this.dimensions = dimensions;
     }
 
-    void remove() {
+    public void remove() {
         if (centerTimer != null) {
             centerTimer.cancel();
             centerTimer = null;

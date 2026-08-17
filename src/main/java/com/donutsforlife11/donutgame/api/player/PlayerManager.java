@@ -155,6 +155,22 @@ public class PlayerManager {
         }
     }
 
+    public void activatePostStartPlayers() {
+        activatePendingPlayers();
+        for (GamePlayer player : players) {
+            if (player.player() != null) {
+                player.syncSpectatorState();
+            }
+        }
+    }
+
+    public void handlePlayerJoin(Player player) {
+        GamePlayer gamePlayer = getPlayer(player);
+        if (gamePlayer != null && gamePlayer.isSpectator()) {
+            module.plugin().getServer().getScheduler().runTask(module.plugin(), gamePlayer::syncSpectatorState);
+        }
+    }
+
     public CompletableFuture<Void> evacuateForShutdown() {
         Location destination = shutdownDestination();
         List<CompletableFuture<Boolean>> teleports = new ArrayList<>();
@@ -243,6 +259,9 @@ public class PlayerManager {
             } catch (RuntimeException exception) {
                 module.logError("Registration hook failed for player " + player.getName() + ".", exception);
             }
+        }
+        if (module.hasStarted()) {
+            gamePlayer.setSpectator(true, spawn);
         }
     }
 

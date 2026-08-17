@@ -35,6 +35,11 @@ public class GameTimer {
             }
             started = true;
         }
+        runTickActions();
+        if (maxTicks == 0) {
+            finishImmediately();
+            return this;
+        }
         timeManager.activate(this);
         return this;
     }
@@ -78,7 +83,14 @@ public class GameTimer {
     }
 
     public GameTimer onTick(int interval, Consumer<GameTimer> action) {
-        onTickActions.add(new TickAction(interval, action));
+        if (interval <= 0) {
+            throw new IllegalArgumentException("Tick interval must be greater than zero.");
+        }
+        TickAction tickAction = new TickAction(interval, action);
+        onTickActions.add(tickAction);
+        if (started && !finished && !cancelled && elapsedTicks % interval == 0) {
+            action.accept(this);
+        }
         return this;
     }
 
@@ -138,11 +150,7 @@ public class GameTimer {
             }
             if (!paused) {
                 elapsedTicks++;
-                for (TickAction action : onTickActions) {
-                    if (elapsedTicks % action.interval() == 0) {
-                        action.action().accept(this);
-                    }
-                }
+                runTickActions();
             }
             if (maxTicks >= 0 && elapsedTicks >= maxTicks) {
                 finished = true;
@@ -158,12 +166,34 @@ public class GameTimer {
         }
     }
 
+    private void finishImmediately() {
+        synchronized (stateLock) {
+            if (finished || cancelled) {
+                return;
+            }
+            finished = true;
+            paused = true;
+        }
+        timeManager.deactivate(this);
+        for (Consumer<GameTimer> action : onFinishActions) {
+            action.accept(this);
+        }
+    }
+
     private void setPaused(boolean paused) {
         synchronized (stateLock) {
             if (finished || cancelled) {
                 return;
             }
             this.paused = paused;
+        }
+    }
+
+    private void runTickActions() {
+        for (TickAction action : onTickActions) {
+            if (elapsedTicks % action.interval() == 0) {
+                action.action().accept(this);
+            }
         }
     }
 
