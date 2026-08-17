@@ -24,14 +24,11 @@ public class TimeManager {
         if (time < 0) {
             throw new IllegalArgumentException("Timers cannot run for a negative amount of time!");
         }
-        GameTimer timer = new GameTimer(this).setMaxTicks(time);
-        timers.add(timer);
-        return timer;
+        return track(new GameTimer(this).setMaxTicks(time));
     }
+
     public GameTimer newTimer() {
-        GameTimer timer = new GameTimer(this);
-        timers.add(timer);
-        return timer;
+        return track(new GameTimer(this));
     }
 
     Set<GameTimer> timers() {
@@ -73,5 +70,10 @@ public class TimeManager {
             timer.tick();
         }
         stopTickerTaskIfIdle();
+    }
+
+    private GameTimer track(GameTimer timer) {
+        timers.add(timer);
+        return timer;
     }
 }

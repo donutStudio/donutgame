@@ -2,10 +2,10 @@ package com.donutsforlife11.donutgame.api.team;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 import org.bukkit.Bukkit;
 import org.bukkit.damage.DamageType;
@@ -89,35 +89,19 @@ public class GameTeam {
     }
 
     public Collection<GamePlayer> getMembers() {
-        Set<GamePlayer> players = new LinkedHashSet<>();
-        for (UUID uuid : members) {
-            GamePlayer player = teamManager.playerManager().getPlayer(uuid);
-            if (player != null) {
-                players.add(player);
-            }
-        }
-        return Collections.unmodifiableSet(players);
+        return filteredMembers(player -> true);
     }
+
     public Collection<GamePlayer> getSpectatorMembers() {
-        Set<GamePlayer> players = new HashSet<>();
-        for (GamePlayer player : getMembers()) {
-            if (player.isSpectator()) {
-                players.add(player);
-            }
-        }
-        return players;
+        return filteredMembers(player -> player.isSpectator());
     }
+
     public Collection<GamePlayer> getNonSpectatorMembers() {
-        Set<GamePlayer> players = new HashSet<>();
-        for (GamePlayer player : getMembers()) {
-            if (!player.isSpectator()) {
-                players.add(player);
-            }
-        }
-        return players;
+        return filteredMembers(player -> !player.isSpectator());
     }
+
     public boolean allMembersSpectators() {
-        for (GamePlayer player : getMembers()) {
+        for (GamePlayer player : onlineMembers()) {
             if (!player.isSpectator()) {
                 return false;
             }
@@ -283,7 +267,7 @@ public class GameTeam {
     }
 
     private void syncOnlineMembers() {
-        for (GamePlayer player : getMembers()) {
+        for (GamePlayer player : onlineMembers()) {
             if (player.player() == null) continue;
             player.player().setScoreboard(bukkitTeam.getScoreboard());
             bukkitTeam.addEntry(player.player().getName());
@@ -292,6 +276,23 @@ public class GameTeam {
 
     private Component defaultDisplayName() {
         return Component.text("Team " + (defaultIndex + 1), color);
+    }
+
+    private Collection<GamePlayer> filteredMembers(Predicate<GamePlayer> filter) {
+        Set<GamePlayer> players = new LinkedHashSet<>();
+        for (GamePlayer player : onlineMembers()) {
+            if (filter.test(player)) players.add(player);
+        }
+        return Collections.unmodifiableSet(players);
+    }
+
+    private Collection<GamePlayer> onlineMembers() {
+        Set<GamePlayer> players = new LinkedHashSet<>();
+        for (UUID uuid : members) {
+            GamePlayer player = teamManager.playerManager().getPlayer(uuid);
+            if (player != null) players.add(player);
+        }
+        return players;
     }
 
 }

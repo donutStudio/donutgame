@@ -20,6 +20,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
 import com.donutsforlife11.donutgame.api.map.GameLocation;
+import com.donutsforlife11.donutgame.api.team.GameTeam;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
 public class PlayerManager {
@@ -30,9 +31,9 @@ public class PlayerManager {
     private final Map<UUID, GamePlayer> playersById = new LinkedHashMap<>();
     private final Set<UUID> pendingPlayers = new LinkedHashSet<>();
     private final Set<GamePlayer> spectatablePlayers = new LinkedHashSet<>();
-    private final Set<com.donutsforlife11.donutgame.api.team.GameTeam> spectatableTeams = new LinkedHashSet<>();
+    private final Set<GameTeam> spectatableTeams = new LinkedHashSet<>();
     private final Map<UUID, Set<GamePlayer>> spectatablePlayersByViewer = new LinkedHashMap<>();
-    private final Map<UUID, Set<com.donutsforlife11.donutgame.api.team.GameTeam>> spectatableTeamsByViewer = new LinkedHashMap<>();
+    private final Map<UUID, Set<GameTeam>> spectatableTeamsByViewer = new LinkedHashMap<>();
 
     public PlayerManager(GameModule module) {
         this.module = module;
@@ -86,10 +87,10 @@ public class PlayerManager {
         for (GamePlayer player : players) if (isRegistered(player)) spectatablePlayers.add(player);
     }
 
-    public void setSpectatableTeams(Collection<com.donutsforlife11.donutgame.api.team.GameTeam> teams) {
+    public void setSpectatableTeams(Collection<GameTeam> teams) {
         spectatableTeams.clear();
         if (teams == null) return;
-        for (com.donutsforlife11.donutgame.api.team.GameTeam team : teams) {
+        for (GameTeam team : teams) {
             if (team != null && module.teamManager().getTeams().contains(team)) spectatableTeams.add(team);
         }
     }
@@ -98,7 +99,7 @@ public class PlayerManager {
         return Collections.unmodifiableSet(spectatablePlayers);
     }
 
-    public Collection<com.donutsforlife11.donutgame.api.team.GameTeam> spectatableTeams() {
+    public Collection<GameTeam> spectatableTeams() {
         return Collections.unmodifiableSet(spectatableTeams);
     }
 
@@ -205,13 +206,13 @@ public class PlayerManager {
         else spectatablePlayers.remove(player);
     }
 
-    public void setTeamSpectatable(com.donutsforlife11.donutgame.api.team.GameTeam team, boolean spectatable) {
+    public void setTeamSpectatable(GameTeam team, boolean spectatable) {
         if (team == null || !module.teamManager().getTeams().contains(team)) return;
         if (spectatable) spectatableTeams.add(team);
         else spectatableTeams.remove(team);
     }
 
-    public void removeSpectatableTeam(com.donutsforlife11.donutgame.api.team.GameTeam team) {
+    public void removeSpectatableTeam(GameTeam team) {
         spectatableTeams.remove(team);
         spectatableTeamsByViewer.values().forEach(targets -> targets.remove(team));
     }
@@ -224,12 +225,12 @@ public class PlayerManager {
         for (GamePlayer player : players) if (isRegistered(player)) targets.add(player);
     }
 
-    public void setSpectatableTeams(GamePlayer viewer, Collection<com.donutsforlife11.donutgame.api.team.GameTeam> teams) {
+    public void setSpectatableTeams(GamePlayer viewer, Collection<GameTeam> teams) {
         if (viewer == null || !isRegistered(viewer)) return;
-        Set<com.donutsforlife11.donutgame.api.team.GameTeam> targets = spectatableTeamsByViewer.computeIfAbsent(viewer.uuid(), ignored -> new LinkedHashSet<>());
+        Set<GameTeam> targets = spectatableTeamsByViewer.computeIfAbsent(viewer.uuid(), ignored -> new LinkedHashSet<>());
         targets.clear();
         if (teams == null) return;
-        for (com.donutsforlife11.donutgame.api.team.GameTeam team : teams) {
+        for (GameTeam team : teams) {
             if (team != null && module.teamManager().getTeams().contains(team)) targets.add(team);
         }
     }
@@ -240,9 +241,9 @@ public class PlayerManager {
         return targets == null ? spectatablePlayers() : Collections.unmodifiableSet(targets);
     }
 
-    public Collection<com.donutsforlife11.donutgame.api.team.GameTeam> spectatableTeams(GamePlayer viewer) {
+    public Collection<GameTeam> spectatableTeams(GamePlayer viewer) {
         if (viewer == null) return List.of();
-        Set<com.donutsforlife11.donutgame.api.team.GameTeam> targets = spectatableTeamsByViewer.get(viewer.uuid());
+        Set<GameTeam> targets = spectatableTeamsByViewer.get(viewer.uuid());
         return targets == null ? spectatableTeams() : Collections.unmodifiableSet(targets);
     }
 

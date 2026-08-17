@@ -51,7 +51,6 @@ public class GlowService {
         activeGlows.clear();
     }
 
-    @SuppressWarnings("deprecation")
     public void glowEntity(
         Entity entity,
         Collection<Player> viewers,
@@ -67,6 +66,7 @@ public class GlowService {
         applyGlow(entity, viewers, null, null);
     }
 
+    @SuppressWarnings("deprecation")
     private void applyGlow(
         Entity entity,
         Collection<Player> viewers,

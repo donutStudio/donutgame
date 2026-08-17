@@ -37,7 +37,7 @@ public class GameTimer {
         }
         runTickActions();
         if (maxTicks == 0) {
-            finishImmediately();
+            finish();
             return this;
         }
         timeManager.activate(this);
@@ -159,14 +159,11 @@ public class GameTimer {
             }
         }
         if (ended) {
-            timeManager.deactivate(this);
-            for (Consumer<GameTimer> action : onFinishActions) {
-                action.accept(this);
-            }
+            completeFinishActions();
         }
     }
 
-    private void finishImmediately() {
+    private void finish() {
         synchronized (stateLock) {
             if (finished || cancelled) {
                 return;
@@ -174,6 +171,10 @@ public class GameTimer {
             finished = true;
             paused = true;
         }
+        completeFinishActions();
+    }
+
+    private void completeFinishActions() {
         timeManager.deactivate(this);
         for (Consumer<GameTimer> action : onFinishActions) {
             action.accept(this);

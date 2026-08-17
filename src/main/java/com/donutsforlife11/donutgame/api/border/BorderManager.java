@@ -1,7 +1,8 @@
 package com.donutsforlife11.donutgame.api.border;
 
 import java.util.Collection;
-import java.util.HashSet;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 import org.bukkit.Particle;
@@ -27,7 +28,7 @@ public class BorderManager {
     private Particle defaultParticle = Particle.TRIAL_OMEN;
     private Particle movingParticle = Particle.RAID_OMEN;
 
-    private final Set<GameBorder> borders = new HashSet<>();
+    private final Set<GameBorder> borders = new LinkedHashSet<>();
 
     private double borderDamage = 2;
     private int borderDamageInterval = 20;
@@ -92,50 +93,14 @@ public class BorderManager {
             throw new IllegalArgumentException("Border damage interval must be greater than zero.");
         }
         this.borderDamageInterval = interval;
-        if (borderDamageTimer != null) {
-            borderDamageTimer.cancel();
-        }
+        if (borderDamageTimer != null) borderDamageTimer.cancel();
         borderDamageTimer = module.timeManager().newTimer()
-            .onTick(interval, ignored -> {
-                // No borders means there is currently no border restriction.
-                if (borders.isEmpty()) {
-                    return;
-                }
-                for (var player : module.playerManager().getNonSpectators()) {
-                    Player bukkitPlayer = player.player();
-                    if (bukkitPlayer == null) {
-                        continue;
-                    }
-                    boolean insideBorder = false;
-                    for (GameBorder border : borders) {
-                        if (border.containsLocation(player.location())) {
-                            insideBorder = true;
-                            break;
-                        }
-                    }
-                    if (insideBorder) {
-                        continue;
-                    }
-                    if (!canTakeBorderDamage(bukkitPlayer)) {
-                        continue;
-                    }
-                    module.uiManager().actionbar(
-                        player,
-                        Component.text(
-                            "You are outside the border!",
-                            NamedTextColor.RED
-                        )
-                    );
-                    bukkitPlayer.damage(
-                        borderDamage,
-                        DamageSource.builder(DamageType.OUTSIDE_BORDER).build()
-                    );
-                }
-            }).start();
+            .onTick(interval, ignored -> damagePlayersOutsideBorders())
+            .start();
     }
 
     public Collection<GameBorder> borders() {
-        return borders;
+        return Collections.unmodifiableSet(borders);
     }
 
     public void clear() {
@@ -176,6 +141,27 @@ public class BorderManager {
 
     GameModule module() {
         return module;
+    }
+
+    void remove(GameBorder border) {
+        borders.remove(border);
+    }
+
+    private void damagePlayersOutsideBorders() {
+        if (borders.isEmpty()) return;
+        for (var player : module.playerManager().getNonSpectators()) {
+            Player bukkitPlayer = player.player();
+            if (bukkitPlayer == null || insideAnyBorder(player.location()) || !canTakeBorderDamage(bukkitPlayer)) continue;
+            module.uiManager().actionbar(player, Component.text("You are outside the border!", NamedTextColor.RED));
+            bukkitPlayer.damage(borderDamage, DamageSource.builder(DamageType.OUTSIDE_BORDER).build());
+        }
+    }
+
+    private boolean insideAnyBorder(GameLocation location) {
+        for (GameBorder border : borders) {
+            if (border.containsLocation(location)) return true;
+        }
+        return false;
     }
 
     private boolean canTakeBorderDamage(Player player) {

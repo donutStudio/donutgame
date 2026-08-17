@@ -273,9 +273,7 @@ public class GamePlayerEvents implements Listener {
     private void damageThrowable(Projectile projectile, Entity shooter, LivingEntity target, Damageable damageable) {
         DamageSource.Builder source = DamageSource.builder(DamageType.THROWN).withDirectEntity(projectile);
         if (shooter != null) source.withCausingEntity(shooter);
-        target.setNoDamageTicks(0);
         damageable.damage(projectile instanceof Egg ? 0.01 : 0.5, source.build());
-        target.setNoDamageTicks(0);
     }
 
     private void applyThrowableKnockback(Projectile projectile, LivingEntity target) {

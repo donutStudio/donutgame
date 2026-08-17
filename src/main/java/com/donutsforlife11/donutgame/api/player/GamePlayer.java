@@ -20,7 +20,6 @@ import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.persistence.PersistentDataType;
@@ -247,19 +246,17 @@ public class GamePlayer extends GameEntity {
 
     public Map<Integer, ItemStack> addToStoredInventory(Collection<ItemStack> items) {
         if (items == null || items.isEmpty()) return Map.of();
-        captureLiveState();
-        Inventory temporaryInventory = Bukkit.createInventory(null, 36);
-        temporaryInventory.setStorageContents(cloneContents(state.inventory));
-        Map<Integer, ItemStack> leftovers = temporaryInventory.addItem(items.stream()
-            .filter(item -> item != null && item.getType() != Material.AIR)
-            .map(item -> item.clone())
-            .toArray(ItemStack[]::new));
-        state.inventory = cloneContents(temporaryInventory.getStorageContents());
+        captureLiveStateIfActive();
+        Map<Integer, ItemStack> leftovers = state.addItems(items);
         applyIfActive();
         return leftovers;
     }
 
     public void captureLiveState() {
+        captureLiveStateIfActive();
+    }
+
+    private void captureLiveStateIfActive() {
         Player player = player();
         if (player != null && !spectator) state.capture(player);
     }
@@ -269,6 +266,7 @@ public class GamePlayer extends GameEntity {
     }
 
     public void clearItems() {
+        captureLiveStateIfActive();
         state.inventory = new ItemStack[36];
         state.armor = new ItemStack[4];
         state.offhand = null;
@@ -277,6 +275,7 @@ public class GamePlayer extends GameEntity {
 
     public void clearItems(ItemStack item) {
         if (item == null) return;
+        captureLiveStateIfActive();
         state.inventory = clearMatchingItems(state.inventory, item);
         state.armor = clearMatchingItems(state.armor, item);
         if (state.offhand != null && state.offhand.isSimilar(item)) state.offhand = null;
@@ -285,6 +284,7 @@ public class GamePlayer extends GameEntity {
 
     public int itemCount(ItemStack item) {
         if (item == null) return 0;
+        captureLiveStateIfActive();
         int count = 0;
         for (ItemStack current : concat(state.inventory, state.armor, state.offhand)) {
             if (current != null && current.isSimilar(item)) count += current.getAmount();
@@ -293,11 +293,13 @@ public class GamePlayer extends GameEntity {
     }
 
     public void setGameMode(GameMode gameMode) {
+        captureLiveStateIfActive();
         state.gameMode = gameMode == null ? GameMode.SURVIVAL : gameMode;
         applyIfActive();
     }
 
     public GameMode gameMode() {
+        captureLiveStateIfActive();
         return state.gameMode;
     }
 
@@ -306,57 +308,70 @@ public class GamePlayer extends GameEntity {
     }
 
     public void setHunger(int hunger) {
+        captureLiveStateIfActive();
         state.foodLevel = hunger;
         applyIfActive();
     }
 
     public int hunger() {
+        captureLiveStateIfActive();
         return state.foodLevel;
     }
 
     public void setSaturation(float saturation) {
+        captureLiveStateIfActive();
         state.saturation = saturation;
         applyIfActive();
     }
 
     public float saturation() {
+        captureLiveStateIfActive();
         return state.saturation;
     }
 
     public void clearExperience() {
-        setLevel(0);
-        setExp(0);
-        setTotalExperience(0);
+        captureLiveStateIfActive();
+        state.level = 0;
+        state.exp = 0;
+        state.totalExperience = 0;
+        applyIfActive();
     }
 
     public void setLevel(int level) {
+        captureLiveStateIfActive();
         state.level = level;
         applyIfActive();
     }
 
     public void setExp(float progress) {
+        captureLiveStateIfActive();
         state.exp = progress;
         applyIfActive();
     }
 
     public void setTotalExperience(int xp) {
+        captureLiveStateIfActive();
         state.totalExperience = xp;
         applyIfActive();
     }
 
     public int level() {
+        captureLiveStateIfActive();
         return state.level;
     }
 
     public float exp() {
+        captureLiveStateIfActive();
         return state.exp;
     }
 
     public int totalExperience() {
+        captureLiveStateIfActive();
         return state.totalExperience;
     }
 
     public void setArrowsInBody(int arrows) {
+        captureLiveStateIfActive();
         state.arrowsInBody = Math.max(0, arrows);
         if (spectator) {
             Player player = player();
@@ -367,6 +382,7 @@ public class GamePlayer extends GameEntity {
     }
 
     public int arrowsInBody() {
+        captureLiveStateIfActive();
         return state.arrowsInBody;
     }
 
@@ -386,6 +402,7 @@ public class GamePlayer extends GameEntity {
 
     @Override
     public void setHealth(double health) {
+        captureLiveStateIfActive();
         state.health = Math.max(0, health);
         applyIfActive();
     }
@@ -403,12 +420,14 @@ public class GamePlayer extends GameEntity {
 
     @Override
     public void heal() {
+        captureLiveStateIfActive();
         state.health = maxHealth();
         applyIfActive();
     }
 
     @Override
     public void heal(double health) {
+        captureLiveStateIfActive();
         state.health = Math.min(state.health + Math.max(0, health), maxHealth());
         applyIfActive();
     }
@@ -439,6 +458,7 @@ public class GamePlayer extends GameEntity {
     @Override
     public void addEffect(PotionEffect effect) {
         if (effect == null) return;
+        captureLiveStateIfActive();
         state.effects.removeIf(current -> current.getType().equals(effect.getType()));
         state.effects.add(effect);
         applyIfActive();
@@ -478,16 +498,19 @@ public class GamePlayer extends GameEntity {
     }
 
     public void removeEffect(PotionEffectType effect) {
+        captureLiveStateIfActive();
         state.effects.removeIf(current -> current.getType().equals(effect));
         applyIfActive();
     }
 
     public Collection<PotionEffect> getEffects() {
+        captureLiveStateIfActive();
         return List.copyOf(state.effects);
     }
 
     @Override
     public void clearEffects() {
+        captureLiveStateIfActive();
         state.effects.clear();
         applyIfActive();
     }
@@ -504,6 +527,7 @@ public class GamePlayer extends GameEntity {
 
     @Override
     public void setAttributeBase(Attribute attribute, double value) {
+        captureLiveStateIfActive();
         state.attributes.computeIfAbsent(attribute, key -> new StoredAttribute(value, List.of())).base = value;
         applyIfActive();
     }
@@ -520,12 +544,14 @@ public class GamePlayer extends GameEntity {
 
     @Override
     public double getAttributeBase(Attribute attribute) {
+        captureLiveStateIfActive();
         StoredAttribute stored = state.attributes.get(attribute);
         return stored == null ? 0.0 : stored.base;
     }
 
     @Override
     public void resetAttribute(Attribute attribute) {
+        captureLiveStateIfActive();
         Player player = player();
         AttributeInstance instance = player == null ? null : player.getAttribute(attribute);
         double base = instance == null ? 0.0 : instance.getDefaultValue();
@@ -535,6 +561,7 @@ public class GamePlayer extends GameEntity {
 
     @Override
     public void resetAttributeBase(Attribute attribute) {
+        captureLiveStateIfActive();
         Player player = player();
         AttributeInstance instance = player == null ? null : player.getAttribute(attribute);
         double base = instance == null ? 0.0 : instance.getDefaultValue();
@@ -838,6 +865,49 @@ public class GamePlayer extends GameEntity {
             this.gameMode = gameMode;
             effects.clear();
             attributes.clear();
+        }
+
+        private Map<Integer, ItemStack> addItems(Collection<ItemStack> items) {
+            Map<Integer, ItemStack> leftovers = new LinkedHashMap<>();
+            int itemIndex = 0;
+            for (ItemStack item : items) {
+                if (item == null || item.getType() == Material.AIR) {
+                    itemIndex++;
+                    continue;
+                }
+                ItemStack remaining = item.clone();
+                remaining = stackIntoExistingSlots(remaining);
+                remaining = stackIntoEmptySlots(remaining);
+                if (remaining != null && remaining.getAmount() > 0) leftovers.put(itemIndex, remaining);
+                itemIndex++;
+            }
+            return leftovers;
+        }
+
+        private ItemStack stackIntoExistingSlots(ItemStack item) {
+            if (item == null) return null;
+            for (ItemStack current : inventory) {
+                if (current == null || !current.isSimilar(item)) continue;
+                int transfer = Math.min(item.getAmount(), current.getMaxStackSize() - current.getAmount());
+                if (transfer <= 0) continue;
+                current.setAmount(current.getAmount() + transfer);
+                item.setAmount(item.getAmount() - transfer);
+                if (item.getAmount() <= 0) return null;
+            }
+            return item;
+        }
+
+        private ItemStack stackIntoEmptySlots(ItemStack item) {
+            if (item == null) return null;
+            for (int slot = 0; slot < inventory.length; slot++) {
+                if (inventory[slot] != null) continue;
+                int transfer = Math.min(item.getAmount(), item.getMaxStackSize());
+                inventory[slot] = item.clone();
+                inventory[slot].setAmount(transfer);
+                item.setAmount(item.getAmount() - transfer);
+                if (item.getAmount() <= 0) return null;
+            }
+            return item;
         }
     }
 

@@ -33,15 +33,9 @@ public class GameBorder {
     }
 
     public void remove() {
-        if (centerTimer != null) {
-            centerTimer.cancel();
-            centerTimer = null;
-        }
-        if (dimensionsTimer != null) {
-            dimensionsTimer.cancel();
-            dimensionsTimer = null;
-        }
-        borderManager.borders().remove(this);
+        centerTimer = cancel(centerTimer);
+        dimensionsTimer = cancel(dimensionsTimer);
+        borderManager.remove(this);
     }
 
     public GameBorder setCenter(GameLocation target) {
@@ -53,23 +47,14 @@ public class GameBorder {
     }
 
     public GameBorder setCenter(GameLocation target, int ticks) {
-        if (centerTimer != null) {
-            centerTimer.cancel();
-        }
+        centerTimer = cancel(centerTimer);
         if (ticks <= 0) {
             center = target;
             return this;
         }
         GameLocation start = center;
         centerTimer = timeManager.newTimer(ticks).onTick(ignored -> {
-            double progress = ignored.getElapsedTicks() / (double) ticks;
-            center = new GameLocation(
-                lerp(start.x(), target.x(), progress),
-                lerp(start.y(), target.y(), progress),
-                lerp(start.z(), target.z(), progress),
-                lerp(start.pitch(), target.pitch(), progress),
-                lerp(start.yaw(), target.yaw(), progress)
-            );
+            center = interpolate(start, target, ignored.getElapsedTicks() / (double) ticks);
         }).onFinish(ignored -> center = target).start();
         return this;
     }
@@ -90,9 +75,7 @@ public class GameBorder {
         if (target.getX() < 0 || target.getY() < 0 || target.getZ() < 0) {
             throw new IllegalArgumentException("Border dimensions must be positive or zero!");
         }
-        if (dimensionsTimer != null) {
-            dimensionsTimer.cancel();
-        }
+        dimensionsTimer = cancel(dimensionsTimer);
         if (ticks <= 0) {
             dimensions = target.clone();
             return this;
@@ -268,6 +251,21 @@ public class GameBorder {
 
     private double squared(double input) {
         return input * input;
+    }
+
+    private GameTimer cancel(GameTimer timer) {
+        if (timer != null) timer.cancel();
+        return null;
+    }
+
+    private GameLocation interpolate(GameLocation start, GameLocation end, double progress) {
+        return new GameLocation(
+            lerp(start.x(), end.x(), progress),
+            lerp(start.y(), end.y(), progress),
+            lerp(start.z(), end.z(), progress),
+            lerp(start.pitch(), end.pitch(), progress),
+            lerp(start.yaw(), end.yaw(), progress)
+        );
     }
 
     private static double lerp(double start, double end, double progress) {
