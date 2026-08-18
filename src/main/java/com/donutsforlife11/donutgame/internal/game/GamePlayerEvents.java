@@ -52,7 +52,7 @@ public class GamePlayerEvents implements Listener {
     public void playerRespawn(PlayerRespawnEvent event) {
         GamePlayer gamePlayer = gamePlayer(event.getPlayer());
         if (gamePlayer == null) return;
-        if (gamePlayer.respawnLocation() != null) event.setRespawnLocation(gamePlayer.respawnLocation().toBukkit(gamePlayer.world().bukkitWorld()));
+        if (gamePlayer.spawnPoint() != null) event.setRespawnLocation(gamePlayer.spawnPoint().toBukkit(gamePlayer.world().bukkitWorld()));
         GameModule game = game(event.getPlayer());
         moduleService.plugin().getServer().getScheduler().runTask(moduleService.plugin(), () -> {
             if (gamePlayer.isSpectator()) gamePlayer.syncSpectatorState();
@@ -130,7 +130,7 @@ public class GamePlayerEvents implements Listener {
         GamePlayer gamePlayer = gamePlayer(player);
         GameModule game = game(player);
         if (gamePlayer != null && gamePlayer.isSpectator() && game != null) {
-            moduleService.plugin().getServer().getScheduler().runTask(moduleService.plugin(), () -> game.uiManager().refreshPlayerState());
+            moduleService.plugin().getServer().getScheduler().runTask(moduleService.plugin(), () -> game.uiManager().hideSpectatorEquipment(gamePlayer));
         }
     }
 
@@ -178,7 +178,7 @@ public class GamePlayerEvents implements Listener {
         if (gamePlayer == null || !gamePlayer.isSpectator()) return;
         event.setCancelled(true);
         if (event.getCause() == EntityDamageEvent.DamageCause.VOID) {
-            GameLocation fallback = gamePlayer.respawnLocation() != null ? gamePlayer.respawnLocation() : gamePlayer.world().worldSpawn();
+            GameLocation fallback = gamePlayer.spawnPoint() != null ? gamePlayer.spawnPoint() : gamePlayer.world().worldSpawn();
             gamePlayer.teleport(fallback);
         }
     }

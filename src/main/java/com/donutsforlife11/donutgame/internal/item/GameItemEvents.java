@@ -138,7 +138,7 @@ public class GameItemEvents implements Listener {
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
         Inventory top = event.getView().getTopInventory();
-        if (top.getHolder() instanceof SpectatorMainMenuHolder holder) {
+        if (top.getHolder() instanceof SpectatorMenuHolder holder && holder.screen == SpectatorMenuScreen.MAIN) {
             event.setCancelled(true);
             if (!player.equals(holder.viewer.player()) || event.getRawSlot() < 0 || event.getRawSlot() >= top.getSize()) return;
             int slot = event.getRawSlot();
@@ -150,7 +150,7 @@ public class GameItemEvents implements Listener {
             if (playerIndex >= 0 && playerIndex < holder.players.size()) spectateTarget(holder.viewer, holder.players.get(playerIndex));
             return;
         }
-        if (top.getHolder() instanceof SpectatorTeamMenuHolder holder) {
+        if (top.getHolder() instanceof SpectatorMenuHolder holder && holder.screen == SpectatorMenuScreen.TEAM) {
             event.setCancelled(true);
             if (!player.equals(holder.viewer.player()) || event.getRawSlot() < 0 || event.getRawSlot() >= top.getSize()) return;
             if (event.getRawSlot() == holder.backSlot) {
@@ -182,7 +182,7 @@ public class GameItemEvents implements Listener {
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
         Inventory top = event.getView().getTopInventory();
-        if (top.getHolder() instanceof SpectatorMainMenuHolder || top.getHolder() instanceof SpectatorTeamMenuHolder) {
+        if (top.getHolder() instanceof SpectatorMenuHolder) {
             event.setCancelled(true);
             return;
         }
@@ -236,6 +236,14 @@ public class GameItemEvents implements Listener {
     public void onHeldSlotChange(PlayerItemHeldEvent event) {
         GamePlayer gamePlayer = gamePlayer(event.getPlayer());
         if (gamePlayer == null) return;
+        if (gamePlayer.isSpectator()) {
+            int newSlot = event.getNewSlot();
+            Bukkit.getScheduler().runTask(moduleService.plugin(), () -> {
+                Player player = gamePlayer.player();
+                if (player != null && gamePlayer.isSpectator()) player.getInventory().setHeldItemSlot(newSlot);
+            });
+            return;
+        }
         Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(gamePlayer));
     }
 
@@ -245,7 +253,7 @@ public class GameItemEvents implements Listener {
         for (GameTeam team : viewer.spectatableTeams()) if (hasVisibleTargets(team)) teams.add(team);
         List<GamePlayer> players = new ArrayList<>();
         for (GamePlayer player : viewer.spectatablePlayers()) if (isVisibleTarget(player)) players.add(player);
-        SpectatorMainMenuHolder holder = new SpectatorMainMenuHolder(viewer, teams, players, menuSize(teams.size() + players.size(), 1));
+        SpectatorMenuHolder holder = SpectatorMenuHolder.main(viewer, teams, players, menuSize(teams.size() + players.size(), 1));
         int slot = 0;
         for (GameTeam team : teams) holder.inventory.setItem(slot++, teamItem(team, viewer.team() == team));
         for (GamePlayer player : players) holder.inventory.setItem(slot++, playerItem(player));
@@ -256,7 +264,7 @@ public class GameItemEvents implements Listener {
         if (!viewer.isSpectator() || viewer.player() == null) return;
         List<GamePlayer> players = new ArrayList<>();
         for (GamePlayer player : team.getMembers()) if (isVisibleTarget(player)) players.add(player);
-        SpectatorTeamMenuHolder holder = new SpectatorTeamMenuHolder(viewer, players, submenuSize(players.size()));
+        SpectatorMenuHolder holder = SpectatorMenuHolder.team(viewer, players, submenuSize(players.size()));
         int index = 0;
         for (int slot = 0; slot < holder.inventory.getSize() && index < players.size(); slot++) {
             if (slot == holder.backSlot) continue;
@@ -321,7 +329,7 @@ public class GameItemEvents implements Listener {
     private void syncInventory(GamePlayer player) {
         itemService.normalizeInventory(player);
         if (player.player() == null) return;
-        if (player.isSpectator()) player.syncSpectatorState();
+        if (player.isSpectator()) player.syncSpectatorInventory();
         else GamePlayer.removeSpectatorCompass(player.player().getInventory());
     }
 
@@ -378,36 +386,36 @@ public class GameItemEvents implements Listener {
         }
     }
 
-    private static final class SpectatorMainMenuHolder implements InventoryHolder {
-        private final GamePlayer viewer;
-        private final List<GameTeam> teams;
-        private final List<GamePlayer> players;
-        private final Inventory inventory;
-
-        private SpectatorMainMenuHolder(GamePlayer viewer, List<GameTeam> teams, List<GamePlayer> players, int size) {
-            this.viewer = viewer;
-            this.teams = List.copyOf(teams);
-            this.players = List.copyOf(players);
-            this.inventory = Bukkit.createInventory(this, size, Component.text("Spectate"));
-        }
-
-        @Override
-        public Inventory getInventory() {
-            return inventory;
-        }
+    private enum SpectatorMenuScreen {
+        MAIN,
+        TEAM
     }
 
-    private static final class SpectatorTeamMenuHolder implements InventoryHolder {
+    private static final class SpectatorMenuHolder implements InventoryHolder {
+        private static final int NO_BACK_SLOT = -1;
+
         private final GamePlayer viewer;
+        private final SpectatorMenuScreen screen;
+        private final List<GameTeam> teams;
         private final List<GamePlayer> players;
         private final Inventory inventory;
         private final int backSlot;
 
-        private SpectatorTeamMenuHolder(GamePlayer viewer, List<GamePlayer> players, int size) {
+        private static SpectatorMenuHolder main(GamePlayer viewer, List<GameTeam> teams, List<GamePlayer> players, int size) {
+            return new SpectatorMenuHolder(viewer, SpectatorMenuScreen.MAIN, teams, players, size, NO_BACK_SLOT, Component.text("Spectate"));
+        }
+
+        private static SpectatorMenuHolder team(GamePlayer viewer, List<GamePlayer> players, int size) {
+            return new SpectatorMenuHolder(viewer, SpectatorMenuScreen.TEAM, List.of(), players, size, size - 9, Component.text("Spectate Team"));
+        }
+
+        private SpectatorMenuHolder(GamePlayer viewer, SpectatorMenuScreen screen, List<GameTeam> teams, List<GamePlayer> players, int size, int backSlot, Component title) {
             this.viewer = viewer;
+            this.screen = screen;
+            this.teams = List.copyOf(teams);
             this.players = List.copyOf(players);
-            this.inventory = Bukkit.createInventory(this, size, Component.text("Spectate Team"));
-            this.backSlot = size - 9;
+            this.inventory = Bukkit.createInventory(this, size, title);
+            this.backSlot = backSlot;
         }
 
         @Override

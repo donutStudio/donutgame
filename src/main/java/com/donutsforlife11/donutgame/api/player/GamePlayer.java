@@ -116,7 +116,7 @@ public class GamePlayer extends GameEntity {
         cancelRespawn();
         spectator = false;
         state.reset(gameMode == null ? GameMode.SURVIVAL : gameMode);
-        setRespawnLocation(location);
+        setSpawnPoint(location);
         Player player = player();
         if (player != null) {
             if (location != null) teleport(location);
@@ -131,6 +131,15 @@ public class GamePlayer extends GameEntity {
         if (!spectator) return;
         Player player = player();
         if (player != null) applySpectatorPresentation(player);
+    }
+
+    public void syncSpectatorInventory() {
+        if (!spectator) return;
+        Player player = player();
+        if (player != null) {
+            normalizeSpectatorInventory(player.getInventory());
+            player.updateInventory();
+        }
     }
 
     public void respawn() {
@@ -155,7 +164,7 @@ public class GamePlayer extends GameEntity {
         if (ticks == 0) {
             GameLocation location = locationSupplier.get();
             if (location != null) {
-                setRespawnLocation(location);
+                setSpawnPoint(location);
                 teleport(location);
             }
             setNonSpectator();
@@ -172,7 +181,7 @@ public class GamePlayer extends GameEntity {
             if (!playerManager.isRegistered(this) || player() == null) return;
             GameLocation location = locationSupplier.get();
             if (location != null) {
-                setRespawnLocation(location);
+                setSpawnPoint(location);
                 teleport(location);
             }
             setNonSpectator();
@@ -185,10 +194,6 @@ public class GamePlayer extends GameEntity {
             respawnTimer.cancel();
             respawnTimer = null;
         }
-    }
-
-    public void setRespawnLocation(GameLocation location) {
-        setSpawnPoint(location);
     }
 
     public void setSpawnPoint(GameLocation location) {
@@ -214,10 +219,6 @@ public class GamePlayer extends GameEntity {
         return this;
     }
 
-    public String getName() {
-        return name();
-    }
-
     public String name() {
         Player player = player();
         return player == null ? uuid().toString() : player.getName();
@@ -225,10 +226,6 @@ public class GamePlayer extends GameEntity {
 
     public boolean isOnline() {
         return player() != null;
-    }
-
-    public GameLocation respawnLocation() {
-        return spawnPoint();
     }
 
     public GameLocation spawnPoint() {
@@ -259,10 +256,6 @@ public class GamePlayer extends GameEntity {
     private void captureLiveStateIfActive() {
         Player player = player();
         if (player != null && !spectator) state.capture(player);
-    }
-
-    public void clearInventory() {
-        clearItems();
     }
 
     public void clearItems() {
@@ -301,10 +294,6 @@ public class GamePlayer extends GameEntity {
     public GameMode gameMode() {
         captureLiveStateIfActive();
         return state.gameMode;
-    }
-
-    public void setFoodLevel(int foodLevel) {
-        setHunger(foodLevel);
     }
 
     public void setHunger(int hunger) {
@@ -464,39 +453,6 @@ public class GamePlayer extends GameEntity {
         applyIfActive();
     }
 
-    public void addVanillaEffect(PotionEffectType effect) {
-        effect(effect);
-    }
-
-    public void addVanillaEffect(PotionEffectType effect, int seconds) {
-        effect(effect, seconds);
-    }
-
-    public void addVanillaEffect(PotionEffectType effect, int seconds, int amplifier) {
-        effect(effect, seconds, amplifier);
-    }
-
-    public void addVanillaEffect(PotionEffectType effect, int seconds, int amplifier, boolean hideParticles) {
-        effect(effect, seconds, amplifier, hideParticles);
-    }
-
-    public void effect(PotionEffectType effect) {
-        effect(effect, 30, 0, false);
-    }
-
-    public void effect(PotionEffectType effect, int seconds) {
-        effect(effect, seconds, 0, false);
-    }
-
-    public void effect(PotionEffectType effect, int seconds, int amplifier) {
-        effect(effect, seconds, amplifier, false);
-    }
-
-    public void effect(PotionEffectType effect, int seconds, int amplifier, boolean hideParticles) {
-        int durationTicks = seconds == PotionEffect.INFINITE_DURATION ? PotionEffect.INFINITE_DURATION : seconds * 20;
-        addEffect(effect, durationTicks, amplifier, hideParticles);
-    }
-
     public void removeEffect(PotionEffectType effect) {
         captureLiveStateIfActive();
         state.effects.removeIf(current -> current.getType().equals(effect));
@@ -521,20 +477,10 @@ public class GamePlayer extends GameEntity {
     }
 
     @Override
-    public void setAttributeBaseValue(Attribute attribute, double value) {
-        setAttributeBase(attribute, value);
-    }
-
-    @Override
     public void setAttributeBase(Attribute attribute, double value) {
         captureLiveStateIfActive();
         state.attributes.computeIfAbsent(attribute, key -> new StoredAttribute(value, List.of())).base = value;
         applyIfActive();
-    }
-
-    @Override
-    public Double getAttributeValue(Attribute attribute) {
-        return getAttributeBase(attribute);
     }
 
     @Override
@@ -660,7 +606,7 @@ public class GamePlayer extends GameEntity {
         player.setAllowFlight(true);
         player.setFlying(true);
         player.setInvulnerable(true);
-        player.setCollidable(false);
+        player.setCollidable(true);
         player.setCanPickupItems(false);
         player.setInvisible(true);
         player.playerListName(spectatorPlayerListName(player));
@@ -703,7 +649,7 @@ public class GamePlayer extends GameEntity {
 
     private void refreshClientView(Player player) {
         if (spectator || player == null || !player.isOnline()) return;
-        player.setInvisible(false);
+        if (!player.hasPotionEffect(PotionEffectType.INVISIBILITY)) player.setInvisible(false);
         player.updateInventory();
         player.teleport(player.getLocation());
         playerManager.module().uiManager().refreshPlayerStateAfterTrackingReset();

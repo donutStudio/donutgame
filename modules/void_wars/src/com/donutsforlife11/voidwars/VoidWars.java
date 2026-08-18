@@ -129,14 +129,16 @@ public class VoidWars extends GameModule {
             if (!winners.isEmpty()) {
                 String label = winners.size() == 1 ? "Winner: " : "Winners: ";
                 uiManager().subtitle(playerManager().getPlayers(),
-                Component.text(label + winners.stream().map(player -> player.getName()).collect(Collectors.joining(", "))));
+                Component.text(label + winners.stream().map(GamePlayer::name).collect(Collectors.joining(", "))));
             }
             for (GamePlayer player : winners) {
                 player.setSpectator(true, player.location());
             }
             if (round >= maxRounds) {
-                uiManager().title(playerManager().getPlayers(), Component.text("Game over!", NamedTextColor.WHITE, TextDecoration.BOLD));
-                unload();
+                timeManager().newTimer(100).onFinish(ignored2 -> {
+                    uiManager().title(playerManager().getPlayers(), Component.text("Game over!", NamedTextColor.WHITE, TextDecoration.BOLD));
+                    timeManager().newTimer(40).onFinish(ignored3 -> unload()).start();
+                }).start();
             } else {
                 timeManager().newTimer(100).onFinish(ignored2 -> {
                     reload();

@@ -61,7 +61,7 @@ public class VoidWarsPlayers {
         player.setNonSpectator();
         player.setGameMode(GameMode.SURVIVAL);
         if (clearItems) {
-            player.clearInventory();
+            player.clearItems();
         }
         player.clearExperience();
         player.setLevel(99);
@@ -104,7 +104,7 @@ public class VoidWarsPlayers {
         } else {
             player.respawn(respawnTime, () -> {
                 GamePlayer nearestTeammate = getNearestTeammate(player);
-                return nearestTeammate == null ? player.respawnLocation() : nearestTeammate.location();
+                return nearestTeammate == null ? player.spawnPoint() : nearestTeammate.location();
             });
             return true;
         }

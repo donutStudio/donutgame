@@ -177,6 +177,21 @@ public class UiManager {
         schedulePlayerStateRefresh(true);
     }
 
+    public void refreshPlayerPresentation(GamePlayer subject) {
+        if (!module.plugin().isEnabled() || module.isTransitioning()) return;
+        if (subject == null) return;
+        Player subjectPlayer = subject.player();
+        if (subjectPlayer == null || !subjectPlayer.isOnline()) return;
+        for (GamePlayer viewer : module.playerManager().getPlayers()) {
+            if (viewer.uuid().equals(subject.uuid())) continue;
+            refreshPlayerPresentation(viewer, subject);
+        }
+    }
+
+    public void hideSpectatorEquipment(GamePlayer spectator) {
+        if (spectator != null && spectator.isSpectator()) refreshPlayerPresentation(spectator);
+    }
+
     private void schedulePlayerStateRefresh(boolean trackingReset) {
         if (!module.plugin().isEnabled() || module.isTransitioning()) return;
         playerStateTrackingResetQueued = playerStateTrackingResetQueued || trackingReset;
@@ -199,27 +214,31 @@ public class UiManager {
         if (forceTrackingReset) glowService.clearAppliedCache();
         List<GamePlayer> players = new ArrayList<>(module.playerManager().getPlayers());
         for (GamePlayer viewer : players) {
-            Player viewerPlayer = viewer.player();
-            if (viewerPlayer == null || !viewerPlayer.isOnline()) continue;
             for (GamePlayer subject : players) {
                 if (viewer.uuid().equals(subject.uuid())) continue;
-                Player subjectPlayer = subject.player();
-                if (subjectPlayer == null || !subjectPlayer.isOnline() || !viewerPlayer.getWorld().equals(subjectPlayer.getWorld())) continue;
-                if (subject.isSpectator()) {
-                    glowService.clearEntityGlow(subjectPlayer, Set.of(viewerPlayer));
-                    viewerPlayer.showPlayer(module.plugin(), subjectPlayer);
-                    viewerPlayer.showEntity(module.plugin(), subjectPlayer);
-                    viewerPlayer.sendEquipmentChange(subjectPlayer, HIDDEN_EQUIPMENT);
-                    continue;
-                }
-                viewerPlayer.showPlayer(module.plugin(), subjectPlayer);
-                viewerPlayer.showEntity(module.plugin(), subjectPlayer);
-                GameTeam viewerTeam = viewer.team();
-                GameTeam subjectTeam = subject.team();
-                if (viewerTeam != null && viewerTeam == subjectTeam && shouldGlowTeammate(subjectTeam)) glowService.glowEntityUsingTeamColor(subjectPlayer, Set.of(viewerPlayer));
-                else glowService.clearEntityGlow(subjectPlayer, Set.of(viewerPlayer));
+                refreshPlayerPresentation(viewer, subject);
             }
         }
+    }
+
+    private void refreshPlayerPresentation(GamePlayer viewer, GamePlayer subject) {
+        Player viewerPlayer = viewer.player();
+        Player subjectPlayer = subject.player();
+        if (viewerPlayer == null || !viewerPlayer.isOnline()) return;
+        if (subjectPlayer == null || !subjectPlayer.isOnline() || !viewerPlayer.getWorld().equals(subjectPlayer.getWorld())) return;
+        if (subject.isSpectator()) {
+            glowService.clearEntityGlow(subjectPlayer, Set.of(viewerPlayer));
+            viewerPlayer.showPlayer(module.plugin(), subjectPlayer);
+            viewerPlayer.showEntity(module.plugin(), subjectPlayer);
+            viewerPlayer.sendEquipmentChange(subjectPlayer, HIDDEN_EQUIPMENT);
+            return;
+        }
+        viewerPlayer.showPlayer(module.plugin(), subjectPlayer);
+        viewerPlayer.showEntity(module.plugin(), subjectPlayer);
+        GameTeam viewerTeam = viewer.team();
+        GameTeam subjectTeam = subject.team();
+        if (viewerTeam != null && viewerTeam == subjectTeam && shouldGlowTeammate(subjectTeam)) glowService.glowEntityUsingTeamColor(subjectPlayer, Set.of(viewerPlayer));
+        else glowService.clearEntityGlow(subjectPlayer, Set.of(viewerPlayer));
     }
 
     public void clear() {

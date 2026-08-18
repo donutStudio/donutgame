@@ -1,7 +1,7 @@
 package com.donutsforlife11.donutgame.internal.player;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 
 import org.bukkit.GameMode;
@@ -109,8 +109,7 @@ public class PlayerEvents implements Listener {
         for (Attribute attribute : Registry.ATTRIBUTE) {
             AttributeInstance instance = player.getAttribute(attribute);
             if (instance != null) {
-                AttributeState savedState = state.newAttributeState(attribute, instance.getBaseValue(), instance.getModifiers());
-                state.attributes.add(savedState);
+                state.attributes.add(new AttributeState(attribute, instance.getBaseValue(), List.copyOf(instance.getModifiers())));
             }
         }
         state.health = player.getHealth();
@@ -190,7 +189,7 @@ public class PlayerEvents implements Listener {
         for (Attribute attribute : Registry.ATTRIBUTE) {
             AttributeInstance instance = player.getAttribute(attribute);
             if (instance != null) {
-                state.attributes.add(new AttributeState(attribute, defaultBaseValue(attribute, instance), new HashSet<>()));
+                state.attributes.add(new AttributeState(attribute, defaultBaseValue(attribute, instance), List.of()));
             }
         }
         AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);

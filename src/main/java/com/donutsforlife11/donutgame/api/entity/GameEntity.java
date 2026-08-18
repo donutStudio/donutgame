@@ -109,47 +109,10 @@ public class GameEntity {
         addEffect(new PotionEffect(effect, ticks, amplifier, false, !hideParticles, !hideParticles));
     }
 
-    public void addVanillaEffect(PotionEffectType effect) {
-        addVanillaEffect(effect, 30);
-    }
-
-    public void addVanillaEffect(PotionEffectType effect, int seconds) {
-        addVanillaEffect(effect, seconds, 0);
-    }
-
-    public void addVanillaEffect(PotionEffectType effect, int seconds, int amplifier) {
-        addVanillaEffect(effect, seconds, amplifier, false);
-    }
-
-    public void addVanillaEffect(PotionEffectType effect, int seconds, int amplifier, boolean hideParticles) {
-        int durationTicks = seconds == PotionEffect.INFINITE_DURATION ? PotionEffect.INFINITE_DURATION : seconds * 20;
-        addEffect(effect, durationTicks, amplifier, hideParticles);
-    }
-
-    public void effect(PotionEffectType effect) {
-        addVanillaEffect(effect);
-    }
-
-    public void effect(PotionEffectType effect, int seconds) {
-        addVanillaEffect(effect, seconds);
-    }
-
-    public void effect(PotionEffectType effect, int seconds, int amplifier) {
-        addVanillaEffect(effect, seconds, amplifier);
-    }
-
-    public void effect(PotionEffectType effect, int seconds, int amplifier, boolean hideParticles) {
-        addVanillaEffect(effect, seconds, amplifier, hideParticles);
-    }
-
     public void addEffect(PotionEffect effect) {
         if (requireEntity() instanceof LivingEntity livingEntity) {
             livingEntity.addPotionEffect(effect);
         }
-    }
-
-    public void setAttributeBaseValue(Attribute attribute, double value) {
-        setAttributeBase(attribute, value);
     }
 
     public double getAttribute(Attribute attribute) {
@@ -178,10 +141,6 @@ public class GameEntity {
                 instance.setBaseValue(value);
             }
         }
-    }
-
-    public Double getAttributeValue(Attribute attribute) {
-        return getAttributeBase(attribute);
     }
 
     public double getAttributeBase(Attribute attribute) {
