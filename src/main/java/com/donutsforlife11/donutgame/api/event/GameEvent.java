@@ -80,7 +80,12 @@ public class GameEvent<T extends Event> {
         Object damageSource = getRaw("damageSource");
         if (damageSource instanceof DamageSource source) {
             GameEntity causingEntity = gameEntity(source.getCausingEntity());
-            return causingEntity == null ? gameEntity(source.getDirectEntity()) : causingEntity;
+            if (causingEntity != null) return causingEntity;
+            GameEntity directEntity = gameEntity(source.getDirectEntity());
+            if (directEntity != null) return directEntity;
+        }
+        if (event instanceof PlayerDeathEvent deathEvent) {
+            return gamePlayer(deathEvent.getEntity().getKiller());
         }
         return null;
     }

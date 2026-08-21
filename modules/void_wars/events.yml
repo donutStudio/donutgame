@@ -50,8 +50,8 @@ border_shrinks:
   - {time: 990, scale: 0.0}
 
 chest_fills:
-  - {time: 0, loot_table: "chest/base"}
-  - {time: 200, loot_table: "chest/common"}
-  - {time: 400, loot_table: "chest/rare"}
-  - {time: 600, loot_table: "chest/epic"}
-  - {time: 800, loot_table: "chest/legendary"}
+  - {time: 0, loot_table: "void_wars:chest/base"}
+  - {time: 200, loot_table: "void_wars:chest/common"}
+  - {time: 400, loot_table: "void_wars:chest/rare"}
+  - {time: 600, loot_table: "void_wars:chest/epic"}
+  - {time: 800, loot_table: "void_wars:chest/legendary"}

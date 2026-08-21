@@ -46,6 +46,7 @@ import com.donutsforlife11.donutgame.api.team.GameTeam;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 import com.donutsforlife11.donutgame.internal.game.ModuleService;
 
+import io.papermc.paper.datacomponent.DataComponentTypes;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
@@ -236,14 +237,7 @@ public class GameItemEvents implements Listener {
     public void onHeldSlotChange(PlayerItemHeldEvent event) {
         GamePlayer gamePlayer = gamePlayer(event.getPlayer());
         if (gamePlayer == null) return;
-        if (gamePlayer.isSpectator()) {
-            int newSlot = event.getNewSlot();
-            Bukkit.getScheduler().runTask(moduleService.plugin(), () -> {
-                Player player = gamePlayer.player();
-                if (player != null && gamePlayer.isSpectator()) player.getInventory().setHeldItemSlot(newSlot);
-            });
-            return;
-        }
+        if (gamePlayer.isSpectator()) return;
         Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(gamePlayer));
     }
 
@@ -305,8 +299,8 @@ public class GameItemEvents implements Listener {
         ItemStack item = new ItemStack(Material.PLAYER_HEAD);
         item.editMeta(SkullMeta.class, meta -> {
             meta.setPlayerProfile(Bukkit.createProfile(player.uuid(), player.name()));
-            meta.itemName(Component.text(player.name(), NamedTextColor.WHITE));
         });
+        item.setData(DataComponentTypes.ITEM_NAME, Component.text(player.name(), NamedTextColor.WHITE));
         return item;
     }
 

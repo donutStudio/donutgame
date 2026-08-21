@@ -3,17 +3,13 @@ package com.donutsforlife11.donutgame.api.ui;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.EquipmentSlot;
-import org.bukkit.inventory.ItemStack;
 
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.entity.GameEntity;
@@ -32,15 +28,6 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.title.TitlePart;
 
 public class UiManager {
-    private static final Map<EquipmentSlot, ItemStack> HIDDEN_EQUIPMENT = Map.of(
-        EquipmentSlot.HAND, ItemStack.of(Material.AIR),
-        EquipmentSlot.OFF_HAND, ItemStack.of(Material.AIR),
-        EquipmentSlot.HEAD, ItemStack.of(Material.AIR),
-        EquipmentSlot.CHEST, ItemStack.of(Material.AIR),
-        EquipmentSlot.LEGS, ItemStack.of(Material.AIR),
-        EquipmentSlot.FEET, ItemStack.of(Material.AIR)
-    );
-
     private final Set<GameSidebar> sidebars = ConcurrentHashMap.newKeySet();
     private final Set<GameGlow> glows = ConcurrentHashMap.newKeySet();
     private final GameModule module;
@@ -177,6 +164,11 @@ public class UiManager {
         schedulePlayerStateRefresh(true);
     }
 
+    public void refreshPlayerStateAfterTrackingReset(GamePlayer player) {
+        if (player != null) glowService.clearAppliedCache(player.uuid());
+        schedulePlayerStateRefresh(false);
+    }
+
     public void refreshPlayerPresentation(GamePlayer subject) {
         if (!module.plugin().isEnabled() || module.isTransitioning()) return;
         if (subject == null) return;
@@ -186,10 +178,6 @@ public class UiManager {
             if (viewer.uuid().equals(subject.uuid())) continue;
             refreshPlayerPresentation(viewer, subject);
         }
-    }
-
-    public void hideSpectatorEquipment(GamePlayer spectator) {
-        if (spectator != null && spectator.isSpectator()) refreshPlayerPresentation(spectator);
     }
 
     private void schedulePlayerStateRefresh(boolean trackingReset) {
@@ -228,9 +216,8 @@ public class UiManager {
         if (subjectPlayer == null || !subjectPlayer.isOnline() || !viewerPlayer.getWorld().equals(subjectPlayer.getWorld())) return;
         if (subject.isSpectator()) {
             glowService.clearEntityGlow(subjectPlayer, Set.of(viewerPlayer));
-            viewerPlayer.showPlayer(module.plugin(), subjectPlayer);
-            viewerPlayer.showEntity(module.plugin(), subjectPlayer);
-            viewerPlayer.sendEquipmentChange(subjectPlayer, HIDDEN_EQUIPMENT);
+            viewerPlayer.hidePlayer(module.plugin(), subjectPlayer);
+            viewerPlayer.hideEntity(module.plugin(), subjectPlayer);
             return;
         }
         viewerPlayer.showPlayer(module.plugin(), subjectPlayer);

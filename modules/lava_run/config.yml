@@ -1,0 +1,6 @@
+id: lava_run
+main_class: com.donutsforlife11.lavarun.LavaRun
+name: Lava Run
+maps:
+  - "adytus"
+team_count: 1 

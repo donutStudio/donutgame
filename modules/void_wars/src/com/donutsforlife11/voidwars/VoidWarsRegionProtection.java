@@ -21,7 +21,7 @@ public class VoidWarsRegionProtection {
     @GameEventHandler
     public void onExitStartingBorder(GameEvent<PlayerMoveEvent> event) {
         GamePlayer player = event.getPlayer();
-        if (player == null) {
+        if (player == null || player.isSpectator()) {
             return;
         }
         GameLocation from = event.getFrom();
@@ -63,7 +63,7 @@ public class VoidWarsRegionProtection {
     }
 
     private boolean actionDeniable(GameLocation location) {
-        if (!game.roundStarted()) {
+        if (!game.roundStarted() && !game.roundEnding()) {
             return true;
         }
         return game.protectRegions && !game.world().posInRegion(location, game.mutableRegionName);

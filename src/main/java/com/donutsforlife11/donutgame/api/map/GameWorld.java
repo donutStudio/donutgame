@@ -52,6 +52,10 @@ public class GameWorld {
         bukkitWorld.setGameRule(GameRules.PVP, enabled);
     }
 
+    public boolean pvp() {
+        return Boolean.TRUE.equals(bukkitWorld.getGameRuleValue(GameRules.PVP));
+    }
+
     public void setFallDamage(boolean enabled) {
         bukkitWorld.setGameRule(GameRules.FALL_DAMAGE, enabled);
     }

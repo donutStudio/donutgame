@@ -173,7 +173,7 @@ public class MapManager {
         CompletableFuture<Void> future = new CompletableFuture<>();
         module.plugin().getServer().getScheduler().runTask(module.plugin(), () -> {
             try {
-                List<Player> movedPlayers = new ArrayList<>();
+                List<GamePlayer> movedPlayers = new ArrayList<>();
                 List<CompletableFuture<Boolean>> teleports = new ArrayList<>();
                 World bukkitWorld = world.bukkitWorld();
                 Location destination = targetSpawn.toBukkit(bukkitWorld);
@@ -184,7 +184,7 @@ public class MapManager {
                     player.setSpawnPoint(targetSpawn);
                     module.log("Teleporting registered player " + bukkitPlayer.getName() + " to map spawn " + targetSpawn.x() + ", " + targetSpawn.y() + ", " + targetSpawn.z() + ".");
                     bukkitPlayer.closeInventory();
-                    movedPlayers.add(bukkitPlayer);
+                    movedPlayers.add(player);
                     resetTransientPlayerState(bukkitPlayer);
                     teleports.add(bukkitPlayer.teleportAsync(destination.clone()).exceptionally(throwable -> false));
                 }
@@ -195,12 +195,14 @@ public class MapManager {
                             return;
                         }
                         for (int i = 0; i < movedPlayers.size(); i++) {
-                            Player movedPlayer = movedPlayers.get(i);
+                            GamePlayer movedGamePlayer = movedPlayers.get(i);
+                            Player movedPlayer = movedGamePlayer.player();
+                            if (movedPlayer == null) continue;
                             if (!Boolean.TRUE.equals(teleports.get(i).getNow(false))) {
                                 future.completeExceptionally(new IllegalStateException("Failed to teleport player " + movedPlayer.getName() + " during map handoff."));
                                 return;
                             }
-                            resetTransientPlayerState(movedPlayer);
+                            movedGamePlayer.syncStateAfterTrackingReset();
                             movedPlayer.updateInventory();
                         }
                         module.uiManager().refreshPlayerStateAfterTrackingReset();

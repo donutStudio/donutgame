@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -32,8 +33,10 @@ public class PlayerManager {
     private final Set<UUID> pendingPlayers = new LinkedHashSet<>();
     private final Set<GamePlayer> spectatablePlayers = new LinkedHashSet<>();
     private final Set<GameTeam> spectatableTeams = new LinkedHashSet<>();
-    private final Map<UUID, Set<GamePlayer>> spectatablePlayersByViewer = new LinkedHashMap<>();
-    private final Map<UUID, Set<GameTeam>> spectatableTeamsByViewer = new LinkedHashMap<>();
+    private Supplier<? extends Collection<GamePlayer>> spectatablePlayersSupplier = () -> spectatablePlayers;
+    private Supplier<? extends Collection<GameTeam>> spectatableTeamsSupplier = () -> spectatableTeams;
+    private final Map<UUID, Supplier<? extends Collection<GamePlayer>>> spectatablePlayersByViewer = new LinkedHashMap<>();
+    private final Map<UUID, Supplier<? extends Collection<GameTeam>>> spectatableTeamsByViewer = new LinkedHashMap<>();
 
     public PlayerManager(GameModule module) {
         this.module = module;
@@ -83,24 +86,36 @@ public class PlayerManager {
 
     public void setSpectatablePlayers(Collection<GamePlayer> players) {
         spectatablePlayers.clear();
-        if (players == null) return;
-        for (GamePlayer player : players) if (isRegistered(player)) spectatablePlayers.add(player);
+        if (players != null) {
+            for (GamePlayer player : players) if (isRegistered(player)) spectatablePlayers.add(player);
+        }
+        spectatablePlayersSupplier = () -> spectatablePlayers;
+    }
+
+    public void setSpectatablePlayers(Supplier<? extends Collection<GamePlayer>> players) {
+        spectatablePlayersSupplier = players == null ? List::of : players;
     }
 
     public void setSpectatableTeams(Collection<GameTeam> teams) {
         spectatableTeams.clear();
-        if (teams == null) return;
-        for (GameTeam team : teams) {
-            if (team != null && module.teamManager().getTeams().contains(team)) spectatableTeams.add(team);
+        if (teams != null) {
+            for (GameTeam team : teams) {
+                if (team != null && module.teamManager().getTeams().contains(team)) spectatableTeams.add(team);
+            }
         }
+        spectatableTeamsSupplier = () -> spectatableTeams;
+    }
+
+    public void setSpectatableTeams(Supplier<? extends Collection<GameTeam>> teams) {
+        spectatableTeamsSupplier = teams == null ? List::of : teams;
     }
 
     public Collection<GamePlayer> spectatablePlayers() {
-        return Collections.unmodifiableSet(spectatablePlayers);
+        return sanitizePlayers(spectatablePlayersSupplier.get());
     }
 
     public Collection<GameTeam> spectatableTeams() {
-        return Collections.unmodifiableSet(spectatableTeams);
+        return sanitizeTeams(spectatableTeamsSupplier.get());
     }
 
     public boolean register(Player player) {
@@ -136,7 +151,6 @@ public class PlayerManager {
         spectatablePlayers.remove(gamePlayer);
         spectatablePlayersByViewer.remove(gamePlayer.uuid());
         spectatableTeamsByViewer.remove(gamePlayer.uuid());
-        spectatablePlayersByViewer.values().forEach(targets -> targets.remove(gamePlayer));
         gamePlayer.cancelRespawn();
         gamePlayer.setNonSpectator();
         module.log("Unregistered player " + player.getName() + " from active game " + module.index() + ".");
@@ -160,15 +174,15 @@ public class PlayerManager {
         activatePendingPlayers();
         for (GamePlayer player : players) {
             if (player.player() != null) {
-                player.syncSpectatorState();
+                player.syncStateAfterTrackingReset();
             }
         }
     }
 
     public void handlePlayerJoin(Player player) {
         GamePlayer gamePlayer = getPlayer(player);
-        if (gamePlayer != null && gamePlayer.isSpectator()) {
-            module.plugin().getServer().getScheduler().runTask(module.plugin(), gamePlayer::syncSpectatorState);
+        if (gamePlayer != null) {
+            module.plugin().getServer().getScheduler().runTask(module.plugin(), gamePlayer::syncStateAfterTrackingReset);
         }
     }
 
@@ -214,37 +228,65 @@ public class PlayerManager {
 
     public void removeSpectatableTeam(GameTeam team) {
         spectatableTeams.remove(team);
-        spectatableTeamsByViewer.values().forEach(targets -> targets.remove(team));
     }
 
     public void setSpectatablePlayers(GamePlayer viewer, Collection<GamePlayer> players) {
         if (viewer == null || !isRegistered(viewer)) return;
-        Set<GamePlayer> targets = spectatablePlayersByViewer.computeIfAbsent(viewer.uuid(), ignored -> new LinkedHashSet<>());
-        targets.clear();
-        if (players == null) return;
-        for (GamePlayer player : players) if (isRegistered(player)) targets.add(player);
+        Set<GamePlayer> targets = new LinkedHashSet<>();
+        if (players != null) {
+            for (GamePlayer player : players) if (isRegistered(player)) targets.add(player);
+        }
+        spectatablePlayersByViewer.put(viewer.uuid(), () -> targets);
+    }
+
+    public void setSpectatablePlayers(GamePlayer viewer, Supplier<? extends Collection<GamePlayer>> players) {
+        if (viewer == null || !isRegistered(viewer)) return;
+        spectatablePlayersByViewer.put(viewer.uuid(), players == null ? List::of : players);
     }
 
     public void setSpectatableTeams(GamePlayer viewer, Collection<GameTeam> teams) {
         if (viewer == null || !isRegistered(viewer)) return;
-        Set<GameTeam> targets = spectatableTeamsByViewer.computeIfAbsent(viewer.uuid(), ignored -> new LinkedHashSet<>());
-        targets.clear();
-        if (teams == null) return;
-        for (GameTeam team : teams) {
-            if (team != null && module.teamManager().getTeams().contains(team)) targets.add(team);
+        Set<GameTeam> targets = new LinkedHashSet<>();
+        if (teams != null) {
+            for (GameTeam team : teams) {
+                if (team != null && module.teamManager().getTeams().contains(team)) targets.add(team);
+            }
         }
+        spectatableTeamsByViewer.put(viewer.uuid(), () -> targets);
+    }
+
+    public void setSpectatableTeams(GamePlayer viewer, Supplier<? extends Collection<GameTeam>> teams) {
+        if (viewer == null || !isRegistered(viewer)) return;
+        spectatableTeamsByViewer.put(viewer.uuid(), teams == null ? List::of : teams);
     }
 
     public Collection<GamePlayer> spectatablePlayers(GamePlayer viewer) {
         if (viewer == null) return List.of();
-        Set<GamePlayer> targets = spectatablePlayersByViewer.get(viewer.uuid());
-        return targets == null ? spectatablePlayers() : Collections.unmodifiableSet(targets);
+        Supplier<? extends Collection<GamePlayer>> targets = spectatablePlayersByViewer.get(viewer.uuid());
+        return targets == null ? spectatablePlayers() : sanitizePlayers(targets.get());
     }
 
     public Collection<GameTeam> spectatableTeams(GamePlayer viewer) {
         if (viewer == null) return List.of();
-        Set<GameTeam> targets = spectatableTeamsByViewer.get(viewer.uuid());
-        return targets == null ? spectatableTeams() : Collections.unmodifiableSet(targets);
+        Supplier<? extends Collection<GameTeam>> targets = spectatableTeamsByViewer.get(viewer.uuid());
+        return targets == null ? spectatableTeams() : sanitizeTeams(targets.get());
+    }
+
+    private Collection<GamePlayer> sanitizePlayers(Collection<GamePlayer> players) {
+        Set<GamePlayer> targets = new LinkedHashSet<>();
+        if (players != null) {
+            for (GamePlayer player : players) if (isRegistered(player)) targets.add(player);
+        }
+        return Collections.unmodifiableSet(targets);
+    }
+
+    private Collection<GameTeam> sanitizeTeams(Collection<GameTeam> teams) {
+        Set<GameTeam> targets = new LinkedHashSet<>();
+        if (teams != null) {
+            Collection<GameTeam> registeredTeams = module.teamManager().getTeams();
+            for (GameTeam team : teams) if (team != null && registeredTeams.contains(team)) targets.add(team);
+        }
+        return Collections.unmodifiableSet(targets);
     }
 
     private void registerNow(Player player) {

@@ -142,6 +142,23 @@ public class GamePlayer extends GameEntity {
         }
     }
 
+    public void syncStateAfterTrackingReset() {
+        Player player = player();
+        if (player == null) return;
+        if (spectator) {
+            applySpectatorPresentation(player);
+            return;
+        }
+        applyStoredState(player);
+        resetTransientState(player);
+        player.setInvulnerable(false);
+        if (!player.hasPotionEffect(PotionEffectType.INVISIBILITY)) player.setInvisible(false);
+        player.setCollidable(true);
+        player.setCanPickupItems(true);
+        player.setFlying(false);
+        player.setAllowFlight(false);
+    }
+
     public void respawn() {
         respawn(0, () -> respawnLocation);
     }
@@ -523,7 +540,15 @@ public class GamePlayer extends GameEntity {
         playerManager.setSpectatablePlayers(this, players);
     }
 
+    public void setSpectatablePlayers(Supplier<? extends Collection<GamePlayer>> players) {
+        playerManager.setSpectatablePlayers(this, players);
+    }
+
     public void setSpectatableTeams(Collection<GameTeam> teams) {
+        playerManager.setSpectatableTeams(this, teams);
+    }
+
+    public void setSpectatableTeams(Supplier<? extends Collection<GameTeam>> teams) {
         playerManager.setSpectatableTeams(this, teams);
     }
 
@@ -611,12 +636,6 @@ public class GamePlayer extends GameEntity {
         player.setInvisible(true);
         player.playerListName(spectatorPlayerListName(player));
         player.setFallDistance(0);
-        Bukkit.getScheduler().runTask(playerManager.module().plugin(), () -> {
-            if (!spectator || !player.isOnline()) return;
-            player.setAllowFlight(true);
-            if (!player.isFlying()) player.setFlying(true);
-            player.setArrowsInBody(0);
-        });
     }
 
     private Component spectatorPlayerListName(Player player) {
@@ -642,7 +661,7 @@ public class GamePlayer extends GameEntity {
     }
 
     private void refreshAfterLeavingSpectator(Player player) {
-        playerManager.module().uiManager().refreshPlayerStateAfterTrackingReset();
+        playerManager.module().uiManager().refreshPlayerStateAfterTrackingReset(this);
         Bukkit.getScheduler().runTaskLater(playerManager.module().plugin(), () -> refreshClientView(player), 1L);
         Bukkit.getScheduler().runTaskLater(playerManager.module().plugin(), () -> refreshClientView(player), 5L);
     }
@@ -652,7 +671,7 @@ public class GamePlayer extends GameEntity {
         if (!player.hasPotionEffect(PotionEffectType.INVISIBILITY)) player.setInvisible(false);
         player.updateInventory();
         player.teleport(player.getLocation());
-        playerManager.module().uiManager().refreshPlayerStateAfterTrackingReset();
+        playerManager.module().uiManager().refreshPlayerStateAfterTrackingReset(this);
     }
 
     private void resetTransientState(Player player) {

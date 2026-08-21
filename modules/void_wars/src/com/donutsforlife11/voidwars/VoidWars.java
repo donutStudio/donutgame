@@ -129,7 +129,7 @@ public class VoidWars extends GameModule {
             if (!winners.isEmpty()) {
                 String label = winners.size() == 1 ? "Winner: " : "Winners: ";
                 uiManager().subtitle(playerManager().getPlayers(),
-                Component.text(label + winners.stream().map(GamePlayer::name).collect(Collectors.joining(", "))));
+                Component.text(label + winners.stream().map(player -> player.name()).collect(Collectors.joining(", "))));
             }
             for (GamePlayer player : winners) {
                 player.setSpectator(true, player.location());
@@ -173,5 +173,8 @@ public class VoidWars extends GameModule {
     }
     public boolean roundStarted() {
         return roundStarted;
+    }
+    public boolean roundEnding() {
+        return roundEnding;
     }
 }

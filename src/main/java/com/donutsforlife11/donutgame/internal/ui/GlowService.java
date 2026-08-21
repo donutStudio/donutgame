@@ -51,6 +51,11 @@ public class GlowService {
         activeGlows.clear();
     }
 
+    public void clearAppliedCache(UUID playerId) {
+        if (playerId == null) return;
+        activeGlows.keySet().removeIf(key -> key.entityId().equals(playerId) || key.viewerId().equals(playerId));
+    }
+
     public void glowEntity(
         Entity entity,
         Collection<Player> viewers,

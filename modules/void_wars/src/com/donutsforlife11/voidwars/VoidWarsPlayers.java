@@ -44,7 +44,7 @@ public class VoidWarsPlayers {
         for (int i = 0; i < players.size(); i++) {
             teams.get(i % teamCount).addPlayer(players.get(i));
         }
-        updateSpectatorTargets();
+        configureSpectatorTargets();
     }
 
     public void setupPlayer(GamePlayer player, boolean clearItems) {
@@ -53,7 +53,7 @@ public class VoidWarsPlayers {
         player.setSpawnPoint(spawnPoint);
         if (game.roundStarted()) {
             player.setSpectator(true);
-            updateSpectatorTargets();
+            configureSpectatorTargets();
             return;
         }
         player.heal();
@@ -68,20 +68,16 @@ public class VoidWarsPlayers {
         player.setExp(0.99f);
         player.setSaturation(20);
         player.clearArrowsInBody();
-        updateSpectatorTargets();
+        configureSpectatorTargets();
     }
 
-    public void updateSpectatorTargets() {
-        Collection<GamePlayer> players = game.playerManager().getPlayers();
-        Collection<GameTeam> teams = game.teamManager().getTeams();
-        for (GamePlayer player : players) {
-            if (game.teamSize <= 1) {
-                player.setSpectatablePlayers(players);
-                player.setSpectatableTeams(List.of());
-            } else {
-                player.setSpectatablePlayers(List.of());
-                player.setSpectatableTeams(teams);
-            }
+    private void configureSpectatorTargets() {
+        if (game.teamSize <= 1) {
+            game.playerManager().setSpectatablePlayers(() -> game.playerManager().getPlayers());
+            game.playerManager().setSpectatableTeams(List.of());
+        } else {
+            game.playerManager().setSpectatablePlayers(List.of());
+            game.playerManager().setSpectatableTeams(() -> game.teamManager().getTeams());
         }
     }
 
