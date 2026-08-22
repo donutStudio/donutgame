@@ -89,9 +89,11 @@ public class ModuleService {
     private CompletableFuture<Void> cleanupFailedLoad(GameModule module, int index) {
         module.setTransitioning(true);
         return module.shutdown().whenComplete((ignored, throwable) -> {
-            activeGames.remove(index, module);
-            if (!freeIndexes.contains(index)) {
-                freeIndexes.offer(index);
+            if (throwable == null) {
+                activeGames.remove(index, module);
+                if (!freeIndexes.contains(index)) {
+                    freeIndexes.offer(index);
+                }
             }
         });
     }
@@ -108,8 +110,6 @@ public class ModuleService {
             freeIndexes.offer(index);
             return true;
         }).exceptionally(throwable -> {
-            activeGames.remove(index, module);
-            freeIndexes.offer(index);
             throw new RuntimeException(throwable);
         });
     }
@@ -133,7 +133,11 @@ public class ModuleService {
 
     public void unloadAll() {
         for (int gameIndex : Set.copyOf(activeGames.keySet())) {
-            unloadModule(gameIndex).join();
+            try {
+                unloadModule(gameIndex).join();
+            } catch (RuntimeException exception) {
+                plugin.getLogger().log(Level.SEVERE, "Failed to unload active game " + gameIndex + ".", exception);
+            }
         }
     }
 

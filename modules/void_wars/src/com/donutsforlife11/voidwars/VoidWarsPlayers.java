@@ -44,7 +44,6 @@ public class VoidWarsPlayers {
         for (int i = 0; i < players.size(); i++) {
             teams.get(i % teamCount).addPlayer(players.get(i));
         }
-        configureSpectatorTargets();
     }
 
     public void setupPlayer(GamePlayer player, boolean clearItems) {
@@ -53,7 +52,6 @@ public class VoidWarsPlayers {
         player.setSpawnPoint(spawnPoint);
         if (game.roundStarted()) {
             player.setSpectator(true);
-            configureSpectatorTargets();
             return;
         }
         player.heal();
@@ -68,16 +66,12 @@ public class VoidWarsPlayers {
         player.setExp(0.99f);
         player.setSaturation(20);
         player.clearArrowsInBody();
-        configureSpectatorTargets();
-    }
-
-    private void configureSpectatorTargets() {
         if (game.teamSize <= 1) {
-            game.playerManager().setSpectatablePlayers(() -> game.playerManager().getPlayers());
-            game.playerManager().setSpectatableTeams(List.of());
+            player.setSpectatablePlayers(() -> game.playerManager().getPlayers());
+            player.setSpectatableTeams(List.of());
         } else {
-            game.playerManager().setSpectatablePlayers(List.of());
-            game.playerManager().setSpectatableTeams(() -> game.teamManager().getTeams());
+            player.setSpectatablePlayers(List.of());
+            player.setSpectatableTeams(() -> game.teamManager().getTeams());
         }
     }
 
@@ -129,6 +123,10 @@ public class VoidWarsPlayers {
     @GameEventHandler
     public void onPlayerDeath(GameEvent<PlayerDeathEvent> event) {
         GamePlayer player = event.getPlayer();
+        if (player == null) {
+            game.logWarning("Ignored death event without a registered game player.");
+            return;
+        }
         GameEntity damager = event.getDamager();
         if (damager instanceof GamePlayer attacker && attacker != player) {
             playerKills.put(attacker, playerKills.getOrDefault(attacker, 0) + 1);

@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 rootProject.name = "Donutgame"
 
 include("modules:void_wars")
+include("modules:lava_run")

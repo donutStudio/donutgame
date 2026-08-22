@@ -51,4 +51,17 @@ public class GameRegion {
     public GameLocation max() {
         return max;
     }
+
+    public double sizeX() {
+        return max.x() - min.x();
+    }
+    public double sizeY() {
+        return max.y() - min.y();
+    }
+    public double sizeZ() {
+        return max.z() - min.z();
+    }
+    public double volume() {
+        return sizeX() * sizeY() * sizeX();
+    }
 }

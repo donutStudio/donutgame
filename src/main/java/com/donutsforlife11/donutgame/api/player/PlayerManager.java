@@ -188,16 +188,25 @@ public class PlayerManager {
 
     public CompletableFuture<Void> evacuateForShutdown() {
         Location destination = shutdownDestination();
-        List<CompletableFuture<Boolean>> teleports = new ArrayList<>();
-        for (GamePlayer gamePlayer : List.copyOf(players)) {
-            Player player = gamePlayer.player();
-            gamePlayer.cancelRespawn();
-            if (player == null) continue;
-            player.closeInventory();
-            gamePlayer.setNonSpectator();
-            teleports.add(player.teleportAsync(destination).exceptionally(throwable -> false));
-        }
-        return CompletableFuture.allOf(teleports.toArray(CompletableFuture[]::new));
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        module.plugin().getServer().getScheduler().runTask(module.plugin(), () -> {
+            try {
+                for (GamePlayer gamePlayer : List.copyOf(players)) {
+                    Player player = gamePlayer.player();
+                    gamePlayer.cancelRespawn();
+                    if (player == null) continue;
+                    player.closeInventory();
+                    gamePlayer.setNonSpectator();
+                    if (!player.teleport(destination)) {
+                        throw new IllegalStateException("Failed to move " + player.getName() + " out of game " + module.index() + ".");
+                    }
+                }
+                future.complete(null);
+            } catch (Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        });
+        return future;
     }
 
     public void clearForShutdown() {

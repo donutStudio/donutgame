@@ -216,7 +216,7 @@ public class UiManager {
         if (subjectPlayer == null || !subjectPlayer.isOnline() || !viewerPlayer.getWorld().equals(subjectPlayer.getWorld())) return;
         if (subject.isSpectator()) {
             glowService.clearEntityGlow(subjectPlayer, Set.of(viewerPlayer));
-            viewerPlayer.hidePlayer(module.plugin(), subjectPlayer);
+            viewerPlayer.showPlayer(module.plugin(), subjectPlayer);
             viewerPlayer.hideEntity(module.plugin(), subjectPlayer);
             return;
         }

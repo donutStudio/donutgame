@@ -4,6 +4,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -15,6 +16,8 @@ import org.bukkit.GameRules;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.BoundingBox;
 
@@ -119,6 +122,10 @@ public class WorldService {
     }
 
     public CompletableFuture<Void> unloadWorld(String worldName) {
+        return unloadWorld(worldName, true);
+    }
+
+    public CompletableFuture<Void> unloadWorld(String worldName, boolean force) {
         CompletableFuture<Void> future = new CompletableFuture<>();
         runSync(() -> {
             try {
@@ -130,10 +137,18 @@ public class WorldService {
                     future.complete(null);
                     return;
                 }
-                if (!world.getPlayers().isEmpty()) throw new IllegalStateException("Cannot unload world " + worldName + " while players are still inside it.");
-                Bukkit.unloadWorld(world, false);
+                if (!world.getPlayers().isEmpty()) {
+                    if (!force) throw new IllegalStateException("Cannot unload world " + worldName + " while players are still inside it.");
+                    evacuatePlayers(world);
+                }
+                if (force) removeNonPlayerEntities(world);
+                boolean unloaded = Bukkit.unloadWorld(world, false);
+                if (!unloaded) {
+                    if (playerStateId != null) playerStateIds.put(worldName, playerStateId);
+                    throw new IllegalStateException("Bukkit refused to unload world " + worldName + ".");
+                }
                 releasePlayerState(playerStateId);
-                deleteWorldFolder(worldName);
+                tryDeleteWorldFolder(worldName);
                 future.complete(null);
             } catch (Throwable throwable) {
                 future.completeExceptionally(throwable);
@@ -157,10 +172,17 @@ public class WorldService {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            Bukkit.unloadWorld(instance.getBukkitWorld(), false);
+            World world = instance.getBukkitWorld();
+            evacuatePlayers(world);
+            removeNonPlayerEntities(world);
+            Bukkit.unloadWorld(world, false);
         }
         playerStateIds.clear();
         playerStateReferences.clear();
+    }
+
+    public List<String> loadedWorldNames() {
+        return Bukkit.getWorlds().stream().map(World::getName).sorted().toList();
     }
 
     private void configureWorld(World world) {
@@ -209,6 +231,36 @@ public class WorldService {
         if (!Files.exists(worldFolder)) return;
         try (var walk = Files.walk(worldFolder)) {
             for (Path path : walk.sorted((left, right) -> right.getNameCount() - left.getNameCount()).toList()) Files.deleteIfExists(path);
+        }
+    }
+
+    private void tryDeleteWorldFolder(String worldName) {
+        try {
+            deleteWorldFolder(worldName);
+        } catch (IOException exception) {
+            plugin.getLogger().warning("Unloaded world " + worldName + " but could not delete its folder: " + exception.getMessage());
+        }
+    }
+
+    private void evacuatePlayers(World world) {
+        Location destination = fallbackLocation(world);
+        for (Player player : List.copyOf(world.getPlayers())) {
+            player.closeInventory();
+            player.setFallDistance(0);
+            player.teleport(destination);
+        }
+    }
+
+    private Location fallbackLocation(World unloadingWorld) {
+        for (World world : Bukkit.getWorlds()) {
+            if (!world.equals(unloadingWorld)) return world.getSpawnLocation();
+        }
+        throw new IllegalStateException("Cannot unload world " + unloadingWorld.getName() + " because no destination world is loaded.");
+    }
+
+    private void removeNonPlayerEntities(World world) {
+        for (Entity entity : List.copyOf(world.getEntities())) {
+            if (!(entity instanceof Player)) entity.remove();
         }
     }
 

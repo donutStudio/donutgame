@@ -35,9 +35,13 @@ public class MapManager {
         this.worldService = worldService;
     }
 
+    public GameMap getMapFromId(String mapId) {
+        return mapService.loadGameMap(mapService.getGameMapDescriptor(mapId));
+    }
+
     public CompletableFuture<GameMap> setMap(String mapId) {
         Objects.requireNonNull(mapId, "mapId");
-        return setMap(mapService.loadGameMap(mapService.getGameMapDescriptor(mapId)));
+        return setMap(getMapFromId(mapId));
     }
 
     public CompletableFuture<GameMap> setMap(GameMap map) {
@@ -81,20 +85,20 @@ public class MapManager {
         }).whenComplete((ignored, throwable) -> module.setTransitioning(false));
     }
 
-    public CompletableFuture<Void> placeMap(String mapId, Location location) {
+    public CompletableFuture<Void> placeMap(String mapId, GameLocation location) {
         return placeMap(mapId, location, MapRotation.DEG_0);
     }
 
-    public CompletableFuture<Void> placeMap(String mapId, Location location, MapRotation rotation) {
+    public CompletableFuture<Void> placeMap(String mapId, GameLocation location, MapRotation rotation) {
         Objects.requireNonNull(mapId, "mapId");
-        return placeMap(mapService.loadGameMap(mapService.getGameMapDescriptor(mapId)), location, rotation);
+        return placeMap(getMapFromId(mapId), location, rotation);
     }
 
-    public CompletableFuture<Void> placeMap(GameMap map, Location location) {
+    public CompletableFuture<Void> placeMap(GameMap map, GameLocation location) {
         return placeMap(map, location, MapRotation.DEG_0);
     }
 
-    public CompletableFuture<Void> placeMap(GameMap map, Location location, MapRotation rotation) {
+    public CompletableFuture<Void> placeMap(GameMap map, GameLocation location, MapRotation rotation) {
         Objects.requireNonNull(map, "map");
         Objects.requireNonNull(location, "location");
         Objects.requireNonNull(rotation, "rotation");
@@ -102,12 +106,12 @@ public class MapManager {
         if (descriptor.backingType() == BackingType.WORLD) return CompletableFuture.failedFuture(new IllegalArgumentException("World-backed maps cannot be placed into an existing world."));
         GameWorld world = currentWorld;
         if (world == null) return CompletableFuture.failedFuture(new IllegalStateException("This game does not currently have a world."));
-        if (!world.bukkitWorld().equals(location.getWorld())) return CompletableFuture.failedFuture(new IllegalArgumentException("Location must be inside the current game world."));
+        Location bukkitLocation = location.toBukkit(world.bukkitWorld());
         if (descriptor.backingType() != BackingType.SCHEMATIC) {
-            registerMapData(world, map, location, rotation, null);
+            registerMapData(world, map, bukkitLocation, rotation, null);
             return CompletableFuture.completedFuture(null);
         }
-        return worldService.pasteSchematic(descriptor.assetPath(), world.bukkitWorld(), location, rotation).thenAccept(metadata -> registerMapData(world, map, location, rotation, metadata));
+        return worldService.pasteSchematic(descriptor.assetPath(), world.bukkitWorld(), bukkitLocation, rotation).thenAccept(metadata -> registerMapData(world, map, bukkitLocation, rotation, metadata));
     }
 
     public CompletableFuture<Void> unloadWorld() {

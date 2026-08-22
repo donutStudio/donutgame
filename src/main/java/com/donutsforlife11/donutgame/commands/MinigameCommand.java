@@ -249,6 +249,10 @@ public class MinigameCommand implements PluginCommand {
                 return;
             }
             sendError(sender, "No active game exists at index " + index + ".");
+        }).exceptionally(error -> {
+            sendError(sender, "Failed to unload active game " + index + ". See console; the game slot was kept for recovery.");
+            error.printStackTrace();
+            return null;
         });
         return Command.SINGLE_SUCCESS;
     }

@@ -25,6 +25,7 @@ import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.border.BorderManager;
 import com.donutsforlife11.donutgame.api.data.GameData;
 import com.donutsforlife11.donutgame.api.event.GameEventRegistrar;
+import com.donutsforlife11.donutgame.api.map.GameMap;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
@@ -63,6 +64,8 @@ public abstract class GameModule {
         List<String> maps = config().getStringList("maps");
         if (!maps.isEmpty()) {
             mapManager().setMap(maps.get(ThreadLocalRandom.current().nextInt(maps.size())));
+        } else {
+            mapManager.setMap(MapManager.DEFAULT_MAP_ID);
         }
     }
 
@@ -303,6 +306,9 @@ public abstract class GameModule {
 
     public GameWorld world() {
         return mapManager().world();
+    }
+    public GameMap currentMap() {
+        return mapManager.map();
     }
 
     public final boolean isTransitioning() {
