@@ -1,6 +1,0 @@
-modules_directory: modules
-maps_directory: maps
-runtime_directory: .runtime
-max-active-games: 1
-single-world: false
-join-active-game-world: true
