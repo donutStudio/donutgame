@@ -1,4 +1,4 @@
-package com.donutsforlife11.donutgame.internal.map;
+package com.donutsforlife11.donutgame.api.map;
 
 import org.bukkit.World;
 
@@ -21,7 +21,7 @@ public class GameWorld {
         return bukkitWorld;
     }
 
-    void setBukkitWorld(World bukkitWorld) {
+    public void setBukkitWorld(World bukkitWorld) {
         this.bukkitWorld = bukkitWorld;
     }
 }

@@ -1,7 +1,42 @@
 name: Donutgame
 version: ${version}
 main: com.donutsforlife11.donutgame.Donutgame
-description: Empty Paper plugin.
+description: Donutsforlife11's base for creating minigames
 api-version: '26.2'
 authors:
   - Donutsforlife11
+dependencies:
+  server:
+    packetevents:
+      load: BEFORE
+      required: false
+      join-classpath: true
+permissions:
+  donutgame.command:
+    description: Allows use of Donutgame administrative commands.
+    default: op
+    children:
+      donutgame.command.reload: true
+      donutgame.command.minigame.load: true
+      donutgame.command.minigame.join: true
+      donutgame.command.minigame.leave: true
+      donutgame.command.minigame.unload: true
+      donutgame.command.worldtp: true
+  donutgame.command.reload:
+    description: Allows reloading Donutgame configuration, modules, and maps.
+    default: op
+  donutgame.command.minigame.load:
+    description: Allows loading minigame modules.
+    default: op
+  donutgame.command.minigame.join:
+    description: Allows joining players to active minigame modules.
+    default: op
+  donutgame.command.minigame.leave:
+    description: Allows removing players from active minigame modules.
+    default: op
+  donutgame.command.minigame.unload:
+    description: Allows unloading active minigame modules.
+    default: op
+  donutgame.command.worldtp:
+    description: Allows teleporting to loaded worlds.
+    default: op

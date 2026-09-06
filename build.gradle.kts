@@ -11,7 +11,7 @@ version = "1.0.0"
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:26.2.build.+")
-    compileOnly("net.dmulloy2:ProtocolLib:5.4.0")
+    compileOnly("com.github.retrooper:packetevents-spigot:2.13.0")
     compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.4.5")
     compileOnly("com.infernalsuite.asp:api:4.0.0-SNAPSHOT")
     implementation("fr.skytasul:glowingentities:2.0.0")

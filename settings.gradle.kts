@@ -14,6 +14,8 @@ dependencyResolutionManagement {
         mavenCentral()
         maven("https://repo.papermc.io/repository/maven-public/")
         maven("https://maven.enginehub.org/repo/")
+        maven("https://repo.codemc.io/repository/maven-releases/")
+        maven("https://repo.codemc.io/repository/maven-snapshots/")
         maven("https://repo.infernalsuite.com/repository/maven-snapshots/")
         maven("https://repo.infernalsuite.com/repository/maven-releases/")
     }
