@@ -1,16 +1,27 @@
 package com.donutsforlife11.donutgame.internal.game;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 
+import org.bukkit.event.Event;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.HandlerList;
+import org.bukkit.event.Listener;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.plugin.EventExecutor;
 
 import com.donutsforlife11.donutgame.Donutgame;
+import com.donutsforlife11.donutgame.api.event.GameEventAdapterRegistry;
+import com.donutsforlife11.donutgame.api.event.GameEventRegistrar;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
@@ -21,12 +32,14 @@ public abstract class GameModule {
     private Donutgame plugin;
     private MapManager mapManager;
     private PlayerManager playerManager;
+    private GameEventRegistrar eventRegistrar;
     private String id;
     private String name;
     private int index;
     private YamlConfiguration config;
     private volatile ModuleLifecycleState lifecycleState = ModuleLifecycleState.NEW;
     private final Map<String, GameWorld> worlds = new LinkedHashMap<>();
+    private final Set<Listener> registeredListeners = new LinkedHashSet<>();
 
     protected GameModule() {
         worlds.put(DEFAULT_WORLD_ID, new GameWorld(DEFAULT_WORLD_ID));
@@ -47,6 +60,7 @@ public abstract class GameModule {
         this.config = config;
         this.mapManager = mapManager;
         this.playerManager = playerManager;
+        this.eventRegistrar = new GameEventRegistrar(this);
     }
 
     public void beforeLoad() {
@@ -77,6 +91,8 @@ public abstract class GameModule {
                 .thenApply(ignored -> {
                     try {
                         onLoad();
+                        registerGameEventHandlers(this);
+                        registerFieldGameEventHandlers();
                         setLifecycleState(ModuleLifecycleState.LOADED);
                         return this;
                     } catch (Throwable throwable) {
@@ -97,6 +113,7 @@ public abstract class GameModule {
 
     protected final CompletableFuture<Void> shutdown() {
         setLifecycleState(ModuleLifecycleState.UNLOADING);
+        unregisterDynamicEvents();
         return playerManager.clear()
             .thenCompose(ignored -> mapManager.unloadWorlds())
             .whenComplete((ignored, throwable) -> setLifecycleState(throwable == null ? ModuleLifecycleState.UNLOADED : ModuleLifecycleState.FAILED));
@@ -145,6 +162,29 @@ public abstract class GameModule {
         worlds.put(world.id(), world);
     }
 
+    protected final void registerGameEventHandlers(Object target) {
+        eventRegistrar.registerAnnotated(target);
+    }
+
+    protected final GameEventAdapterRegistry gameEventAdapters() {
+        return eventRegistrar.adapterRegistry();
+    }
+
+    public final void registerDynamicEvent(
+        Listener listener,
+        Class<? extends Event> eventType,
+        EventExecutor executor,
+        EventPriority priority,
+        boolean ignoreCancelled
+    ) {
+        if (listener == null || eventType == null || executor == null) {
+            throw new IllegalArgumentException("listener, eventType, and executor cannot be null");
+        }
+        if (registeredListeners.add(listener)) {
+            plugin.getServer().getPluginManager().registerEvent(eventType, listener, priority, executor, plugin, ignoreCancelled);
+        }
+    }
+
     public final ModuleLifecycleState lifecycleState() {
         return lifecycleState;
     }
@@ -165,5 +205,35 @@ public abstract class GameModule {
 
     private void setLifecycleState(ModuleLifecycleState lifecycleState) {
         this.lifecycleState = lifecycleState;
+    }
+
+    private void unregisterDynamicEvents() {
+        for (Listener listener : List.copyOf(registeredListeners)) {
+            HandlerList.unregisterAll(listener);
+        }
+        registeredListeners.clear();
+    }
+
+    private void registerFieldGameEventHandlers() {
+        for (Class<?> current = getClass(); current != null && current != GameModule.class; current = current.getSuperclass()) {
+            for (Field field : current.getDeclaredFields()) {
+                if (Modifier.isStatic(field.getModifiers()) || field.getType().isPrimitive()) {
+                    continue;
+                }
+                Object target = fieldValue(field);
+                if (target != null && target != this) {
+                    registerGameEventHandlers(target);
+                }
+            }
+        }
+    }
+
+    private Object fieldValue(Field field) {
+        try {
+            field.setAccessible(true);
+            return field.get(this);
+        } catch (IllegalAccessException | RuntimeException exception) {
+            return null;
+        }
     }
 }

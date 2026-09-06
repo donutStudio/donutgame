@@ -26,6 +26,14 @@ java {
     }
 }
 
+val generatedGameEventApi = layout.buildDirectory.dir("generated/sources/game-events/java/main")
+
+sourceSets {
+    main {
+        java.srcDir(generatedGameEventApi)
+    }
+}
+
 allprojects {
     tasks.withType<Jar>().configureEach {
         isPreserveFileTimestamps = false
@@ -44,7 +52,14 @@ allprojects {
 }
 
 tasks {
+    val generateGameEventApi by registering(GameEventApiGenerateTask::class) {
+        classpath.from(configurations.compileClasspath)
+        adapterRegistrySource.set(layout.projectDirectory.file("src/main/java/com/donutsforlife11/donutgame/api/event/GameEventAdapterRegistry.java"))
+        outputDirectory.set(generatedGameEventApi)
+    }
+
     compileJava {
+        dependsOn(generateGameEventApi)
         options.encoding = "UTF-8"
         options.release.set(25)
         options.compilerArgs.add("-Xlint:deprecation")
