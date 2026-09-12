@@ -142,6 +142,25 @@ GameTimer onFinish(Consumer<GameTimer> action) // Runs action upon the timer fin
 boolean isFinished() // Returns whether or not the timer is finished
 ```
 
+## UI SYSTEM
+**UIManager**
+```java
+void title(GamePlayer player, Component title) // Shows title on the player's screen
+void title(Collection<GamePlayer> players, Component title) // Shows a title on the players' screens
+void subtitle(GamePlayer player, Component subtitle) // Shows subtitle on the player's screen (and uses packet tracking to work and display the subtitle regardless of if a title is already shown currently)
+void subtitle(Collection<GamePlayer> players, Component subtitle) // Shows a subtitle on the players' screens
+void actionbar(GamePlayer player, Component actionbar) // Shows an actionbar on the player's screen
+void actionbar(Collection<GamePlayer> players, Component actionbar) // Shows an actionbar on the players' screens
+void chat(GamePlayer player, Component message) // Shows a chat message on the player's screen
+void chat(Collection<GamePlayer> players, Component message) // Shows a chat message on the players' screens
+void gameMessage(GamePlayer player, Component message) // Sends a formatted "game message" to the player's chat
+void gameMessage(Collection<GamePlayer> players, Component message) // Sends a formatted "game message" to the players' chat
+void playSound(GamePlayer player, Sound sound) // Plays a sound audible to the specified player
+void playSound(GamePlayer player, Sound sound, GameLocation location) // Plays a sound at a specific location audible to specified player
+void playSound(GamePlayer player, Sound sound, )
+GameSidebar newSidebar()
+```
+
 ## PLAYER SYSTEM
 **PlayerManager**
 ```java
