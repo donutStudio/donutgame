@@ -16,6 +16,7 @@ import org.bukkit.entity.Player;
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
+import com.donutsforlife11.donutgame.api.time.TimeManager;
 
 public class ModuleService {
     private final Donutgame plugin;
@@ -48,7 +49,8 @@ public class ModuleService {
         try {
             MapManager mapManager = new MapManager(module, plugin.mapService(), plugin.worldService());
             PlayerManager playerManager = new PlayerManager(module);
-            module.initialize(plugin, descriptor, index, config, mapManager, playerManager);
+            TimeManager timeManager = new TimeManager(module);
+            module.initialize(plugin, descriptor, index, config, mapManager, playerManager, timeManager);
             plugin.getLogger().info("Loading module " + descriptor.id() + " as active game " + index + ".");
             return module.startLoadSequence()
                 .thenCompose(loadedModule -> playerManager.join(initialPlayers).thenApply(ignored -> loadedModule))

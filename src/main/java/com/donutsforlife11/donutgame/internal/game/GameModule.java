@@ -25,6 +25,7 @@ import com.donutsforlife11.donutgame.api.event.GameEventRegistrar;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
+import com.donutsforlife11.donutgame.api.time.TimeManager;
 
 public abstract class GameModule {
     public static final String DEFAULT_WORLD_ID = "default";
@@ -32,6 +33,7 @@ public abstract class GameModule {
     private Donutgame plugin;
     private MapManager mapManager;
     private PlayerManager playerManager;
+    private TimeManager timeManager;
     private GameEventRegistrar eventRegistrar;
     private String id;
     private String name;
@@ -51,7 +53,8 @@ public abstract class GameModule {
         int index,
         YamlConfiguration config,
         MapManager mapManager,
-        PlayerManager playerManager
+        PlayerManager playerManager,
+        TimeManager timeManager
     ) {
         this.plugin = plugin;
         this.id = descriptor.id();
@@ -60,6 +63,7 @@ public abstract class GameModule {
         this.config = config;
         this.mapManager = mapManager;
         this.playerManager = playerManager;
+        this.timeManager = timeManager;
         this.eventRegistrar = new GameEventRegistrar(this);
     }
 
@@ -113,6 +117,7 @@ public abstract class GameModule {
 
     protected final CompletableFuture<Void> shutdown() {
         setLifecycleState(ModuleLifecycleState.UNLOADING);
+        timeManager.cancelAll();
         unregisterDynamicEvents();
         return playerManager.clear()
             .thenCompose(ignored -> mapManager.unloadWorlds())
@@ -149,6 +154,10 @@ public abstract class GameModule {
 
     public PlayerManager playerManager() {
         return playerManager;
+    }
+
+    public TimeManager timeManager() {
+        return timeManager;
     }
 
     public final Map<String, GameWorld> worlds() {
