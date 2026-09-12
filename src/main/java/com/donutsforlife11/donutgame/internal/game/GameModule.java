@@ -143,6 +143,10 @@ public abstract class GameModule {
         return mapManager;
     }
 
+    public GameWorld world() {
+        return defaultWorld();
+    }
+
     public PlayerManager playerManager() {
         return playerManager;
     }
@@ -158,6 +162,11 @@ public abstract class GameModule {
     protected final void putWorld(GameWorld world) {
         if (world == null) {
             throw new IllegalArgumentException("world cannot be null");
+        }
+        // Implement later: Multi-world modules: remove this guard once a module can intentionally own
+        // multiple GameWorlds and expose a public API for selecting between them.
+        if (!DEFAULT_WORLD_ID.equals(world.id())) {
+            throw new UnsupportedOperationException("Modules are limited to one GameWorld for now.");
         }
         worlds.put(world.id(), world);
     }

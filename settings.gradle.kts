@@ -23,5 +23,9 @@ dependencyResolutionManagement {
 
 rootProject.name = "Donutgame"
 
-include("modules:void_wars")
-include("modules:lava_run")
+file("modules").listFiles()
+    ?.filter { it.isDirectory && it.resolve("build.gradle.kts").isFile }
+    ?.sortedBy { it.name }
+    ?.forEach { module ->
+        include("modules:${module.name}")
+    }

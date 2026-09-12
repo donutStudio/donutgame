@@ -1,6 +1,5 @@
 gradlew.bat
 .gradle/
-.vscode/
 bin/
 build/
 gradle/

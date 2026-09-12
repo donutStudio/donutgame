@@ -2,8 +2,10 @@ package com.donutsforlife11.donutgame.internal.game;
 
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.entity.Player;
 
 public class GamePlayerConnectionEvents implements Listener {
     private final ModuleService moduleService;
@@ -29,5 +31,20 @@ public class GamePlayerConnectionEvents implements Listener {
                 return false;
             });
         }
+    }
+
+    @EventHandler
+    public void onFoodLevelChange(FoodLevelChangeEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+        GameModule game = moduleService.getGameOfPlayer(player);
+        if (game == null || game.world().hungerEnabled()) {
+            return;
+        }
+        event.setCancelled(true);
+        player.setFoodLevel(20);
+        player.setSaturation(20);
+        player.setExhaustion(0);
     }
 }

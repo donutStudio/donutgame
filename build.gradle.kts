@@ -27,10 +27,12 @@ java {
 }
 
 val generatedGameEventApi = layout.buildDirectory.dir("generated/sources/game-events/java/main")
+val generatedGameWorldGamerulesApi = layout.buildDirectory.dir("generated/sources/game-world-gamerules/java/main")
 
 sourceSets {
     main {
         java.srcDir(generatedGameEventApi)
+        java.srcDir(generatedGameWorldGamerulesApi)
     }
 }
 
@@ -58,8 +60,13 @@ tasks {
         outputDirectory.set(generatedGameEventApi)
     }
 
+    val generateGameWorldGamerulesApi by registering(GameWorldGamerulesGenerateTask::class) {
+        classpath.from(configurations.compileClasspath)
+        outputDirectory.set(generatedGameWorldGamerulesApi)
+    }
+
     compileJava {
-        dependsOn(generateGameEventApi)
+        dependsOn(generateGameEventApi, generateGameWorldGamerulesApi)
         options.encoding = "UTF-8"
         options.release.set(25)
         options.compilerArgs.add("-Xlint:deprecation")

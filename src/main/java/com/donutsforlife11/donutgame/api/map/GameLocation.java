@@ -3,6 +3,7 @@ package com.donutsforlife11.donutgame.api.map;
 import java.util.Objects;
 
 import org.bukkit.Location;
+import org.bukkit.World;
 
 public class GameLocation {
     private final GameWorld world;
@@ -11,6 +12,18 @@ public class GameLocation {
     private final double z;
     private final float yaw;
     private final float pitch;
+
+    public GameLocation() {
+        this(null, 0, 0, 0, 0, 0);
+    }
+
+    public GameLocation(double x, double y, double z) {
+        this(null, x, y, z, 0, 0);
+    }
+
+    public GameLocation(double x, double y, double z, double yaw, double pitch) {
+        this(null, x, y, z, (float) yaw, (float) pitch);
+    }
 
     public GameLocation(GameWorld world, Location location) {
         this(
@@ -28,7 +41,7 @@ public class GameLocation {
     }
 
     public GameLocation(GameWorld world, double x, double y, double z, float yaw, float pitch) {
-        this.world = Objects.requireNonNull(world, "world");
+        this.world = world;
         this.x = x;
         this.y = y;
         this.z = z;
@@ -41,7 +54,19 @@ public class GameLocation {
     }
 
     public Location bukkitLocation() {
-        return new Location(world.bukkitWorld(), x, y, z, yaw, pitch);
+        if (world == null) {
+            throw new IllegalStateException("Location is not bound to a GameWorld.");
+        }
+        return toBukkit(world.bukkitWorld());
+    }
+
+    public Location toBukkit(World world) {
+        Objects.requireNonNull(world, "world");
+        return new Location(world, x, y, z, yaw, pitch);
+    }
+
+    public GameLocation inWorld(GameWorld world) {
+        return new GameLocation(Objects.requireNonNull(world, "world"), x, y, z, yaw, pitch);
     }
 
     public double x() {
