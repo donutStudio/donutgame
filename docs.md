@@ -71,6 +71,12 @@ void setDifficulty(Difficulty difficulty) // Sets the difficulty of the world
 Difficulty difficulty() // Returns the GameWorld's difficulty
 void setHungerEnabled(boolean enabled) // Sets whether or not the mechanic of hunger and saturation is enabled in the GameWorld
 boolean hungerEnabled() // Returns whether or not hunger is enabled
+// Block management (more may be added in future)
+CompletableFuture<Void> setBlock(GameLocation location, BlockSpec block) // Sets a block at a location, like /setblock
+CompletableFuture<Void> fillBlocks(GameRegion region, BlockSpec block) // Fills a region, like /fill
+CompletableFuture<Void> replaceBlocks(GameRegion region, BlockSpec from, BlockSpec to) // Fills a region but only replacing certain blocks
+// Entity management (more may be added in future)
+CompletableFuture<Void> summon(EntitySpec entity, GameLocation loc) // Summons an entity at a location
 ```
 **GameWorldGamerules**
 ```java
@@ -145,20 +151,117 @@ boolean isFinished() // Returns whether or not the timer is finished
 ## UI SYSTEM
 **UIManager**
 ```java
-void title(GamePlayer player, Component title) // Shows title on the player's screen
-void title(Collection<GamePlayer> players, Component title) // Shows a title on the players' screens
-void subtitle(GamePlayer player, Component subtitle) // Shows subtitle on the player's screen (and uses packet tracking to work and display the subtitle regardless of if a title is already shown currently)
-void subtitle(Collection<GamePlayer> players, Component subtitle) // Shows a subtitle on the players' screens
-void actionbar(GamePlayer player, Component actionbar) // Shows an actionbar on the player's screen
-void actionbar(Collection<GamePlayer> players, Component actionbar) // Shows an actionbar on the players' screens
-void chat(GamePlayer player, Component message) // Shows a chat message on the player's screen
-void chat(Collection<GamePlayer> players, Component message) // Shows a chat message on the players' screens
-void gameMessage(GamePlayer player, Component message) // Sends a formatted "game message" to the player's chat
-void gameMessage(Collection<GamePlayer> players, Component message) // Sends a formatted "game message" to the players' chat
-void playSound(GamePlayer player, Sound sound) // Plays a sound audible to the specified player
-void playSound(GamePlayer player, Sound sound, GameLocation location) // Plays a sound at a specific location audible to specified player
-void playSound(GamePlayer player, Sound sound, )
-GameSidebar newSidebar()
+GameSidebar newSidebar() // Creates a new sidebar
+List<GameSidebar> sidebars() // Returns active sidebars
+```
+**GameSidebar**
+```java
+GameSidebar setViewers(Collection<GamePlayer> viewers) // Sets the viewers of the sidebar (by default a sidebar's viewers is supplied from the module's playerManager.getPlayers())
+GameSidebar setViewers(Supplier<Collection<GamePlayer>> viewers) // Sets the viewers similar to above but explicitly supplying it
+GameSidebar setTitle(Component title) // Sets the title of the sidebar (by default it uses the game's name in gold and bold)
+GameSidebar setTitle(Supplier<Component> title) // Similar to above but supplies it
+GameSidebar addEntry(SidebarEntry entry) // Adds a sidebar entry to the end sidebar
+GameSidebar insertEntry(int index, SidebarEntry entry) // Inserts an entry to a certain position in the sidebar
+GameSidebar setEntry(int index, SidebarEntry entry) // Replaces an index of the sidebar entries to a different entry
+GameSidebar replaceEntry(SidebarEntry oldEntry, SidebarEntry newEntry) // Replaces first instance of specified entry with a different one
+GameSidebar removeEntry(SidebarEntry entry) // Removes first instance of specified entry from the sidebar
+GameSidebar removeEntry(int index) // Removes entry from sidebar based on an index
+List<SidebarEntry> entries() // Returns the sidebar entries
+GameSidebar show() // Shows the sidebar to its viewers, replacing existing sidebars they may have on their screen
+GameSidebar hide() // Hides the sidebar from its viewers
+boolean visible() // Returns whether or not the sidebar is shown to its viewers
+GameSidebar setRefreshInterval(int ticks) // Sets the sidebar refresh interval, defaults to 10 ticks, 0 to disable auto refreshing
+GameSidebar refresh() // Refreshes the sidebar manually
+```
+**SidebarEntry**
+```java
+// These static factory methods return SidebarEntries with certain formatting constraints
+static SidebarEntry blank() // Blank line
+static SidebarEntry custom(Component component) // Global non-labeled component
+static SidebarEntry custom(Supplier<Component> component) // Global non-labeled supplied component
+static SidebarEntry custom(Function<GamePlayer, Component> component) // Player specific non-labeled component
+static SidebarEntry integer(String label, int value) // Global integer
+static SidebarEntry integer(String label, IntSupplier value) // Global supplied integer
+static SidebarEntry integer(String label, Function<GamePlayer, Integer> value) // Player specific component
+static SidebarEntry fraction(String label, int numerator, int denominator) // Global fraction
+static SidebarEntry fraction(String label, IntSupplier numerator, IntSupplier denominator) // Global supplied fraction
+static SidebarEntry fraction(String label, Function<GamePlayer, Integer> numerator, Function<GamePlayer, Integer> denominator) // Player specific fraction
+static SidebarEntry time(String label, int ticks) // Global time
+static SidebarEntry time(String label, IntSupplier ticks) // Global supplied time
+static SidebarEntry time(String label, Function<GamePlayer, Integer> time) // Player specific time
+static SidebarEntry component(String label, Component component) // Global component
+static SidebarEntry component(String label, Supplier<Component> component) // Global supplied component
+static SidebarEntry component(String label, Function<GamePlayer, Component> component) // Player specific component
+SidebarEntry setLabel(String label) // Sets (or adds if it doesn't exist) label on the sidebar entry
+SidebarEntry setLabel(Supplier<String> label) // Similar to above but supplies it
+SidebarEntry setLabel(Function<GamePlayer, String> label) // Similar to above but makes it player specific
+SidebarEntry removeLabel() // Removes this entry's label, thus giving it no label
+String label() // Returns the sidebar's label
+```
+
+# ENTITIES
+**GameEntityBase**
+```java
+// Most of these would have default implementations so not to make GameEntity and GamePlayer too big, but some that really really need overrides will have them
+Entity bukkitEntity() // Returns the underlying bukkit entity, hopefully the API will try to make needing the bukkit entity uncommon but its still an option for any case that MIGHT need it
+CompletableFuture<Boolean> teleport(GameLocation location) // Teleports this entity to a game location
+GameLocation location() // Returns the entity's location
+GameWorld world() // Returns the entity's GameWorld
+// Health and damage
+void setHealth(float health) // Sets the entity's health (clamped to its max health)
+void heal() // Heals the entity to its max health
+void heal(float amount) // Heals the entity by a certain amount
+void damage(float amount) // Damages the entity by a certain amount with the generic damage type
+void damage(float amount, DamageSource source) // Damages the entity but with a DamageSource
+float health() // Returns the entity's current health
+void kill() // Kills the entity (of course death behaves a bit different for players and entities though)
+boolean isDead() // Returns whether or not the entity is dead
+// Common entity config
+void setVelocity(Vectory velocity) // Sets the entity's velocity
+Vector velocity() // Returns the entity's velocity
+void setCustomName(Component name) // Sets a custom name for the entity
+void setCustomNameVisible(boolean visible) // Sets if the custom name is visible or not
+Component customName() // Returns the entity's custom name
+boolean customNameVisible() // Returns whether or not the entity's custom name is visible
+void setInvulnerable(boolean invulnerable) // Sets if the entity is invulnerable or not
+boolean isInvulnerable() // Returns whether or not the entity is invulnerable
+void setInvisible(boolean invisible) // Sets if the entity is invisible or not
+boolean isInvisible() // Returns whether or not the entity is invisible
+void setNoGravity(boolean noGravity) // Sets whether or not the entity has no gravity
+boolean hasNoGravity() // Returns whether or not the entity has no gravity
+void setSilent(boolean silent) // Sets whether or not the entity is silent
+boolean isSilent() // Returns whether or not the entity is silent
+void setFireTicks(int ticks) // Sets the fire ticks of the entity
+int fireTicks() // Returns the fire ticks on the entity
+// Effects
+void addEffect(PotionEffectType effect, int ticks, int amplifier) // Adds a potion effect to an entity with an amplifier
+void addEffect(PotionEffectType effect, int ticks, int amplifier, boolean hideParticles) // Similar to above but hides particles, similar to the the true/false at the end of vanilla /effect
+void addEffect(PotionEffect effect) // Adds a potion effect you have to construct to the entity
+void clearEffects() // Clears all effects of the entity
+void clearEffect(PotionEffectType effect) // Clears instances of this specific potion effect type on the entity
+void clearEffect(PotionEffect effect) // Similar to above but takes in a PotionEffect and not just a PotionEffectType
+boolean hasEffect(PotionEffectType effect) // Returns whether or not the entity has this effect type
+boolean hasEffect(PotionEffect effect) // Similar to above but takes in a PotionEffect
+List<PotionEffect> effects() // Returns all active effects on the entity
+// Attributes
+void setAttributeBase(Attribute attribute, double value) // Sets the attribute base of an entity
+void resetAttributeBase(Attribute attribute) // Resets the base value of that attribute to its default for that entity
+double attributeBase(Attribute attribute) // Returns the value of that attribute's base on the entity
+void addModifier(Attribute attribute, AttributeModifier modifier) // Adds an attribute modifier
+void removeModifier(Attribute attribute, AttributeModifier modifier) // Removes an attribute modifier
+void attributeModifierValue(Attribute attribute, AttributeModifier modifier) // Gets the value of an attribute modifier
+List<AttributeModifier> attributeModifiers(Attribute attribute) // Returns all modifiers present for that attribute
+double attributeValue(Attribute attribute) // Returns the calculated attribute value for this entity, including base and all modifiers present
+// Items (more may be added in future)
+void setItem(EquipmentSlot slot, ItemSpec item) // Sets an item in the specified slot like /item replace
+void setItem(EquipmentSlot slot, ItemStack item) // Similar to above but takes in an ItemStack
+void clearItems() // Clears all items in all slots of the entity (and inventory as well if its a player)
+void clearItems(ItemSpec item) // Similar to above but only clears instances of a certain ItemSpec (that of course with components will make it check for items to clear with even more specifity)
+void clearItems(ItemStack item) // Similar to above but takes in an ItemStack
+```
+**GameEntity** (implements GameEntityBase)
+```java
+UUID uuid() // Returns the entity's UUID
 ```
 
 ## PLAYER SYSTEM
@@ -168,8 +271,9 @@ Collection<GamePlayer> getPlayers() // Returns all GamePlayers owned by the game
 Collection<GamePlayer> getSpectators() // Returns all spectating GamePlayers owned by the game
 Collection<GamePlayer> getNonSpectators() // Returns all non spectating GamePlayers owned by the game
 ```
-**GamePlayer**
+**GamePlayer** (implements GameEntityBase)
 ```java
+UUID uuid() // Returns the player's bukkit UUID
 void setSpectator(boolean spectator) // Sets the player to a spectator or not at their current location (so for example if this is called in an event when a player dies, the player would become a spectator at the location where they died)
 void setSpectator(boolean spectator, GameLocation location) // Sets the player to a spectator at the specified location (as in immediately teleporting them to that location once they change from a non spectator to a spectator or vice versa)
 boolean isSpectator() // Returns whether or not the player is a spectator; If a player is a spectator they will have a completely separate raw paper/bukkit inventory snapshot and other data while in spectator (like effects, attributes, etc). For example, if a player is in spectator, and an item is given to them, it will be stored in their inventory but they will not see it- but if they are not a spectator they will see it
@@ -188,4 +292,37 @@ void setHunger(int hunger) // Sets the player's hunger/foodLevel
 int hunger() // Returns the player's hunger
 void setSaturation(float saturation) // Sets the player's saturation
 float saturation() // Returns the player's saturation
+void setArrowsInBody(int arrows) // Sets the arrows in a player's body
+int arrowsInBody() // Returns the arrows in a player's body
+void reset() // Resets the player to the default state, including gamemode, inventory, health, attributes, effects, arrows in body, fire ticks, everything
+// UI methods
+void title(Component title) // Shows title on the player's screen
+void subtitle(Component subtitle) // Shows subtitle on the player's screen (and uses packet tracking to work and display the subtitle regardless of if a title is already shown currently)
+void actionbar(Component actionbar) // Shows an actionbar on the player's screen
+void chat(Component message) // Shows a chat message on the player's screen
+void gameMessage(Component message) // Sends a formatted "game message" to the player's chat
+// Sound section of UI methods because there are lots of overloads for this
+// Just a sound, no volume pitch or min volume
+void playSound(Sound sound) // Plays sound audible to specified player
+void playSound(Sound sound, GameLocation location) // Plays sound at a specific location audible to specified player
+void playSound(Sound sound, SoundCategory track) // Plays sound on specified track (overloads without the track use MASTER)
+void playSound(Sound sound, SoundCategory track, GameLocation location) // Plays sound on track at location
+// volume
+void playSound(Sound sound, float volume)
+void playSound(Sound sound, GameLocation location, float volume)
+void playSound(Sound sound, SoundCategory track, float volume)
+void playSound(Sound sound, SoundCategory track, GameLocation location, float volume)
+// volume + pitch
+void playSound(Sound sound, float volume, float pitch)
+void playSound(Sound sound, GameLocation location, float volume, float pitch)
+void playSound(Sound sound, SoundCategory track, float volume, float pitch)
+void playSound(Sound sound, SoundCategory track, GameLocation location, float volume, float pitch)
+// volume + pitch + min volume
+void playSound(Sound sound, float volume, float pitch, float minVolume)
+void playSound(Sound sound, GameLocation location, float volume, float pitch, float minVolume)
+void playSound(Sound sound, SoundCategory track, float volume, float pitch, float minVolume)
+void playSound(Sound sound, SoundCategory track, GameLocation location, float volume, float pitch, float minVolume)
+// Items (more may be added in future)
+void giveItem(ItemSpec item) // Gives an item to a player
+void giveItem(ItemStack item) // Similar to above but takes in an ItemStack
 ```

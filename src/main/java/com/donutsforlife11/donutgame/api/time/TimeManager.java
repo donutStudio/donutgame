@@ -32,6 +32,8 @@ public class TimeManager {
         for (GameTimer timer : Set.copyOf(timers)) {
             timer.cancel();
         }
+        timers.clear();
+        stopTicker();
     }
 
     void startTicking() {
@@ -64,8 +66,16 @@ public class TimeManager {
             if (tickerTask == null || hasTickingTimer()) {
                 return;
             }
-            tickerTask.cancel();
-            tickerTask = null;
+            stopTicker();
+        }
+    }
+
+    private void stopTicker() {
+        synchronized (tickerLock) {
+            if (tickerTask != null) {
+                tickerTask.cancel();
+                tickerTask = null;
+            }
         }
     }
 

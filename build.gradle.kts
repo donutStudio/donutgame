@@ -28,12 +28,23 @@ java {
 
 val generatedGameEventApi = layout.buildDirectory.dir("generated/sources/game-events/java/main")
 val generatedGameWorldGamerulesApi = layout.buildDirectory.dir("generated/sources/game-world-gamerules/java/main")
+val generatedGameObjectSpecsApi = layout.buildDirectory.dir("generated/sources/game-object-specs/java/main")
 
 sourceSets {
     main {
         java.srcDir(generatedGameEventApi)
         java.srcDir(generatedGameWorldGamerulesApi)
+        java.srcDir(generatedGameObjectSpecsApi)
     }
+}
+
+val paperApiSources by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
+dependencies {
+    paperApiSources("io.papermc.paper:paper-api:26.2.build.+:sources")
 }
 
 allprojects {
@@ -65,8 +76,14 @@ tasks {
         outputDirectory.set(generatedGameWorldGamerulesApi)
     }
 
+    val generateGameObjectSpecsApi by registering(GameObjectSpecsGenerateTask::class) {
+        classpath.from(configurations.compileClasspath)
+        sourceArchives.from(paperApiSources)
+        outputDirectory.set(generatedGameObjectSpecsApi)
+    }
+
     compileJava {
-        dependsOn(generateGameEventApi, generateGameWorldGamerulesApi)
+        dependsOn(generateGameEventApi, generateGameWorldGamerulesApi, generateGameObjectSpecsApi)
         options.encoding = "UTF-8"
         options.release.set(25)
         options.compilerArgs.add("-Xlint:deprecation")

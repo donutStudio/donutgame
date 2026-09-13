@@ -107,6 +107,7 @@ public class MapManager {
     public CompletableFuture<Void> unloadWorlds() {
         return worldService.unloadModuleWorlds(module).thenRun(() -> {
             currentMap = null;
+            pendingMapLoad = null;
             world().clearMapData();
         });
     }

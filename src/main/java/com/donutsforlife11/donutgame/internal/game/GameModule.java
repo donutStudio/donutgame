@@ -10,8 +10,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
+import java.util.function.Supplier;
 
+import org.bukkit.Sound;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
@@ -20,12 +23,24 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.EventExecutor;
 
 import com.donutsforlife11.donutgame.Donutgame;
+import com.donutsforlife11.donutgame.api.entity.GameEntity;
 import com.donutsforlife11.donutgame.api.event.GameEventAdapterRegistry;
 import com.donutsforlife11.donutgame.api.event.GameEventRegistrar;
+import com.donutsforlife11.donutgame.api.map.GameLocation;
+import com.donutsforlife11.donutgame.api.map.GameRegion;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.map.MapManager;
+import com.donutsforlife11.donutgame.api.object.BlockSpec;
+import com.donutsforlife11.donutgame.api.object.EntitySpec;
+import com.donutsforlife11.donutgame.api.object.ItemSpec;
+import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
+import com.donutsforlife11.donutgame.api.ui.UIManager;
+
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 
 public abstract class GameModule {
     public static final String DEFAULT_WORLD_ID = "default";
@@ -34,11 +49,13 @@ public abstract class GameModule {
     private MapManager mapManager;
     private PlayerManager playerManager;
     private TimeManager timeManager;
+    private UIManager uiManager;
     private GameEventRegistrar eventRegistrar;
     private String id;
     private String name;
     private int index;
     private YamlConfiguration config;
+    private volatile boolean started;
     private volatile ModuleLifecycleState lifecycleState = ModuleLifecycleState.NEW;
     private final Map<String, GameWorld> worlds = new LinkedHashMap<>();
     private final Set<Listener> registeredListeners = new LinkedHashSet<>();
@@ -54,7 +71,8 @@ public abstract class GameModule {
         YamlConfiguration config,
         MapManager mapManager,
         PlayerManager playerManager,
-        TimeManager timeManager
+        TimeManager timeManager,
+        UIManager uiManager
     ) {
         this.plugin = plugin;
         this.id = descriptor.id();
@@ -64,6 +82,7 @@ public abstract class GameModule {
         this.mapManager = mapManager;
         this.playerManager = playerManager;
         this.timeManager = timeManager;
+        this.uiManager = uiManager;
         this.eventRegistrar = new GameEventRegistrar(this);
     }
 
@@ -83,25 +102,38 @@ public abstract class GameModule {
     public void onLoad() {
     }
 
+    public void onStart() {
+    }
+
     public void onUnload() {
     }
 
     protected final CompletableFuture<GameModule> startLoadSequence() {
+        return startLoadSequence(() -> CompletableFuture.completedFuture(null));
+    }
+
+    protected final CompletableFuture<GameModule> startLoadSequence(Supplier<CompletableFuture<?>> beforeCountdown) {
         try {
             requireState(ModuleLifecycleState.NEW);
             setLifecycleState(ModuleLifecycleState.LOADING);
+            started = false;
             beforeLoad();
             return mapManager.whenReady()
-                .thenApply(ignored -> {
+                .thenCompose(ignored -> {
                     try {
                         onLoad();
                         registerGameEventHandlers(this);
                         registerFieldGameEventHandlers();
-                        setLifecycleState(ModuleLifecycleState.LOADED);
-                        return this;
+                        CompletableFuture<?> beforeCountdownFuture = beforeCountdown == null
+                            ? CompletableFuture.completedFuture(null)
+                            : beforeCountdown.get();
+                        return beforeCountdownFuture.thenCompose(beforeCountdownIgnored -> {
+                            setLifecycleState(ModuleLifecycleState.COUNTDOWN);
+                            return startCountdownSequence();
+                        });
                     } catch (Throwable throwable) {
                         setLifecycleState(ModuleLifecycleState.FAILED);
-                        throw new RuntimeException(throwable);
+                        return CompletableFuture.failedFuture(throwable);
                     }
                 })
                 .whenComplete((ignored, throwable) -> {
@@ -121,7 +153,10 @@ public abstract class GameModule {
         unregisterDynamicEvents();
         return playerManager.clear()
             .thenCompose(ignored -> mapManager.unloadWorlds())
-            .whenComplete((ignored, throwable) -> setLifecycleState(throwable == null ? ModuleLifecycleState.UNLOADED : ModuleLifecycleState.FAILED));
+            .whenComplete((ignored, throwable) -> {
+                uiManager.clear();
+                setLifecycleState(throwable == null ? ModuleLifecycleState.UNLOADED : ModuleLifecycleState.FAILED);
+            });
     }
 
     public final Donutgame plugin() {
@@ -158,6 +193,29 @@ public abstract class GameModule {
 
     public TimeManager timeManager() {
         return timeManager;
+    }
+
+    public UIManager uiManager() {
+        return uiManager;
+    }
+
+    protected final void setBlock(GameLocation location, BlockSpec<?> block) {
+        world().setBlock(location, block);
+    }
+
+    protected final void fill(GameRegion region, BlockSpec<?> block) {
+        world().fill(region, block);
+    }
+
+    protected final void give(GamePlayer player, ItemSpec item) {
+        if (player == null) {
+            throw new IllegalArgumentException("player cannot be null");
+        }
+        player.give(item);
+    }
+
+    protected final GameEntity summon(GameLocation location, EntitySpec<?> entity) {
+        return world().summon(location, entity);
     }
 
     public final Map<String, GameWorld> worlds() {
@@ -207,6 +265,10 @@ public abstract class GameModule {
         return lifecycleState;
     }
 
+    public final boolean hasStarted() {
+        return started;
+    }
+
     public final void log(String message) {
         plugin.getLogger().info("[" + id + ":" + index + "] " + message);
     }
@@ -223,6 +285,63 @@ public abstract class GameModule {
 
     private void setLifecycleState(ModuleLifecycleState lifecycleState) {
         this.lifecycleState = lifecycleState;
+    }
+
+    private CompletableFuture<GameModule> startCountdownSequence() {
+        CompletableFuture<GameModule> future = new CompletableFuture<>();
+        AtomicBoolean completed = new AtomicBoolean();
+        startCountdown(config.getInt("countdown_ticks", 200), () -> {
+            if (!completed.compareAndSet(false, true)) {
+                return;
+            }
+            try {
+                onStart();
+                started = true;
+                setLifecycleState(ModuleLifecycleState.STARTED);
+                future.complete(this);
+            } catch (Throwable throwable) {
+                setLifecycleState(ModuleLifecycleState.FAILED);
+                future.completeExceptionally(throwable);
+            }
+        });
+        return future;
+    }
+
+    private void startCountdown(int countdownTicks, Runnable action) {
+        timeManager.newTimer(50).onFinish(ignored -> {
+            for (GamePlayer player : playerManager.getOnlinePlayers()) {
+                player.title(Component.text(name, NamedTextColor.LIGHT_PURPLE));
+            }
+            timeManager.newTimer(50).onFinish(ignoredTimer -> {
+                sendCountdownTitle(countdownTicks);
+                timeManager.newTimer(countdownTicks)
+                    .onTick(20, timer -> sendCountdownTitle(timer.remainingTicks()))
+                    .onFinish(ignored2 -> {
+                        for (GamePlayer player : playerManager.getOnlinePlayers()) {
+                            player.title(Component.text("> START <", NamedTextColor.WHITE, TextDecoration.BOLD));
+                            player.playSound(Sound.BLOCK_NOTE_BLOCK_PLING, 0.9f, 2f);
+                        }
+                        action.run();
+                    })
+                    .start();
+            }).start();
+        }).start();
+    }
+
+    private void sendCountdownTitle(int ticks) {
+        int seconds = Math.max(1, (int) Math.ceil(Math.max(0, ticks) / 20.0));
+        NamedTextColor color = switch (Math.min(seconds, 5)) {
+            case 1 -> NamedTextColor.DARK_RED;
+            case 2 -> NamedTextColor.RED;
+            case 3 -> NamedTextColor.GOLD;
+            case 4 -> NamedTextColor.YELLOW;
+            default -> NamedTextColor.GREEN;
+        };
+        Component title = Component.text(seconds, color, TextDecoration.BOLD);
+        for (GamePlayer player : playerManager.getOnlinePlayers()) {
+            player.title(title);
+            player.playSound(Sound.UI_BUTTON_CLICK, 0.7f, 1.1f);
+        }
     }
 
     private void unregisterDynamicEvents() {

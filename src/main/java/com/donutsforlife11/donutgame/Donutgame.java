@@ -9,16 +9,19 @@ import com.donutsforlife11.donutgame.commands.MinigameCommand;
 import com.donutsforlife11.donutgame.commands.WorldTeleportCommand;
 import com.donutsforlife11.donutgame.internal.command.CommandRegistrar;
 import com.donutsforlife11.donutgame.internal.file.FileService;
+import com.donutsforlife11.donutgame.internal.game.GameKillCreditEvents;
 import com.donutsforlife11.donutgame.internal.game.GamePlayerConnectionEvents;
 import com.donutsforlife11.donutgame.internal.game.ModuleService;
 import com.donutsforlife11.donutgame.internal.map.MapService;
 import com.donutsforlife11.donutgame.internal.map.WorldService;
+import com.donutsforlife11.donutgame.internal.player.PlayerWorldStateService;
 
 public final class Donutgame extends JavaPlugin {
     private FileService fileService;
     private MapService mapService;
     private WorldService worldService;
     private ModuleService moduleService;
+    private PlayerWorldStateService playerWorldStateService;
 
     @Override
     public void onEnable() {
@@ -27,9 +30,12 @@ public final class Donutgame extends JavaPlugin {
         fileService = new FileService(this);
         fileService.reload();
         mapService = new MapService(fileService);
-        worldService = new WorldService(this);
+        playerWorldStateService = new PlayerWorldStateService();
+        worldService = new WorldService(this, playerWorldStateService);
         moduleService = new ModuleService(this);
         getServer().getPluginManager().registerEvents(new GamePlayerConnectionEvents(moduleService), this);
+        getServer().getPluginManager().registerEvents(new GameKillCreditEvents(moduleService), this);
+        getServer().getPluginManager().registerEvents(playerWorldStateService, this);
 
         new CommandRegistrar(this, List.of(
             new DonutgameCommand(this),
@@ -73,5 +79,9 @@ public final class Donutgame extends JavaPlugin {
 
     public ModuleService moduleService() {
         return moduleService;
+    }
+
+    public PlayerWorldStateService playerWorldStateService() {
+        return playerWorldStateService;
     }
 }

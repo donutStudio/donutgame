@@ -11,6 +11,10 @@ dependencies:
       load: BEFORE
       required: false
       join-classpath: true
+    FastAsyncWorldEdit:
+      load: BEFORE
+      required: false
+      join-classpath: true
 permissions:
   donutgame.command:
     description: Allows use of Donutgame administrative commands.

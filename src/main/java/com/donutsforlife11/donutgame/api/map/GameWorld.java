@@ -8,6 +8,11 @@ import java.util.Map;
 import org.bukkit.Difficulty;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.Entity;
+
+import com.donutsforlife11.donutgame.api.entity.GameEntity;
+import com.donutsforlife11.donutgame.api.object.BlockSpec;
+import com.donutsforlife11.donutgame.api.object.EntitySpec;
 
 public class GameWorld {
     private final String id;
@@ -48,6 +53,39 @@ public class GameWorld {
     public void setWorldSpawn(GameLocation spawn) {
         requireLocation(spawn);
         requireWorld().setSpawnLocation(toBukkit(spawn));
+    }
+
+    public void setBlock(GameLocation location, BlockSpec<?> block) {
+        requireLocation(location);
+        requireBlock(block);
+        block.applyTo(toBukkit(location).getBlock());
+    }
+
+    public void fill(GameRegion region, BlockSpec<?> block) {
+        requireRegion(region);
+        requireBlock(block);
+        World world = requireWorld();
+        int minX = region.min().blockX();
+        int minY = region.min().blockY();
+        int minZ = region.min().blockZ();
+        int maxX = region.max().blockX();
+        int maxY = region.max().blockY();
+        int maxZ = region.max().blockZ();
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    block.applyTo(world.getBlockAt(x, y, z));
+                }
+            }
+        }
+    }
+
+    public GameEntity summon(GameLocation location, EntitySpec<?> entity) {
+        requireLocation(location);
+        requireEntity(entity);
+        World world = requireWorld();
+        Entity bukkitEntity = entity.spawn(world, toBukkit(location));
+        return new GameEntity(this, bukkitEntity);
     }
 
     public void addPoint(String name, GameLocation location) {
@@ -202,6 +240,18 @@ public class GameWorld {
     private void requireRegion(GameRegion region) {
         if (region == null) {
             throw new IllegalArgumentException("region cannot be null");
+        }
+    }
+
+    private void requireBlock(BlockSpec<?> block) {
+        if (block == null) {
+            throw new IllegalArgumentException("block cannot be null");
+        }
+    }
+
+    private void requireEntity(EntitySpec<?> entity) {
+        if (entity == null) {
+            throw new IllegalArgumentException("entity cannot be null");
         }
     }
 

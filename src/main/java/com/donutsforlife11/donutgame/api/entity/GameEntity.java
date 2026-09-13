@@ -6,10 +6,9 @@ import java.util.UUID;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 
-import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 
-public class GameEntity {
+public class GameEntity implements GameEntityBase {
     private final GameWorld world;
     private final UUID uuid;
     private final EntityType type;
@@ -42,10 +41,5 @@ public class GameEntity {
         }
         Entity entity = world.bukkitWorld().getEntity(uuid);
         return entity != null && entity.getType() == type ? entity : null;
-    }
-
-    public GameLocation location() {
-        Entity entity = bukkitEntity();
-        return entity == null ? null : new GameLocation(world, entity.getLocation());
     }
 }

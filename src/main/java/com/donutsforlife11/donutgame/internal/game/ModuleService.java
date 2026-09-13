@@ -17,6 +17,7 @@ import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
+import com.donutsforlife11.donutgame.api.ui.UIManager;
 
 public class ModuleService {
     private final Donutgame plugin;
@@ -50,10 +51,15 @@ public class ModuleService {
             MapManager mapManager = new MapManager(module, plugin.mapService(), plugin.worldService());
             PlayerManager playerManager = new PlayerManager(module);
             TimeManager timeManager = new TimeManager(module);
-            module.initialize(plugin, descriptor, index, config, mapManager, playerManager, timeManager);
+            UIManager uiManager = new UIManager(module);
+            module.initialize(plugin, descriptor, index, config, 
+                mapManager, 
+                playerManager, 
+                timeManager,
+                uiManager
+            );
             plugin.getLogger().info("Loading module " + descriptor.id() + " as active game " + index + ".");
-            return module.startLoadSequence()
-                .thenCompose(loadedModule -> playerManager.join(initialPlayers).thenApply(ignored -> loadedModule))
+            return module.startLoadSequence(() -> playerManager.join(initialPlayers))
                 .thenApply(ignored -> {
                     plugin.getLogger().info("Loaded module " + descriptor.id() + " as active game " + index + ".");
                     return module;
