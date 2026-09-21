@@ -77,6 +77,15 @@ public final class BlockSpec<D extends BlockData> {
         state.update(true, false);
     }
 
+    public boolean matches(Block block) {
+        Objects.requireNonNull(block, "block");
+        if (block.getType() != material) {
+            return false;
+        }
+        return dataConfigurations.isEmpty() && stateConfigurations.isEmpty()
+            || block.getBlockData().equals(createBlockData());
+    }
+
     private record StateConfiguration<S extends BlockState>(
         Class<S> stateType,
         Consumer<? super S> configuration

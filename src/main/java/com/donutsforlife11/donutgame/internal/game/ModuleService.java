@@ -10,12 +10,14 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.logging.Level;
 
+import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
+import com.donutsforlife11.donutgame.api.team.TeamManager;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.ui.UIManager;
 
@@ -50,14 +52,17 @@ public class ModuleService {
         try {
             MapManager mapManager = new MapManager(module, plugin.mapService(), plugin.worldService());
             PlayerManager playerManager = new PlayerManager(module);
+            TeamManager teamManager = new TeamManager(playerManager);
             TimeManager timeManager = new TimeManager(module);
             UIManager uiManager = new UIManager(module);
             module.initialize(plugin, descriptor, index, config, 
                 mapManager, 
                 playerManager, 
+                teamManager,
                 timeManager,
                 uiManager
             );
+            teamManager.initialize();
             plugin.getLogger().info("Loading module " + descriptor.id() + " as active game " + index + ".");
             return module.startLoadSequence(() -> playerManager.join(initialPlayers))
                 .thenApply(ignored -> {
@@ -108,6 +113,10 @@ public class ModuleService {
         return Collections.unmodifiableMap(activeGames);
     }
 
+    public Donutgame plugin() {
+        return plugin;
+    }
+
     public GameModule activeGame(int index) {
         return activeGames.get(index);
     }
@@ -151,7 +160,15 @@ public class ModuleService {
     public void unloadAll() {
         for (int index : Set.copyOf(activeGames.keySet())) {
             try {
-                unloadModule(index).join();
+                CompletableFuture<Boolean> unload = unloadModule(index);
+                if (Bukkit.isPrimaryThread()) {
+                    unload.exceptionally(exception -> {
+                        plugin.getLogger().log(Level.SEVERE, "Failed to unload active game " + index + ".", exception);
+                        return false;
+                    });
+                } else {
+                    unload.join();
+                }
             } catch (RuntimeException exception) {
                 plugin.getLogger().log(Level.SEVERE, "Failed to unload active game " + index + ".", exception);
             }

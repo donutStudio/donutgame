@@ -24,7 +24,8 @@ import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 
 public abstract class GameObjectSpecsGenerateTask extends DefaultTask {
-    private static final String PACKAGE_NAME = "com.donutsforlife11.donutgame.api.object";
+    private static final String OBJECT_PACKAGE_NAME = "com.donutsforlife11.donutgame.api.object";
+    private static final String ITEM_PACKAGE_NAME = "com.donutsforlife11.donutgame.api.item";
 
     @Classpath
     public abstract ConfigurableFileCollection getClasspath();
@@ -40,7 +41,8 @@ public abstract class GameObjectSpecsGenerateTask extends DefaultTask {
         Path outputDirectory = getOutputDirectory().get().getAsFile().toPath();
         try {
             deleteGeneratedFiles(outputDirectory);
-            Files.createDirectories(outputDirectory.resolve(PACKAGE_NAME.replace('.', '/')));
+            Files.createDirectories(outputDirectory.resolve(OBJECT_PACKAGE_NAME.replace('.', '/')));
+            Files.createDirectories(outputDirectory.resolve(ITEM_PACKAGE_NAME.replace('.', '/')));
 
             URL[] urls = getClasspath().getFiles().stream()
                 .map(file -> {
@@ -146,7 +148,7 @@ public abstract class GameObjectSpecsGenerateTask extends DefaultTask {
     }
 
     private void writeGameBlocks(Path outputDirectory, List<String> blocks) throws IOException {
-        StringBuilder source = generatedHeader();
+        StringBuilder source = generatedHeader(OBJECT_PACKAGE_NAME);
         source.append("public final class GameBlocks {\n");
         for (String block : blocks) {
             source.append("    public static final BlockSpec<org.bukkit.block.data.BlockData> ")
@@ -165,11 +167,11 @@ public abstract class GameObjectSpecsGenerateTask extends DefaultTask {
         source.append("        return BlockSpec.of(material, dataType);\n");
         source.append("    }\n");
         source.append("}\n");
-        writeJava(outputDirectory, "GameBlocks", source.toString());
+        writeJava(outputDirectory, OBJECT_PACKAGE_NAME, "GameBlocks", source.toString());
     }
 
     private void writeGameItems(Path outputDirectory, List<String> items) throws IOException {
-        StringBuilder source = generatedHeader();
+        StringBuilder source = generatedHeader(ITEM_PACKAGE_NAME);
         source.append("public final class GameItems {\n");
         for (String item : items) {
             source.append("    public static final ItemSpec ")
@@ -183,13 +185,16 @@ public abstract class GameObjectSpecsGenerateTask extends DefaultTask {
         source.append("    }\n\n");
         source.append("    public static ItemSpec of(org.bukkit.Material material) {\n");
         source.append("        return ItemSpec.of(material);\n");
+        source.append("    }\n\n");
+        source.append("    public static GameItem item(org.bukkit.Material material) {\n");
+        source.append("        return GameItem.of(material);\n");
         source.append("    }\n");
         source.append("}\n");
-        writeJava(outputDirectory, "GameItems", source.toString());
+        writeJava(outputDirectory, ITEM_PACKAGE_NAME, "GameItems", source.toString());
     }
 
     private void writeGameEntities(Path outputDirectory, List<EntityData> entities) throws IOException {
-        StringBuilder source = generatedHeader();
+        StringBuilder source = generatedHeader(OBJECT_PACKAGE_NAME);
         source.append("public final class GameEntities {\n");
         for (EntityData entity : entities) {
             source.append("    public static final EntitySpec<")
@@ -209,26 +214,28 @@ public abstract class GameObjectSpecsGenerateTask extends DefaultTask {
         source.append("        return EntitySpec.of(type, entityClass);\n");
         source.append("    }\n");
         source.append("}\n");
-        writeJava(outputDirectory, "GameEntities", source.toString());
+        writeJava(outputDirectory, OBJECT_PACKAGE_NAME, "GameEntities", source.toString());
     }
 
-    private StringBuilder generatedHeader() {
+    private StringBuilder generatedHeader(String packageName) {
         StringBuilder source = new StringBuilder();
-        source.append("package ").append(PACKAGE_NAME).append(";\n\n");
+        source.append("package ").append(packageName).append(";\n\n");
         source.append("@javax.annotation.processing.Generated(\"").append(getClass().getName()).append("\")\n");
         return source;
     }
 
-    private void writeJava(Path outputDirectory, String className, String source) throws IOException {
-        Path file = outputDirectory.resolve(PACKAGE_NAME.replace('.', '/')).resolve(className + ".java");
+    private void writeJava(Path outputDirectory, String packageName, String className, String source) throws IOException {
+        Path file = outputDirectory.resolve(packageName.replace('.', '/')).resolve(className + ".java");
         Files.writeString(file, source, StandardCharsets.UTF_8);
     }
 
     private void deleteGeneratedFiles(Path outputDirectory) throws IOException {
-        Path packageDirectory = outputDirectory.resolve(PACKAGE_NAME.replace('.', '/'));
-        Files.deleteIfExists(packageDirectory.resolve("GameBlocks.java"));
-        Files.deleteIfExists(packageDirectory.resolve("GameItems.java"));
-        Files.deleteIfExists(packageDirectory.resolve("GameEntities.java"));
+        Path objectPackageDirectory = outputDirectory.resolve(OBJECT_PACKAGE_NAME.replace('.', '/'));
+        Path itemPackageDirectory = outputDirectory.resolve(ITEM_PACKAGE_NAME.replace('.', '/'));
+        Files.deleteIfExists(objectPackageDirectory.resolve("GameBlocks.java"));
+        Files.deleteIfExists(objectPackageDirectory.resolve("GameItems.java"));
+        Files.deleteIfExists(objectPackageDirectory.resolve("GameEntities.java"));
+        Files.deleteIfExists(itemPackageDirectory.resolve("GameItems.java"));
     }
 
     private String javaName(Class<?> type) {

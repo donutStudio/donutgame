@@ -8,6 +8,10 @@ void onStart() // Runs when the game first starts
 void unload() // Unloads the game module
 void onUnload() // Runs when the game unloads
 MapManager mapManager() // Returns the module's map manager
+UIManager uiManager() // Returns the module's UI Manager
+PlayerManager playerManager() // Returns the module's player manager
+TimeManager timeManager() // Returns the module's time manager
+TeamManager teamManager() // Returns the module's team manager
 GameWorld world() // Returns this module's active world
 ```
 
@@ -199,7 +203,37 @@ SidebarEntry removeLabel() // Removes this entry's label, thus giving it no labe
 String label() // Returns the sidebar's label
 ```
 
-# ENTITIES
+## ENTITIES
+**GameItem / GameItemBase**
+```java
+GameItem(Material material) // Wraps a new item of a material
+GameItem(ItemStack item) // Wraps a copy of a Bukkit item stack
+static GameItem of(Material material) // Creates a new GameItem
+static GameItem from(ItemStack item) // Wraps a Bukkit item stack, returning null for null
+Material material() // Returns the item's material
+int amount() // Returns the item amount
+void setAmount(int amount) // Sets the item amount
+GameItem configure(Consumer<ItemStack> configuration) // Applies a low-level Bukkit configuration when needed
+boolean editMeta(Consumer<ItemMeta> editor) // Edits the item's metadata
+boolean isSimilar(GameItem other) // Checks whether two items are similar
+ItemStack bukkitItem() // Returns the wrapped Bukkit item stack for Paper/Bukkit interop
+ItemStack copyBukkitItem() // Returns a cloned Bukkit item stack
+// Common ItemStack wrappers are exposed on GameItemBase, including getType/setType, getAmount/setAmount,
+// getItemMeta/setItemMeta/editMeta, enchantment helpers, item flag helpers, and Paper data component methods
+// like getData/setData/hasData/unsetData/resetData/copyDataFrom/matchesWithoutData.
+```
+
+**GameItemComponent / GameItemComponents**
+```java
+record GameItemComponent<T>(NamespacedKey key, PersistentDataType<?, T> type)
+GameItemComponents.DUMMY // Placeholder custom component for testing item-level plugin behavior
+T getData(GameItemComponent<T> component) // Reads custom plugin-owned item data from PDC
+T getDataOrDefault(GameItemComponent<T> component, T fallback) // Reads custom data with a fallback
+boolean hasData(GameItemComponent<T> component) // Checks if custom data is present
+void setData(GameItemComponent<T> component, T value) // Stores custom plugin-owned item data
+void removeData(GameItemComponent<?> component) // Removes custom plugin-owned item data
+```
+
 **GameEntityBase**
 ```java
 // Most of these would have default implementations so not to make GameEntity and GamePlayer too big, but some that really really need overrides will have them
@@ -233,6 +267,11 @@ void setSilent(boolean silent) // Sets whether or not the entity is silent
 boolean isSilent() // Returns whether or not the entity is silent
 void setFireTicks(int ticks) // Sets the fire ticks of the entity
 int fireTicks() // Returns the fire ticks on the entity
+// Glowing
+boolean setGlowing(boolean glowing) // Sets whether or not the entity is glowing (just plain old glowing, visible to everyone)
+boolean setGlowing(boolean glowing, Collection<GamePlayer> viewers) // Sets whether or not the entity is glowing and who can see the glow
+boolean setGlowing(boolean glowing, Supplier<Collection<GamePlayer>> viewers) // Similar to above but supplies who can see the glowing
+void setGlowColor(NamedTextColor color) // Normal glowing syncs to the team color as in vanilla, running this overrides it with a custom glow color
 // Effects
 void addEffect(PotionEffectType effect, int ticks, int amplifier) // Adds a potion effect to an entity with an amplifier
 void addEffect(PotionEffectType effect, int ticks, int amplifier, boolean hideParticles) // Similar to above but hides particles, similar to the the true/false at the end of vanilla /effect
@@ -254,10 +293,11 @@ List<AttributeModifier> attributeModifiers(Attribute attribute) // Returns all m
 double attributeValue(Attribute attribute) // Returns the calculated attribute value for this entity, including base and all modifiers present
 // Items (more may be added in future)
 void setItem(EquipmentSlot slot, ItemSpec item) // Sets an item in the specified slot like /item replace
-void setItem(EquipmentSlot slot, ItemStack item) // Similar to above but takes in an ItemStack
+void setItem(EquipmentSlot slot, GameItem item) // Similar to above but takes in a GameItem
 void clearItems() // Clears all items in all slots of the entity (and inventory as well if its a player)
 void clearItems(ItemSpec item) // Similar to above but only clears instances of a certain ItemSpec (that of course with components will make it check for items to clear with even more specifity)
-void clearItems(ItemStack item) // Similar to above but takes in an ItemStack
+void clearItems(GameItem item) // Similar to above but takes in a GameItem
+GameItem getItem(EquipmentSlot slot) // Returns an item from an equipment slot
 ```
 **GameEntity** (implements GameEntityBase)
 ```java
@@ -274,6 +314,7 @@ Collection<GamePlayer> getNonSpectators() // Returns all non spectating GamePlay
 **GamePlayer** (implements GameEntityBase)
 ```java
 UUID uuid() // Returns the player's bukkit UUID
+// Spectator stuff
 void setSpectator(boolean spectator) // Sets the player to a spectator or not at their current location (so for example if this is called in an event when a player dies, the player would become a spectator at the location where they died)
 void setSpectator(boolean spectator, GameLocation location) // Sets the player to a spectator at the specified location (as in immediately teleporting them to that location once they change from a non spectator to a spectator or vice versa)
 boolean isSpectator() // Returns whether or not the player is a spectator; If a player is a spectator they will have a completely separate raw paper/bukkit inventory snapshot and other data while in spectator (like effects, attributes, etc). For example, if a player is in spectator, and an item is given to them, it will be stored in their inventory but they will not see it- but if they are not a spectator they will see it
@@ -283,9 +324,15 @@ void respawn(GameLocation location) // Respawns the player instantly at a specif
 void respawn(int ticks, GameLocation location) // Respawns the palyer after a time delay at a specified location
 void respawn(int ticks, Supplier<GameLocation> location) // Respawns the player after a time delay at a supplied location
 void cancelRespawn() // Cancels any active respawns and their timers on this player; Calling one of the respawn(...) methods on a player that has an active respawn timer also calls this to cancel prior timers before resetting a new one
+GameTimer respawnTimer() // Returns the active respawn timer on the player if it exists
+void setSpectatablePlayers(Collection<GamePlayer> players) // Sets players this player can teleport to via their compass when they are a spectator
+void setSpectatablePlayers(Supplier<Collection<GamePlayer>> players) // Similar to above but supplies the players directly
+void setSpectatableTeams(Collection<GameTeam> teams) // Sets teams this player can access in their spectator menu
+void setSpectatableTeams(Supplier<Collection<GameTeam>> teams) // Similar to above but supplies the teams directly
+// General methods
 void setSpawnPoint(GameLocation location) // Sets a player's spawnpoint at a specified game location
 GameLocation spawnPoint() // Returns the player's spawnpoint
-GameTimer respawnTimer() // Returns the active respawn timer on the player if it exists
+GameTeam getTeam() // Returns the player's team (or null if they aren't in one)
 void setGameMode(GameMode gameMode) // Sets the player's gamemode
 GameMode gameMode() // Returns the player's gamemode
 void setHunger(int hunger) // Sets the player's hunger/foodLevel
@@ -324,5 +371,54 @@ void playSound(Sound sound, SoundCategory track, float volume, float pitch, floa
 void playSound(Sound sound, SoundCategory track, GameLocation location, float volume, float pitch, float minVolume)
 // Items (more may be added in future)
 void giveItem(ItemSpec item) // Gives an item to a player
-void giveItem(ItemStack item) // Similar to above but takes in an ItemStack
+void giveItem(GameItem item) // Similar to above but takes in a GameItem
+List<GameItem> inventory() // Returns a player's inventory
+List<GameItem> hotbar() // Kinda like above but constrained to only the hotbar
+```
+
+## TEAM SYSTEM
+**TeamManager**
+```java
+GameTeam newTeam() // Creates a new team on fully default settings
+GameTeam newColoredTeam() // Creates a new team with preset settings based on tracking current teams and colors
+Collection<GameTeam> getTeams() // Returns the teams that currently exist
+Collection<GameTeam> getSpectatorTeams() // Returns the teams that have all players spectators
+Collection<GameTeam> getNonSpectatorTeams() // Returns the teams that have at least one non spectator player on them
+```
+**GameTeam**
+```java
+GameTeam addPlayer(GamePlayer player) // Adds a player to the team
+GameTeam removePlayer(GamePlayer player) // Removes a player from the team
+GameTeam clearPlayers() // Clears all players from the team
+void remove() // Removes the team and also from the team manager
+Collection<GamePlayer> getPlayers() // Returns the players on the team
+Collection<GamePlayer> getSpectators() // Returns players on the team who are spectators
+Collection<GamePlayer> getNonSpectators() // Returns players on the team who are not spectators
+boolean allSpectators() // Returns whether or not all players on the team are spectators
+// Properties
+GameTeam setColor(NamedTextColor color) // Sets the team's color
+NamedTextColor color() // Returns the team's color
+GameTeam setDisplayName(Component displayName) // Sets the team's display name
+Component displayName() // Returns the team's display name
+GameTeam setItem(ItemSpec item) // Sets the team's representative item
+GameTeam setItem(GameItem item) // Similar to above but takes in a GameItem
+GameItem item() // Returns the team's representative item
+GameTeam setTeamGlow(boolean glow) // Sets whether or not there is team glow (as in being able to see your teammates glowing in your team color)
+boolean teamGlow() // Whether or not team glow is enabled for the team
+GameTeam setPrefix(Component prefix) // Sets the team's prefix
+Component prefix() // Returns the team's prefix
+GameTeam setSuffix(Component suffix) // Sets the team's suffix
+Component suffix() // Returns the team's suffix
+GameTeam setFriendlyFire(boolean friendlyFire) // Sets whether or not friendly fire is enabled
+GameTeam setFriendlyFireDamageTypes(Collection<DamageType> damageTypes) // Sets a list on what damage types are allowed in friendly fire
+GameTeam setFriendlyFireKillCredit(boolean friendlyFireCredit) // Sets whether or not kill credit is awarded for a friendly fire kill
+boolean friendlyFire() // Returns whether or not this team's friendly fire is enabled
+Collection<DamageType> friendlyFireDamageTypes() // Returns the friendly fire damage types
+boolean friendlyFireKillCredit() // Returns whether or not kill credit is awarded on killing a teammate
+GameTeam setSeeFriendlyInvisibles(boolean seeFriendlyInvisibles) // Sets whether or not teammates can see other invisible teammates
+boolean seeFriendlyInvisibles() // Returns whether or not teammates can see other teammates invisible
+GameTeam setNametagVisibility(Team.OptionStatus nametagVisibility) // Sets team nametag visibility rule
+Team.OptionStatus nametagVisibility() // Returns team nametag visibility rule
+GameTeam setCollisionRule(Team.OptionStatus nametagVisibility) // Sets team collision rule
+Team.OptionStatus collisionRule() // Returns team collision rule
 ```

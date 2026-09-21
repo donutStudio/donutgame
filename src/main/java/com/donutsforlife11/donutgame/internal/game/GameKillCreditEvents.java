@@ -23,6 +23,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.team.GameTeam;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -32,9 +33,8 @@ public class GameKillCreditEvents implements Listener {
     private static final long KILL_CREDIT_MILLIS = 60_000L;
     private static final long BLOCK_CREDIT_MILLIS = 90_000L;
 
-    // TODO: Re-add team/friendly-fire kill-credit filtering once the rewrite has a team API again.
-    // TODO: Re-add spectator damage/kill-credit filtering once spectator state exists in this branch.
-    // TODO: Re-add throwable-specific egg/snowball damage and knockback once projectile gameplay APIs return.
+    // TODO: spectator damage and kill credit handling
+    // TODO: custom projectile implementations (snowball egg stuff)
 
     private final ModuleService moduleService;
     private final Map<UUID, DamageCredit> damageCredits = new HashMap<>();
@@ -142,7 +142,7 @@ public class GameKillCreditEvents implements Listener {
         damageCredits.remove(target.getUniqueId());
 
         GameModule game = game(attacker);
-        if (game == null || game(target) != game) {
+        if (game == null || game(target) != game || !allowsKillCredit(game, target, attacker)) {
             return;
         }
         GamePlayer attackerPlayer = game.playerManager().getPlayer(attacker);
@@ -169,7 +169,7 @@ public class GameKillCreditEvents implements Listener {
             return;
         }
         GameModule game = game(target);
-        if (game == null || game(attacker) != game) {
+        if (game == null || game(attacker) != game || !allowsKillCredit(game, target, attacker)) {
             return;
         }
         target.setKiller(attacker);
@@ -178,10 +178,17 @@ public class GameKillCreditEvents implements Listener {
 
     private void rememberDamageCredit(Player target, Player attacker) {
         GameModule game = game(target);
-        if (game == null || game(attacker) != game) {
+        if (game == null || game(attacker) != game || !allowsKillCredit(game, target, attacker)) {
             return;
         }
         damageCredits.put(target.getUniqueId(), new DamageCredit(attacker.getUniqueId(), System.currentTimeMillis()));
+    }
+
+    private boolean allowsKillCredit(GameModule game, Player target, Player attacker) {
+        GamePlayer targetPlayer = game.playerManager().getPlayer(target);
+        GamePlayer attackerPlayer = game.playerManager().getPlayer(attacker);
+        GameTeam team = game.teamManager().getPlayerTeam(targetPlayer);
+        return team == null || team != game.teamManager().getPlayerTeam(attackerPlayer) || team.friendlyFireKillCredit();
     }
 
     private void rememberBlockCredit(Block block, Player attacker) {
@@ -255,22 +262,6 @@ public class GameKillCreditEvents implements Listener {
         }
         if (directEntity instanceof Projectile projectile && projectile.getShooter() instanceof Player player) {
             return player;
-        }
-        return null;
-    }
-
-    private GameModule game(Entity entity) {
-        if (entity instanceof Player player) {
-            return game(player);
-        }
-        World world = entity == null ? null : entity.getWorld();
-        if (world == null) {
-            return null;
-        }
-        for (GameModule game : moduleService.activeGames().values()) {
-            if (inGameWorld(game, world)) {
-                return game;
-            }
         }
         return null;
     }

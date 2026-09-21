@@ -8,10 +8,12 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 import com.donutsforlife11.donutgame.api.entity.GameEntity;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
+import com.donutsforlife11.donutgame.api.item.GameItem;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
@@ -30,6 +32,7 @@ public class GameEventAdapterRegistry {
             return world == null ? null : new GameLocation(world, location);
         });
         registry.register(World.class, GameWorld.class, (world, module) -> gameWorld(module, world));
+        registry.register(ItemStack.class, GameItem.class, (item, module) -> GameItem.from(item));
         return registry;
     }
 
@@ -38,7 +41,8 @@ public class GameEventAdapterRegistry {
             new TypeMapping(Player.class.getName(), GamePlayer.class.getName()),
             new TypeMapping(Entity.class.getName(), GameEntity.class.getName()),
             new TypeMapping(Location.class.getName(), GameLocation.class.getName()),
-            new TypeMapping(World.class.getName(), GameWorld.class.getName())
+            new TypeMapping(World.class.getName(), GameWorld.class.getName()),
+            new TypeMapping(ItemStack.class.getName(), GameItem.class.getName())
         );
     }
 

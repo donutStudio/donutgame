@@ -12,12 +12,14 @@ import java.util.function.Predicate;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
+import com.donutsforlife11.donutgame.internal.game.GameModule;
+
 final class PlayerRegistry {
-    private final PlayerManager playerManager;
+    private final GameModule module;
     private final Map<UUID, GamePlayer> playersById = new LinkedHashMap<>();
 
-    PlayerRegistry(PlayerManager playerManager) {
-        this.playerManager = playerManager;
+    PlayerRegistry(GameModule module) {
+        this.module = module;
     }
 
     GamePlayer get(UUID uuid) {
@@ -29,7 +31,7 @@ final class PlayerRegistry {
     }
 
     GamePlayer register(Player player) {
-        GamePlayer gamePlayer = playersById.computeIfAbsent(player.getUniqueId(), uuid -> new GamePlayer(playerManager, uuid));
+        GamePlayer gamePlayer = playersById.computeIfAbsent(player.getUniqueId(), uuid -> new GamePlayer(module, uuid));
         gamePlayer.remember(player);
         return gamePlayer;
     }

@@ -1,33 +1,57 @@
 package com.donutsforlife11.donutgame.api.player;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
 import org.bukkit.World;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.attribute.AttributeModifier;
+import org.bukkit.damage.DamageSource;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
+import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.api.entity.GameEntityBase;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
-import com.donutsforlife11.donutgame.api.object.ItemSpec;
-import com.donutsforlife11.donutgame.api.ui.UIManager;
+import com.donutsforlife11.donutgame.api.item.GameItem;
+import com.donutsforlife11.donutgame.api.item.ItemSpec;
+import com.donutsforlife11.donutgame.api.team.GameTeam;
+import com.donutsforlife11.donutgame.api.time.GameTimer;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 
 public class GamePlayer implements GameEntityBase {
-    private final PlayerManager playerManager;
+    private final GameModule module;
     private final UUID uuid;
+    private final PlayerSnapshot playingState = PlayerSnapshot.empty();
+    private SpectatorSession spectatorSession;
     private PlayerState state;
     private String lastWorldName;
     private Location lastLocation;
+    private GameLocation spawnPoint;
+    private GameTimer respawnTimer;
+    private GameLocation pendingVanillaRespawnLocation;
+    private int pendingPostRespawnTimerTicks;
+    private Supplier<GameLocation> pendingPostRespawnTimerLocation;
 
-    GamePlayer(PlayerManager playerManager, UUID uuid) {
-        this.playerManager = playerManager;
+    GamePlayer(GameModule module, UUID uuid) {
+        this.module = module;
         this.uuid = uuid;
         this.state = PlayerState.OFFLINE;
     }
@@ -45,7 +69,7 @@ public class GamePlayer implements GameEntityBase {
     }
 
     public GameModule module() {
-        return playerManager.module();
+        return module;
     }
 
     public GameWorld world() {
@@ -60,6 +84,157 @@ public class GamePlayer implements GameEntityBase {
         return state == PlayerState.ONLINE && bukkitPlayer() != null;
     }
 
+    public void setSpectator(boolean spectator) {
+        setSpectator(spectator, locationOrSpawn());
+    }
+
+    public void setSpectator(boolean spectator, GameLocation location) {
+        if (spectator) {
+            enterSpectator(location);
+        } else {
+            exitSpectator(location);
+        }
+    }
+
+    public boolean isSpectator() {
+        return spectatorSession != null;
+    }
+
+    public void respawn() {
+        respawn(0, () -> spawnPoint());
+    }
+
+    public void respawn(int ticks) {
+        respawn(ticks, () -> spawnPoint());
+    }
+
+    public void respawn(GameLocation location) {
+        respawn(0, location);
+    }
+
+    public void respawn(int ticks, GameLocation location) {
+        respawn(ticks, () -> location);
+    }
+
+    public void respawn(int ticks, Supplier<GameLocation> location) {
+        if (ticks < 0) {
+            throw new IllegalArgumentException("ticks cannot be negative");
+        }
+        if (location == null) {
+            throw new IllegalArgumentException("location cannot be null");
+        }
+        cancelRespawn();
+        Player player = bukkitPlayer();
+        if (player != null && player.isDead()) {
+            pendingPostRespawnTimerTicks = ticks;
+            pendingPostRespawnTimerLocation = location;
+            pendingVanillaRespawnLocation = location.get();
+            return;
+        }
+        if (ticks == 0) {
+            respawnNow(location.get());
+            return;
+        }
+        startRespawnTimer(ticks, location);
+    }
+
+    private void startRespawnTimer(int ticks, Supplier<GameLocation> location) {
+        setSpectator(true);
+        respawnTimer = module().timeManager().newTimer(ticks)
+            .onTick(timer -> showRespawnActionbar(timer.remainingTicks()))
+            .onFinish(timer -> {
+                respawnTimer = null;
+                module().uiManager().actionbar(this, Component.empty());
+
+                respawnNow(location.get());
+            })
+            .start();
+    }
+
+    public void cancelRespawn() {
+        if (respawnTimer != null) {
+            respawnTimer.cancel();
+            respawnTimer = null;
+        }
+        pendingVanillaRespawnLocation = null;
+        pendingPostRespawnTimerTicks = 0;
+        pendingPostRespawnTimerLocation = null;
+    }
+
+    public void setSpawnPoint(GameLocation location) {
+        spawnPoint = location;
+        Player player = bukkitPlayer();
+        if (player != null && location != null && world().bukkitWorld() != null) {
+            player.setRespawnLocation(location.toBukkit(world().bukkitWorld()), true);
+        }
+    }
+    public void clearSpawnPoint() {
+        spawnPoint = world().worldSpawn();
+        Player player = bukkitPlayer();
+        if (player != null && world().bukkitWorld() != null) {
+            player.setRespawnLocation(world().bukkitWorld().getSpawnLocation());
+        }
+    }
+
+    public GameLocation spawnPoint() {
+        if (spawnPoint != null) {
+            return spawnPoint;
+        }
+        GameWorld world = world();
+        return world == null ? null : world.worldSpawn();
+    }
+
+    public GameTimer respawnTimer() {
+        return respawnTimer;
+    }
+
+    public GameTeam getTeam() {
+        return module().teamManager().getPlayerTeam(this);
+    }
+
+    public void setGameMode(GameMode gameMode) {
+        playingState.gameMode = gameMode == null ? GameMode.SURVIVAL : gameMode;
+        applyPlayingStateIfVisible();
+    }
+
+    public GameMode gameMode() {
+        return playingState.gameMode;
+    }
+
+    public void setHunger(int hunger) {
+        playingState.foodLevel = Math.max(0, Math.min(20, hunger));
+        applyPlayingStateIfVisible();
+    }
+
+    public int hunger() {
+        return playingState.foodLevel;
+    }
+
+    public void setSaturation(float saturation) {
+        playingState.saturation = Math.max(0, saturation);
+        applyPlayingStateIfVisible();
+    }
+
+    public float saturation() {
+        return playingState.saturation;
+    }
+
+    public void setArrowsInBody(int arrows) {
+        playingState.arrowsInBody = Math.max(0, arrows);
+        applyPlayingStateIfVisible();
+    }
+
+    public int arrowsInBody() {
+        return playingState.arrowsInBody;
+    }
+
+    public void reset() {
+        cancelRespawn();
+        closeSpectatorSession();
+        playingState.reset(GameMode.SURVIVAL);
+        applyPlayingStateIfVisible();
+    }
+
     public String lastWorldName() {
         return lastWorldName;
     }
@@ -69,34 +244,325 @@ public class GamePlayer implements GameEntityBase {
     }
 
     public void title(Component title) {
-        ui().title(this, title);
+        module().uiManager().title(this, title);
     }
 
     public void subtitle(Component subtitle) {
-        ui().subtitle(this, subtitle);
+        module().uiManager().subtitle(this, subtitle);
     }
 
     public void actionbar(Component actionbar) {
-        ui().actionbar(this, actionbar);
+        module().uiManager().actionbar(this, actionbar);
     }
 
     public void chat(Component message) {
-        ui().chat(this, message);
+        module().uiManager().chat(this, message);
     }
 
     public void gameMessage(Component message) {
-        ui().gameMessage(this, message);
+        module().uiManager().gameMessage(this, message);
     }
 
     public void give(ItemSpec item) {
+        giveItem(item);
+    }
+
+    public void giveItem(ItemSpec item) {
         if (item == null) {
             throw new IllegalArgumentException("item cannot be null");
         }
-        Player player = bukkitPlayer();
-        if (player == null) {
-            throw new IllegalStateException("Player " + uuid + " is not online.");
+        giveItem(item.createItem());
+    }
+
+    public void giveItem(GameItem item) {
+        if (item == null) {
+            return;
         }
-        player.getInventory().addItem(item.createItemStack());
+        playingState.addItem(item.copyBukkitItem());
+        applyPlayingStateIfVisible();
+    }
+
+    public List<GameItem> inventory() {
+        List<GameItem> items = new ArrayList<>();
+        for (ItemStack item : PlayerSnapshot.cloneItems(playingState.inventory)) {
+            items.add(GameItem.from(item));
+        }
+        return Collections.unmodifiableList(items);
+    }
+
+    public List<GameItem> hotbar() {
+        List<GameItem> items = new ArrayList<>();
+        for (int index = 0; index < Math.min(9, playingState.inventory.length); index++) {
+            items.add(GameItem.from(playingState.inventory[index]));
+        }
+        return Collections.unmodifiableList(items);
+    }
+
+    @Override
+    public void setHealth(float health) {
+        playingState.health = Math.max(0.0, Math.min(health, maxHealth()));
+        applyPlayingStateIfVisible();
+    }
+
+    @Override
+    public void heal() {
+        setHealth((float) maxHealth());
+    }
+
+    @Override
+    public void heal(float amount) {
+        setHealth((float) (playingState.health + Math.max(0.0f, amount)));
+    }
+
+    @Override
+    public void damage(float amount) {
+        if (isSpectator()) {
+            return;
+        }
+        GameEntityBase.super.damage(amount);
+        captureVisiblePlayingState();
+    }
+
+    @Override
+    public void damage(float amount, DamageSource source) {
+        if (isSpectator()) {
+            return;
+        }
+        GameEntityBase.super.damage(amount, source);
+        captureVisiblePlayingState();
+    }
+
+    @Override
+    public float health() {
+        return (float) playingState.health;
+    }
+
+    @Override
+    public void setVelocity(Vector velocity) {
+        Player player = bukkitPlayer();
+        if (player != null) {
+            player.setVelocity(velocity == null ? new Vector() : velocity.clone());
+        }
+    }
+
+    @Override
+    public Vector velocity() {
+        Player player = bukkitPlayer();
+        return player == null ? new Vector() : player.getVelocity().clone();
+    }
+
+    @Override
+    public void setInvulnerable(boolean invulnerable) {
+        playingState.invulnerable = invulnerable;
+        applyPlayingStateIfVisible();
+    }
+
+    @Override
+    public boolean isInvulnerable() {
+        return playingState.invulnerable;
+    }
+
+    @Override
+    public void setInvisible(boolean invisible) {
+        playingState.invisible = invisible;
+        applyPlayingStateIfVisible();
+    }
+
+    @Override
+    public boolean isInvisible() {
+        return playingState.invisible;
+    }
+
+    @Override
+    public void setFireTicks(int ticks) {
+        playingState.fireTicks = Math.max(0, ticks);
+        applyPlayingStateIfVisible();
+    }
+
+    @Override
+    public int fireTicks() {
+        return playingState.fireTicks;
+    }
+
+    @Override
+    public void addEffect(PotionEffect effect) {
+        if (effect == null) {
+            throw new IllegalArgumentException("effect cannot be null");
+        }
+        playingState.effects.removeIf(current -> current.getType().equals(effect.getType()));
+        playingState.effects.add(effect);
+        applyPlayingStateIfVisible();
+    }
+
+    @Override
+    public void clearEffects() {
+        playingState.effects.clear();
+        applyPlayingStateIfVisible();
+    }
+
+    @Override
+    public void clearEffect(PotionEffectType effect) {
+        if (effect == null) {
+            return;
+        }
+        playingState.effects.removeIf(current -> current.getType().equals(effect));
+        applyPlayingStateIfVisible();
+    }
+
+    @Override
+    public boolean hasEffect(PotionEffectType effect) {
+        return effect != null && playingState.effects.stream().anyMatch(current -> current.getType().equals(effect));
+    }
+
+    @Override
+    public List<PotionEffect> effects() {
+        return List.copyOf(playingState.effects);
+    }
+
+    @Override
+    public void setAttributeBase(Attribute attribute, double value) {
+        if (attribute == null) {
+            throw new IllegalArgumentException("attribute cannot be null");
+        }
+        playingState.attributeBases.put(attribute, value);
+        applyPlayingStateIfVisible();
+    }
+
+    @Override
+    public void resetAttributeBase(Attribute attribute) {
+        if (attribute == null) {
+            throw new IllegalArgumentException("attribute cannot be null");
+        }
+        playingState.attributeBases.remove(attribute);
+        applyPlayingStateIfVisible();
+    }
+
+    @Override
+    public double attributeBase(Attribute attribute) {
+        if (attribute == null) {
+            throw new IllegalArgumentException("attribute cannot be null");
+        }
+        Double value = playingState.attributeBases.get(attribute);
+        if (value != null) {
+            return value;
+        }
+        Player player = bukkitPlayer();
+        AttributeInstance instance = player == null ? null : player.getAttribute(attribute);
+        return instance == null ? 0.0 : instance.getAttribute().getDefaultValue();
+    }
+
+    @Override
+    public void addModifier(Attribute attribute, AttributeModifier modifier) {
+        if (attribute == null) {
+            throw new IllegalArgumentException("attribute cannot be null");
+        }
+        if (modifier == null) {
+            throw new IllegalArgumentException("modifier cannot be null");
+        }
+        playingState.attributeModifiers.computeIfAbsent(attribute, ignored -> new ArrayList<>()).add(modifier);
+        applyPlayingStateIfVisible();
+    }
+
+    @Override
+    public void removeModifier(Attribute attribute, AttributeModifier modifier) {
+        if (attribute == null) {
+            throw new IllegalArgumentException("attribute cannot be null");
+        }
+        if (modifier == null) {
+            return;
+        }
+        List<AttributeModifier> modifiers = playingState.attributeModifiers.get(attribute);
+        if (modifiers != null) {
+            modifiers.remove(modifier);
+        }
+        applyPlayingStateIfVisible();
+    }
+
+    @Override
+    public double attributeModifierValue(Attribute attribute, AttributeModifier modifier) {
+        if (attribute == null) {
+            throw new IllegalArgumentException("attribute cannot be null");
+        }
+        if (modifier == null) {
+            throw new IllegalArgumentException("modifier cannot be null");
+        }
+        return playingState.attributeModifiers.getOrDefault(attribute, List.of()).contains(modifier) ? modifier.getAmount() : 0.0;
+    }
+
+    @Override
+    public List<AttributeModifier> attributeModifiers(Attribute attribute) {
+        if (attribute == null) {
+            throw new IllegalArgumentException("attribute cannot be null");
+        }
+        return List.copyOf(playingState.attributeModifiers.getOrDefault(attribute, List.of()));
+    }
+
+    @Override
+    public double attributeValue(Attribute attribute) {
+        double value = attributeBase(attribute);
+        for (AttributeModifier modifier : playingState.attributeModifiers.getOrDefault(attribute, List.of())) {
+            String operation = modifier.getOperation().name();
+            if ("ADD_NUMBER".equals(operation)) {
+                value += modifier.getAmount();
+            } else if ("ADD_SCALAR".equals(operation)) {
+                value += attributeBase(attribute) * modifier.getAmount();
+            } else if ("MULTIPLY_SCALAR_1".equals(operation)) {
+                value *= 1.0 + modifier.getAmount();
+            }
+        }
+        return value;
+    }
+
+    @Override
+    public void setItem(EquipmentSlot slot, ItemSpec item) {
+        if (item == null) {
+            throw new IllegalArgumentException("item cannot be null");
+        }
+        setItem(slot, item.createItem());
+    }
+
+    @Override
+    public void setItem(EquipmentSlot slot, GameItem item) {
+        if (slot == null) {
+            throw new IllegalArgumentException("slot cannot be null");
+        }
+        playingState.setItem(slot, item == null ? null : item.copyBukkitItem());
+        applyPlayingStateIfVisible();
+    }
+
+    @Override
+    public GameItem getItem(EquipmentSlot slot) {
+        if (slot == null) {
+            throw new IllegalArgumentException("slot cannot be null");
+        }
+        return GameItem.from(playingState.getItem(slot));
+    }
+
+    @Override
+    public void clearItems() {
+        playingState.inventory = new ItemStack[36];
+        playingState.armor = new ItemStack[4];
+        playingState.extra = new ItemStack[1];
+        applyPlayingStateIfVisible();
+    }
+
+    @Override
+    public void clearItems(ItemSpec item) {
+        if (item == null) {
+            clearItems();
+            return;
+        }
+        clearItems(item::matches);
+    }
+
+    @Override
+    public void clearItems(GameItem item) {
+        if (item == null) {
+            clearItems();
+            return;
+        }
+        ItemStack bukkitItem = item.bukkitItem();
+        clearItems(stack -> stack != null && stack.isSimilar(bukkitItem));
     }
 
     public void playSound(Sound sound) {
@@ -160,7 +626,7 @@ public class GamePlayer implements GameEntityBase {
     }
 
     public void playSound(Sound sound, SoundCategory track, GameLocation location, float volume, float pitch, float minVolume) {
-        ui().playSound(this, sound, track, location, volume, pitch, minVolume);
+        module().uiManager().playSound(this, sound, track, location, volume, pitch, minVolume);
     }
 
     void remember(Player player) {
@@ -172,13 +638,186 @@ public class GamePlayer implements GameEntityBase {
         World world = player.getWorld();
         lastWorldName = world == null ? null : world.getName();
         lastLocation = player.getLocation().clone();
+        if (spawnPoint == null) {
+            spawnPoint = defaultSpawnPoint();
+        }
+        if (spectatorSession == null) {
+            playingState.capture(player);
+        } else {
+            spectatorSession.apply(player);
+        }
     }
 
     void markOffline() {
+        Player player = bukkitPlayer();
+        if (player != null && spectatorSession == null) {
+            playingState.capture(player);
+        }
+        closeSpectatorSession(player);
         state = PlayerState.OFFLINE;
     }
 
-    private UIManager ui() {
-        return playerManager.uiManager();
+    public void enterPostDeathSpectator(GameLocation location) {
+        enterSpectator(location);
+        if (pendingPostRespawnTimerLocation != null) {
+            int ticks = pendingPostRespawnTimerTicks;
+            Supplier<GameLocation> respawnLocation = pendingPostRespawnTimerLocation;
+            pendingPostRespawnTimerTicks = 0;
+            pendingPostRespawnTimerLocation = null;
+            pendingVanillaRespawnLocation = null;
+            if (ticks == 0) {
+                respawnNow(respawnLocation.get());
+            } else {
+                startRespawnTimer(ticks, respawnLocation);
+            }
+            return;
+        }
+        GameLocation pendingLocation = pendingVanillaRespawnLocation;
+        pendingVanillaRespawnLocation = null;
+        if (pendingLocation != null) {
+            respawnNow(pendingLocation);
+        }
     }
+
+    public void rememberVanillaDeath() {
+        playingState.ageTimedValues();
+    }
+
+    void prepareForRemoval() {
+        cancelRespawn();
+        closeSpectatorSession();
+        assertNoSpectatorOverlay(bukkitPlayer());
+    }
+
+    private void respawnNow(GameLocation location) {
+        Player player = bukkitPlayer();
+        if (player != null && player.isDead()) {
+            pendingVanillaRespawnLocation = location == null ? spawnPoint() : location;
+            return;
+        }
+        if (location != null) {
+            setSpawnPoint(location);
+        }
+        exitSpectator(location == null ? spawnPoint() : location);
+        revivePlayingState(maxHealth());
+        applyPlayingStateIfVisible();
+        player = bukkitPlayer();
+        if (player != null) {
+            player.setNoDamageTicks(20);
+        }
+    }
+
+    private void showRespawnActionbar(int remainingTicks) {
+        int remainingSeconds = Math.max(0, (remainingTicks + 19) / 20);
+        module().uiManager().actionbar(
+            this,
+            Component.text("Respawning in " + String.format("%02d:%02d", remainingSeconds / 60, remainingSeconds % 60), NamedTextColor.GREEN)
+        );
+    }
+
+    private void captureVisiblePlayingState() {
+        if (spectatorSession == null) {
+            Player player = bukkitPlayer();
+            if (player != null) {
+                playingState.capture(player);
+            }
+        } else {
+            playingState.ageTimedValues();
+        }
+    }
+
+    private void applyPlayingStateIfVisible() {
+        Player player = bukkitPlayer();
+        if (player != null && spectatorSession == null) {
+            playingState.apply(player);
+            player.updateInventory();
+        }
+    }
+
+    private void clearItems(java.util.function.Predicate<ItemStack> matcher) {
+        playingState.clearItems(matcher);
+        applyPlayingStateIfVisible();
+    }
+
+    private void enterSpectator(GameLocation location) {
+        Player player = bukkitPlayer();
+        if (player != null && player.isDead()) {
+            return;
+        }
+        if (spectatorSession == null) {
+            if (player != null) {
+                playingState.capture(player);
+            }
+            spectatorSession = SpectatorSession.open(this, player);
+        } else if (player != null) {
+            spectatorSession.apply(player);
+        }
+        if (player != null && location != null) {
+            teleport(location);
+        }
+    }
+
+    private void exitSpectator(GameLocation location) {
+        Player player = bukkitPlayer();
+        closeSpectatorSession(player);
+        assertNoSpectatorOverlay(player);
+        if (player != null && location != null) {
+            teleport(location);
+        }
+        applyPlayingStateIfVisible();
+    }
+
+    private void closeSpectatorSession() {
+        closeSpectatorSession(bukkitPlayer());
+    }
+
+    private void closeSpectatorSession(Player player) {
+        SpectatorSession session = spectatorSession;
+        spectatorSession = null;
+        if (session != null) {
+            session.close(player);
+        }
+    }
+
+    private void assertNoSpectatorOverlay(Player player) {
+        if (spectatorSession != null) {
+            throw new IllegalStateException("Player " + uuid + " still has an active Donutgame spectator session after spectator exit.");
+        }
+        if (SpectatorSession.hasMarker(this, player)) {
+            throw new IllegalStateException("Player " + uuid + " still has a Donutgame spectator marker after spectator exit.");
+        }
+    }
+
+    private void revivePlayingState(double maxHealth) {
+        playingState.health = maxHealth;
+        playingState.foodLevel = 20;
+        playingState.saturation = 20;
+        playingState.effects.clear();
+        playingState.arrowsInBody = 0;
+        playingState.fireTicks = 0;
+    }
+
+    private GameLocation locationOrSpawn() {
+        Player player = bukkitPlayer();
+        if (player != null) {
+            return new GameLocation(world(), player.getLocation());
+        }
+        return spawnPoint();
+    }
+
+    private GameLocation defaultSpawnPoint() {
+        GameWorld world = world();
+        if (world == null) {
+            return null;
+        }
+        GameLocation point = world.getPoint("spawn");
+        return point == null ? world.worldSpawn() : point;
+    }
+
+    private double maxHealth() {
+        Player player = bukkitPlayer();
+        AttributeInstance instance = player == null ? null : player.getAttribute(Attribute.MAX_HEALTH);
+        return instance == null ? 20.0 : instance.getValue();
+    }
+
 }

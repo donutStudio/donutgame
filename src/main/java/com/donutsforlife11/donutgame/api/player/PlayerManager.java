@@ -1,8 +1,11 @@
 package com.donutsforlife11.donutgame.api.player;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -11,17 +14,17 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 import com.donutsforlife11.donutgame.api.map.GameWorld;
-import com.donutsforlife11.donutgame.api.ui.UIManager;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
 public class PlayerManager {
     private final GameModule module;
     private final PlayerRegistry registry;
     private final PlayerTeleporter teleporter;
+    private final Set<UUID> leavingPlayers = new LinkedHashSet<>();
 
     public PlayerManager(GameModule module) {
         this.module = module;
-        this.registry = new PlayerRegistry(this);
+        this.registry = new PlayerRegistry(module);
         this.teleporter = new PlayerTeleporter(module);
     }
 
@@ -42,7 +45,9 @@ public class PlayerManager {
             if (!teleported) {
                 throw new IllegalStateException("Failed to teleport " + player.getName() + " into game " + module.index() + ".");
             }
+            leavingPlayers.remove(player.getUniqueId());
             registry.register(player);
+            module.teamManager().syncPlayer(registry.get(player.getUniqueId()));
             module.log("Joined player " + player.getName() + " to game world " + world.getName() + ".");
             return true;
         });
@@ -51,19 +56,17 @@ public class PlayerManager {
     public CompletableFuture<Boolean> leave(Player player) {
         Objects.requireNonNull(player, "player");
         GamePlayer gamePlayer = registry.get(player.getUniqueId());
-        if (gamePlayer == null && !owns(player)) {
+        if (gamePlayer == null && !ownsWorld(player.getWorld())) {
             return CompletableFuture.completedFuture(false);
         }
+        beginExit(player, gamePlayer);
         Location destination = teleporter.fallbackLocation(player.getWorld());
-        return teleporter.teleport(player, destination).thenApply(teleported -> {
+        return teleporter.teleport(player, destination).whenComplete((teleported, throwable) ->
+            leavingPlayers.remove(player.getUniqueId())
+        ).thenApply(teleported -> {
             if (!teleported) {
                 throw new IllegalStateException("Failed to teleport " + player.getName() + " out of game " + module.index() + ".");
             }
-            GamePlayer removedPlayer = registry.get(player.getUniqueId());
-            if (removedPlayer != null) {
-                uiManager().clear(removedPlayer);
-            }
-            registry.remove(player);
             module.log("Removed player " + player.getName() + " from game " + module.index() + ".");
             return true;
         });
@@ -75,7 +78,7 @@ public class PlayerManager {
             .toList();
         return CompletableFuture.allOf(leaves.toArray(CompletableFuture[]::new))
             .thenRun(() -> {
-                uiManager().clear();
+                module.uiManager().clear();
                 registry.clear();
             });
     }
@@ -84,15 +87,8 @@ public class PlayerManager {
         if (player == null) {
             return false;
         }
-        if (owns(player.getWorld())) {
-            registry.register(player);
-            return true;
-        }
-        GamePlayer gamePlayer = registry.get(player.getUniqueId());
-        if (gamePlayer != null) {
-            registry.remove(player);
-        }
-        return false;
+        return !leavingPlayers.contains(player.getUniqueId())
+            && (registry.contains(player.getUniqueId()) || ownsWorld(player.getWorld()));
     }
 
     public boolean ownsOffline(UUID uuid) {
@@ -100,6 +96,10 @@ public class PlayerManager {
     }
 
     public boolean owns(World world) {
+        return ownsWorld(world);
+    }
+
+    public boolean ownsWorld(World world) {
         if (world == null) {
             return false;
         }
@@ -120,10 +120,7 @@ public class PlayerManager {
         if (player == null) {
             return null;
         }
-        if (owns(player)) {
-            return registry.get(player.getUniqueId());
-        }
-        return null;
+        return registry.get(player.getUniqueId());
     }
 
     public Collection<GamePlayer> getPlayers() {
@@ -134,15 +131,55 @@ public class PlayerManager {
         return registry.onlinePlayers();
     }
 
+    public Collection<GamePlayer> getSpectators() {
+        return filteredBySpectatorState(true);
+    }
+
+    public Collection<GamePlayer> getNonSpectators() {
+        return filteredBySpectatorState(false);
+    }
+
     public void markOffline(Player player) {
-        registry.markOffline(player, this::owns);
+        registry.markOffline(player, this::ownsWorld);
+    }
+
+    public void detachAfterExternalWorldChange(Player player) {
+        if (player == null || ownsWorld(player.getWorld())) {
+            return;
+        }
+        GamePlayer gamePlayer = registry.get(player.getUniqueId());
+        if (gamePlayer != null) {
+            beginExit(player, gamePlayer);
+            leavingPlayers.remove(player.getUniqueId());
+            module.log("Detached player " + player.getName() + " after leaving game world " + module.index() + ".");
+        }
     }
 
     public GameModule module() {
         return module;
     }
 
-    UIManager uiManager() {
-        return module.uiManager();
+    private Collection<GamePlayer> filteredBySpectatorState(boolean spectator) {
+        Set<GamePlayer> players = new LinkedHashSet<>();
+        for (GamePlayer player : registry.players()) {
+            if (player.isSpectator() == spectator) {
+                players.add(player);
+            }
+        }
+        return Collections.unmodifiableSet(players);
+    }
+
+    private void beginExit(Player player, GamePlayer gamePlayer) {
+        leavingPlayers.add(player.getUniqueId());
+        if (gamePlayer == null) {
+            return;
+        }
+        var team = module.teamManager().getPlayerTeam(gamePlayer);
+        if (team != null) {
+            team.removePlayer(gamePlayer);
+        }
+        gamePlayer.prepareForRemoval();
+        module.uiManager().clear(gamePlayer);
+        registry.remove(player);
     }
 }

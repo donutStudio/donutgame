@@ -2,7 +2,13 @@ package com.donutsforlife11.voidwars;
 
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
+import org.bukkit.event.entity.PlayerDeathEvent;
 
+import com.donutsforlife11.donutgame.api.event.GameEvent;
+import com.donutsforlife11.donutgame.api.event.GameEventHandler;
+import com.donutsforlife11.donutgame.api.item.GameItemComponents;
+import com.donutsforlife11.donutgame.api.item.GameItems;
+import com.donutsforlife11.donutgame.api.item.ItemSpec;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.ui.SidebarEntry;
@@ -14,6 +20,11 @@ import net.kyori.adventure.text.format.TextDecoration;
 
 public class VoidWars extends GameModule {
     private int sidebarTicks;
+    private static final ItemSpec DUMMY_COMPONENT_ITEM = GameItems.BLAZE_ROD
+        .configure(item -> {
+            item.editMeta(meta -> meta.displayName(Component.text("Dummy Component Tester", NamedTextColor.LIGHT_PURPLE)));
+            item.setData(GameItemComponents.DUMMY, "void_wars_placeholder");
+        });
 
     @Override
     public void onLoad() {
@@ -49,6 +60,10 @@ public class VoidWars extends GameModule {
 
     @Override
     public void onStart() {
+        for (GamePlayer player : playerManager().getOnlinePlayers()) {
+            player.giveItem(DUMMY_COMPONENT_ITEM);
+        }
+
         timeManager().newTimer(80)
             .onFinish(ignored -> {
                 for (GamePlayer player : playerManager().getOnlinePlayers()) {
@@ -75,5 +90,11 @@ public class VoidWars extends GameModule {
                     .start();
             })
             .start();
+    }
+
+    @GameEventHandler
+    public void onDeath(GameEvent<PlayerDeathEvent> event) {
+        GamePlayer player = event.getPlayer();
+        player.respawn(200);
     }
 }

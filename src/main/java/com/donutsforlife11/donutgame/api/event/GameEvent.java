@@ -65,6 +65,9 @@ public class GameEvent<E extends Event> implements GameEventProperties<E> {
         if (value instanceof com.donutsforlife11.donutgame.api.map.GameWorld world) {
             return world.bukkitWorld();
         }
+        if (value instanceof com.donutsforlife11.donutgame.api.item.GameItem item) {
+            return item.bukkitItem();
+        }
         return value;
     }
 }

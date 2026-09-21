@@ -32,9 +32,10 @@ import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.object.BlockSpec;
 import com.donutsforlife11.donutgame.api.object.EntitySpec;
-import com.donutsforlife11.donutgame.api.object.ItemSpec;
+import com.donutsforlife11.donutgame.api.item.ItemSpec;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
+import com.donutsforlife11.donutgame.api.team.TeamManager;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.ui.UIManager;
 
@@ -44,10 +45,18 @@ import net.kyori.adventure.text.format.TextDecoration;
 
 public abstract class GameModule {
     public static final String DEFAULT_WORLD_ID = "default";
+    private static final NamedTextColor[] COUNTDOWN_COLORS = {
+        NamedTextColor.DARK_RED,
+        NamedTextColor.RED,
+        NamedTextColor.GOLD,
+        NamedTextColor.YELLOW,
+        NamedTextColor.GREEN
+    };
 
     private Donutgame plugin;
     private MapManager mapManager;
     private PlayerManager playerManager;
+    private TeamManager teamManager;
     private TimeManager timeManager;
     private UIManager uiManager;
     private GameEventRegistrar eventRegistrar;
@@ -71,6 +80,7 @@ public abstract class GameModule {
         YamlConfiguration config,
         MapManager mapManager,
         PlayerManager playerManager,
+        TeamManager teamManager,
         TimeManager timeManager,
         UIManager uiManager
     ) {
@@ -81,6 +91,7 @@ public abstract class GameModule {
         this.config = config;
         this.mapManager = mapManager;
         this.playerManager = playerManager;
+        this.teamManager = teamManager;
         this.timeManager = timeManager;
         this.uiManager = uiManager;
         this.eventRegistrar = new GameEventRegistrar(this);
@@ -151,6 +162,7 @@ public abstract class GameModule {
         setLifecycleState(ModuleLifecycleState.UNLOADING);
         timeManager.cancelAll();
         unregisterDynamicEvents();
+        teamManager.clear();
         return playerManager.clear()
             .thenCompose(ignored -> mapManager.unloadWorlds())
             .whenComplete((ignored, throwable) -> {
@@ -191,6 +203,10 @@ public abstract class GameModule {
         return playerManager;
     }
 
+    public TeamManager teamManager() {
+        return teamManager;
+    }
+
     public TimeManager timeManager() {
         return timeManager;
     }
@@ -204,7 +220,7 @@ public abstract class GameModule {
     }
 
     protected final void fill(GameRegion region, BlockSpec<?> block) {
-        world().fill(region, block);
+        world().fillBlocks(region, block);
     }
 
     protected final void give(GamePlayer player, ItemSpec item) {
@@ -313,9 +329,9 @@ public abstract class GameModule {
                 player.title(Component.text(name, NamedTextColor.LIGHT_PURPLE));
             }
             timeManager.newTimer(50).onFinish(ignoredTimer -> {
-                sendCountdownTitle(countdownTicks);
+                sendCountdownTitle(countdownTicks, countdownTicks);
                 timeManager.newTimer(countdownTicks)
-                    .onTick(20, timer -> sendCountdownTitle(timer.remainingTicks()))
+                    .onTick(20, timer -> sendCountdownTitle(timer.remainingTicks(), timer.maxTicks()))
                     .onFinish(ignored2 -> {
                         for (GamePlayer player : playerManager.getOnlinePlayers()) {
                             player.title(Component.text("> START <", NamedTextColor.WHITE, TextDecoration.BOLD));
@@ -328,20 +344,30 @@ public abstract class GameModule {
         }).start();
     }
 
-    private void sendCountdownTitle(int ticks) {
-        int seconds = Math.max(1, (int) Math.ceil(Math.max(0, ticks) / 20.0));
-        NamedTextColor color = switch (Math.min(seconds, 5)) {
-            case 1 -> NamedTextColor.DARK_RED;
-            case 2 -> NamedTextColor.RED;
-            case 3 -> NamedTextColor.GOLD;
-            case 4 -> NamedTextColor.YELLOW;
-            default -> NamedTextColor.GREEN;
-        };
-        Component title = Component.text(seconds, color, TextDecoration.BOLD);
+    private void sendCountdownTitle(int remainingTicks, int totalTicks) {
+        int seconds = Math.max(1, (int) Math.ceil(Math.max(0, remainingTicks) / 20.0));
+        Component title = Component.text(seconds, countdownColor(remainingTicks, totalTicks), TextDecoration.BOLD);
         for (GamePlayer player : playerManager.getOnlinePlayers()) {
             player.title(title);
             player.playSound(Sound.UI_BUTTON_CLICK, 0.7f, 1.1f);
         }
+    }
+
+    private NamedTextColor countdownColor(int remainingTicks, int totalTicks) {
+        int totalSeconds = Math.max(0, totalTicks / 20);
+        int elapsedSeconds = Math.round(Math.max(0, totalTicks - remainingTicks) / 20.0f);
+        int baseBandLength = totalSeconds / COUNTDOWN_COLORS.length;
+        int extraSeconds = totalSeconds % COUNTDOWN_COLORS.length;
+
+        int colorIndex;
+        if (baseBandLength <= 0) {
+            colorIndex = Math.min(elapsedSeconds, COUNTDOWN_COLORS.length - 1);
+        } else if (elapsedSeconds < baseBandLength + extraSeconds) {
+            colorIndex = 0;
+        } else {
+            colorIndex = 1 + ((elapsedSeconds - (baseBandLength + extraSeconds)) / baseBandLength);
+        }
+        return COUNTDOWN_COLORS[Math.min(colorIndex, COUNTDOWN_COLORS.length - 1)];
     }
 
     private void unregisterDynamicEvents() {

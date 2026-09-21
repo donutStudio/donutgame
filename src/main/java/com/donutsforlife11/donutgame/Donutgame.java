@@ -9,12 +9,16 @@ import com.donutsforlife11.donutgame.commands.MinigameCommand;
 import com.donutsforlife11.donutgame.commands.WorldTeleportCommand;
 import com.donutsforlife11.donutgame.internal.command.CommandRegistrar;
 import com.donutsforlife11.donutgame.internal.file.FileService;
+import com.donutsforlife11.donutgame.internal.game.GameItemComponentEvents;
 import com.donutsforlife11.donutgame.internal.game.GameKillCreditEvents;
 import com.donutsforlife11.donutgame.internal.game.GamePlayerConnectionEvents;
 import com.donutsforlife11.donutgame.internal.game.ModuleService;
+import com.donutsforlife11.donutgame.internal.game.SpectatorGuardEvents;
+import com.donutsforlife11.donutgame.internal.game.SpectatorService;
 import com.donutsforlife11.donutgame.internal.map.MapService;
 import com.donutsforlife11.donutgame.internal.map.WorldService;
 import com.donutsforlife11.donutgame.internal.player.PlayerWorldStateService;
+import com.donutsforlife11.donutgame.internal.ui.GlowService;
 
 public final class Donutgame extends JavaPlugin {
     private FileService fileService;
@@ -22,6 +26,8 @@ public final class Donutgame extends JavaPlugin {
     private WorldService worldService;
     private ModuleService moduleService;
     private PlayerWorldStateService playerWorldStateService;
+    private GlowService glowService;
+    private SpectatorService spectatorService;
 
     @Override
     public void onEnable() {
@@ -30,11 +36,17 @@ public final class Donutgame extends JavaPlugin {
         fileService = new FileService(this);
         fileService.reload();
         mapService = new MapService(fileService);
-        playerWorldStateService = new PlayerWorldStateService();
+        playerWorldStateService = new PlayerWorldStateService(this);
+        glowService = new GlowService(this);
+        glowService.enable();
+        spectatorService = new SpectatorService(this);
+        spectatorService.enable();
         worldService = new WorldService(this, playerWorldStateService);
         moduleService = new ModuleService(this);
         getServer().getPluginManager().registerEvents(new GamePlayerConnectionEvents(moduleService), this);
         getServer().getPluginManager().registerEvents(new GameKillCreditEvents(moduleService), this);
+        getServer().getPluginManager().registerEvents(new GameItemComponentEvents(moduleService), this);
+        getServer().getPluginManager().registerEvents(new SpectatorGuardEvents(moduleService), this);
         getServer().getPluginManager().registerEvents(playerWorldStateService, this);
 
         new CommandRegistrar(this, List.of(
@@ -56,6 +68,12 @@ public final class Donutgame extends JavaPlugin {
     public void onDisable() {
         if (moduleService != null) {
             moduleService.unloadAll();
+        }
+        if (glowService != null) {
+            glowService.disable();
+        }
+        if (spectatorService != null) {
+            spectatorService.disable();
         }
         if (worldService != null) {
             worldService.unloadAll();
@@ -83,5 +101,13 @@ public final class Donutgame extends JavaPlugin {
 
     public PlayerWorldStateService playerWorldStateService() {
         return playerWorldStateService;
+    }
+
+    public GlowService glowService() {
+        return glowService;
+    }
+
+    public SpectatorService spectatorService() {
+        return spectatorService;
     }
 }

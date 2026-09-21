@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.bukkit.Difficulty;
 import org.bukkit.Location;
@@ -55,13 +56,14 @@ public class GameWorld {
         requireWorld().setSpawnLocation(toBukkit(spawn));
     }
 
-    public void setBlock(GameLocation location, BlockSpec<?> block) {
+    public CompletableFuture<Void> setBlock(GameLocation location, BlockSpec<?> block) {
         requireLocation(location);
         requireBlock(block);
         block.applyTo(toBukkit(location).getBlock());
+        return CompletableFuture.completedFuture(null);
     }
 
-    public void fill(GameRegion region, BlockSpec<?> block) {
+    public CompletableFuture<Void> fillBlocks(GameRegion region, BlockSpec<?> block) {
         requireRegion(region);
         requireBlock(block);
         World world = requireWorld();
@@ -78,14 +80,52 @@ public class GameWorld {
                 }
             }
         }
+        return CompletableFuture.completedFuture(null);
     }
 
-    public GameEntity summon(GameLocation location, EntitySpec<?> entity) {
+    public CompletableFuture<Void> replaceBlocks(GameRegion region, BlockSpec<?> from, BlockSpec<?> to) {
+        requireRegion(region);
+        requireBlock(from);
+        requireBlock(to);
+        World world = requireWorld();
+        int minX = region.min().blockX();
+        int minY = region.min().blockY();
+        int minZ = region.min().blockZ();
+        int maxX = region.max().blockX();
+        int maxY = region.max().blockY();
+        int maxZ = region.max().blockZ();
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    org.bukkit.block.Block block = world.getBlockAt(x, y, z);
+                    if (from.matches(block)) {
+                        to.applyTo(block);
+                    }
+                }
+            }
+        }
+        return CompletableFuture.completedFuture(null);
+    }
+
+    public CompletableFuture<Void> summon(EntitySpec<?> entity, GameLocation location) {
+        summonEntity(location, entity);
+        return CompletableFuture.completedFuture(null);
+    }
+
+    public GameEntity summonEntity(GameLocation location, EntitySpec<?> entity) {
         requireLocation(location);
         requireEntity(entity);
         World world = requireWorld();
         Entity bukkitEntity = entity.spawn(world, toBukkit(location));
         return new GameEntity(this, bukkitEntity);
+    }
+
+    public CompletableFuture<Void> fill(GameRegion region, BlockSpec<?> block) {
+        return fillBlocks(region, block);
+    }
+
+    public GameEntity summon(GameLocation location, EntitySpec<?> entity) {
+        return summonEntity(location, entity);
     }
 
     public void addPoint(String name, GameLocation location) {

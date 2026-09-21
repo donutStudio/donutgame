@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
@@ -25,10 +26,18 @@ import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.util.Vector;
 
+import com.donutsforlife11.donutgame.Donutgame;
+
 public class PlayerWorldStateService implements Listener {
     private static final Map<Attribute, Double> VANILLA_PLAYER_ATTRIBUTES = vanillaPlayerAttributes();
+    private static final String SPECTATOR_MARKER_KEY = "spectator_session";
 
+    private final Donutgame plugin;
     private final Map<UUID, Map<UUID, PlayerWorldState>> statesByPlayer = new ConcurrentHashMap<>();
+
+    public PlayerWorldStateService(Donutgame plugin) {
+        this.plugin = plugin;
+    }
 
     @EventHandler
     public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
@@ -67,6 +76,9 @@ public class PlayerWorldStateService implements Listener {
         if (player == null || world == null) {
             return;
         }
+        if (hasDonutgameSpectatorMarker(player)) {
+            return;
+        }
         statesByPlayer.computeIfAbsent(player.getUniqueId(), ignored -> new ConcurrentHashMap<>())
             .put(world.getUID(), PlayerWorldState.capture(player));
     }
@@ -81,12 +93,12 @@ public class PlayerWorldStateService implements Listener {
         if (state == null) {
             applyEmptyState(player, world);
         } else {
-            state.apply(player);
+            state.apply(player, spectatorMarkerKey());
         }
         player.updateInventory();
     }
 
-    private static void applyEmptyState(Player player, World world) {
+    private void applyEmptyState(Player player, World world) {
         PlayerInventory inventory = player.getInventory();
         inventory.clear();
         inventory.setArmorContents(new ItemStack[4]);
@@ -94,6 +106,9 @@ public class PlayerWorldStateService implements Listener {
         player.getEnderChest().clear();
 
         player.setGameMode(GameMode.SURVIVAL);
+        player.setInvulnerable(false);
+        player.setInvisible(false);
+        player.setCanPickupItems(true);
         player.setAllowFlight(false);
         player.setFlying(false);
         player.setFlySpeed(0.05f);
@@ -120,6 +135,15 @@ public class PlayerWorldStateService implements Listener {
         player.setNoDamageTicks(0);
         player.setPortalCooldown(0);
         player.setRespawnLocation(world.getSpawnLocation(), true);
+        player.getPersistentDataContainer().remove(spectatorMarkerKey());
+    }
+
+    private boolean hasDonutgameSpectatorMarker(Player player) {
+        return player.getPersistentDataContainer().has(spectatorMarkerKey());
+    }
+
+    private NamespacedKey spectatorMarkerKey() {
+        return new NamespacedKey(plugin, SPECTATOR_MARKER_KEY);
     }
 
     private static void resetAttributes(Player player) {
@@ -196,6 +220,9 @@ public class PlayerWorldStateService implements Listener {
         float exp,
         int level,
         int totalExp,
+        boolean invulnerable,
+        boolean invisible,
+        boolean canPickupItems,
         boolean allowFlight,
         boolean flying,
         float flySpeed,
@@ -239,6 +266,9 @@ public class PlayerWorldStateService implements Listener {
                 player.getExp(),
                 player.getLevel(),
                 player.getTotalExperience(),
+                player.isInvulnerable(),
+                player.isInvisible(),
+                player.getCanPickupItems(),
                 player.getAllowFlight(),
                 player.isFlying(),
                 player.getFlySpeed(),
@@ -258,7 +288,7 @@ public class PlayerWorldStateService implements Listener {
             );
         }
 
-        void apply(Player player) {
+        void apply(Player player, NamespacedKey spectatorMarkerKey) {
             PlayerInventory playerInventory = player.getInventory();
             playerInventory.setStorageContents(cloneItems(inventory));
             playerInventory.setArmorContents(cloneItems(armor));
@@ -271,6 +301,9 @@ public class PlayerWorldStateService implements Listener {
             applyAttributes(player);
 
             player.setGameMode(gameMode);
+            player.setInvulnerable(invulnerable);
+            player.setInvisible(invisible);
+            player.setCanPickupItems(canPickupItems);
             player.setAllowFlight(allowFlight);
             player.setFlying(allowFlight && flying);
             player.setFlySpeed(flySpeed);
@@ -297,6 +330,7 @@ public class PlayerWorldStateService implements Listener {
             player.setNoDamageTicks(noDamageTicks);
             player.setPortalCooldown(portalCooldown);
             player.setRespawnLocation(respawnLocation == null ? player.getWorld().getSpawnLocation() : respawnLocation.clone(), true);
+            player.getPersistentDataContainer().remove(spectatorMarkerKey);
         }
 
         private void applyAttributes(Player player) {
