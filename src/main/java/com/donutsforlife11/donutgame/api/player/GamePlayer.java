@@ -31,6 +31,7 @@ import com.donutsforlife11.donutgame.api.entity.GameEntityBase;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.item.GameItem;
+import com.donutsforlife11.donutgame.api.item.GameItemComponents;
 import com.donutsforlife11.donutgame.api.item.ItemSpec;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
 import com.donutsforlife11.donutgame.api.time.GameTimer;
@@ -318,14 +319,15 @@ public class GamePlayer implements GameEntityBase {
         if (item == null) {
             return;
         }
+        ItemStack stack = GameItemComponents.normalize(this, item.copyBukkitItem());
         Player player = visiblePlayer();
         if (player != null) {
-            player.getInventory().addItem(item.copyBukkitItem());
+            player.getInventory().addItem(stack);
             player.updateInventory();
             playingState.capture(player);
             return;
         }
-        playingState.addItem(item.copyBukkitItem());
+        playingState.addItem(stack);
     }
 
     public List<GameItem> inventory() {
@@ -584,9 +586,10 @@ public class GamePlayer implements GameEntityBase {
         if (slot == null) {
             throw new IllegalArgumentException("slot cannot be null");
         }
-        playingState.setItem(slot, item == null ? null : item.copyBukkitItem());
+        ItemStack stack = item == null ? null : GameItemComponents.normalize(this, item.copyBukkitItem());
+        playingState.setItem(slot, stack);
         applyVisiblePlayer(player -> {
-            setPlayerInventorySlot(player, slot, item == null ? null : item.copyBukkitItem());
+            setPlayerInventorySlot(player, slot, stack == null ? null : stack.clone());
             player.updateInventory();
         });
     }

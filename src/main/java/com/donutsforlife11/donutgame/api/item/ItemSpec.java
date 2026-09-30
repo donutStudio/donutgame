@@ -37,6 +37,7 @@ public final class ItemSpec {
         for (Consumer<? super GameItem> configuration : configurations) {
             configuration.accept(item);
         }
+        GameItemComponents.normalize(item.bukkitItem());
         return item;
     }
 

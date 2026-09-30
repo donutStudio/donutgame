@@ -14,7 +14,7 @@ public final class GameItem implements GameItemBase {
     }
 
     public GameItem(ItemStack item) {
-        this.item = Objects.requireNonNull(item, "item").clone();
+        this.item = GameItemComponents.normalize(Objects.requireNonNull(item, "item").clone());
     }
 
     public static GameItem of(Material material) {

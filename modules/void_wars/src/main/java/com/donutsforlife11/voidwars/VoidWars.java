@@ -1,14 +1,16 @@
 package com.donutsforlife11.voidwars;
 
+import java.util.List;
+
+import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
 import org.bukkit.event.entity.PlayerDeathEvent;
 
+import com.donutsforlife11.donutgame.api.item.GameItemComponents;
+import com.donutsforlife11.donutgame.api.item.ItemSpec;
 import com.donutsforlife11.donutgame.api.event.GameEvent;
 import com.donutsforlife11.donutgame.api.event.GameEventHandler;
-import com.donutsforlife11.donutgame.api.item.GameItemComponents;
-import com.donutsforlife11.donutgame.api.item.GameItems;
-import com.donutsforlife11.donutgame.api.item.ItemSpec;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.ui.SidebarEntry;
@@ -17,14 +19,55 @@ import com.donutsforlife11.donutgame.internal.game.GameModule;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import io.papermc.paper.datacomponent.DataComponentTypes;
 
 public class VoidWars extends GameModule {
+    private static final List<ItemSpec> COMPONENT_TEST_ITEMS = List.of(
+        testItem(Material.WHITE_WOOL, "Infinite Build Wool x7", NamedTextColor.GREEN, item -> {
+            item.setAmount(7);
+            item.setData(GameItemComponents.INFINITE_BUILD, (byte) 1);
+        }),
+        testItem(Material.WHITE_WOOL, "Infinite Build Wool x7 Max 16", NamedTextColor.GREEN, item -> {
+            item.setAmount(7);
+            item.setData(GameItemComponents.INFINITE_BUILD, (byte) 1);
+            item.setData(DataComponentTypes.MAX_STACK_SIZE, 16);
+        }),
+        testItem(Material.WHITE_WOOL, "Team Sync Wool", NamedTextColor.AQUA, item -> item.setData(GameItemComponents.TEAM_SYNC, (byte) 1)),
+        testItem(Material.LEATHER_CHESTPLATE, "Team Sync Leather Chestplate", NamedTextColor.AQUA, item -> item.setData(GameItemComponents.TEAM_SYNC, (byte) 1)),
+        testItem(Material.WOLF_ARMOR, "Team Sync Wolf Armor", NamedTextColor.AQUA, item -> item.setData(GameItemComponents.TEAM_SYNC, (byte) 1)),
+        testItem(Material.WHITE_WOOL, "Team Infinite Wool x7", NamedTextColor.YELLOW, item -> {
+            item.setAmount(7);
+            item.setData(GameItemComponents.TEAM_SYNC, (byte) 1);
+            item.setData(GameItemComponents.INFINITE_BUILD, (byte) 1);
+        }),
+        testItem(Material.TNT, null, NamedTextColor.RED, item -> {
+            item.setAmount(4);
+            item.setData(GameItemComponents.AUTO_IGNITE, 80);
+        }),
+        testItem(Material.TNT, "Explicit Named Auto TNT", NamedTextColor.RED, item -> {
+            item.setAmount(4);
+            item.setData(GameItemComponents.AUTO_IGNITE, 80);
+        }),
+        testItem(Material.CREEPER_SPAWN_EGG, "Auto Ignite Creeper Egg", NamedTextColor.RED, item -> item.setData(GameItemComponents.AUTO_IGNITE, 80)),
+        testItem(Material.COW_SPAWN_EGG, "Silent Cow Egg", NamedTextColor.GRAY, item -> item.setData(GameItemComponents.AUTO_IGNITE, 80)),
+        testItem(Material.BLUE_CONCRETE, null, NamedTextColor.GOLD, item -> {
+            item.setAmount(8);
+            item.setData(GameItemComponents.AUTO_IGNITE, 60);
+        }),
+        testItem(Material.RED_WOOL, "Infinite Auto Wool x5", NamedTextColor.GOLD, item -> {
+            item.setAmount(5);
+            item.setData(GameItemComponents.INFINITE_BUILD, (byte) 1);
+            item.setData(GameItemComponents.AUTO_IGNITE, 60);
+        }),
+        testItem(Material.WHITE_CONCRETE, "Team Infinite Auto Concrete x5", NamedTextColor.LIGHT_PURPLE, item -> {
+            item.setAmount(5);
+            item.setData(GameItemComponents.TEAM_SYNC, (byte) 1);
+            item.setData(GameItemComponents.INFINITE_BUILD, (byte) 1);
+            item.setData(GameItemComponents.AUTO_IGNITE, 60);
+        })
+    );
+
     private int sidebarTicks;
-    private static final ItemSpec DUMMY_COMPONENT_ITEM = GameItems.BLAZE_ROD
-        .configure(item -> {
-            item.editMeta(meta -> meta.displayName(Component.text("Dummy Component Tester", NamedTextColor.LIGHT_PURPLE)));
-            item.setData(GameItemComponents.DUMMY, "void_wars_placeholder");
-        });
 
     @Override
     public void onLoad() {
@@ -63,7 +106,9 @@ public class VoidWars extends GameModule {
     public void onStart() {
         for (GamePlayer player : playerManager().getOnlinePlayers()) {
             player.setSpectatablePlayers(() -> playerManager().getPlayers());
-            player.giveItem(DUMMY_COMPONENT_ITEM);
+            for (ItemSpec item : COMPONENT_TEST_ITEMS) {
+                player.giveItem(item);
+            }
         }
 
         timeManager().newTimer(80)
@@ -98,5 +143,14 @@ public class VoidWars extends GameModule {
     public void onDeath(GameEvent<PlayerDeathEvent> event) {
         GamePlayer player = event.getPlayer();
         player.respawn(200);
+    }
+
+    private static ItemSpec testItem(Material material, String name, NamedTextColor color, java.util.function.Consumer<com.donutsforlife11.donutgame.api.item.GameItem> configure) {
+        return ItemSpec.of(material).configure(item -> {
+            if (name != null) {
+                item.setData(DataComponentTypes.ITEM_NAME, Component.text(name, color));
+            }
+            configure.accept(item);
+        });
     }
 }

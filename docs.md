@@ -227,7 +227,9 @@ ItemStack copyBukkitItem() // Returns a cloned Bukkit item stack
 ```java
 record GameItemComponent<T>(NamespacedKey key, PersistentDataType<?, T> type)
 GameItemComponents.SPECTATOR_MENU // Marks an item as opening the spectator teleport menu for spectators on right click
-GameItemComponents.DUMMY // Placeholder custom component for testing item-level plugin behavior
+GameItemComponents.INFINITE_BUILD // Replenishes placed blocks and defaults max stack size to 65 when no max-stack override exists
+GameItemComponents.TEAM_SYNC // Recolors the item to the holder's team, then removes itself from the item
+GameItemComponents.AUTO_IGNITE // Stores an auto-ignite fuse in ticks for explosive spawn/use or block-placement TNT behavior
 T getData(GameItemComponent<T> component) // Reads custom plugin-owned item data from PDC
 T getDataOrDefault(GameItemComponent<T> component, T fallback) // Reads custom data with a fallback
 boolean hasData(GameItemComponent<T> component) // Checks if custom data is present
