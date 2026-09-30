@@ -45,6 +45,7 @@ final class PlayerSnapshot {
     }
 
     void capture(org.bukkit.entity.Player player) {
+        PlayerAttributeDefaults.repairInvalidCameraDistance(player);
         PlayerInventory playerInventory = player.getInventory();
         inventory = cloneItems(playerInventory.getStorageContents());
         armor = cloneItems(playerInventory.getArmorContents());
@@ -56,7 +57,7 @@ final class PlayerSnapshot {
         for (Attribute attribute : attributeRegistry()) {
             AttributeInstance instance = player.getAttribute(attribute);
             if (instance != null) {
-                attributeBases.put(attribute, instance.getBaseValue());
+                attributeBases.put(attribute, PlayerAttributeDefaults.snapshotBaseValue(instance));
                 attributeModifiers.put(attribute, new ArrayList<>(instance.getModifiers()));
             }
         }
@@ -228,13 +229,17 @@ final class PlayerSnapshot {
             if (instance == null) {
                 continue;
             }
-            for (AttributeModifier modifier : List.copyOf(instance.getModifiers())) {
-                instance.removeModifier(modifier);
-            }
+            PlayerAttributeDefaults.clearModifiers(instance);
             Double baseValue = attributeBases.get(attribute);
-            if (baseValue != null) {
-                instance.setBaseValue(baseValue);
+            if (baseValue == null) {
+                PlayerAttributeDefaults.restoreVanillaBase(instance);
+                continue;
             }
+            if (PlayerAttributeDefaults.isInvalidCameraDistance(attribute, baseValue)) {
+                PlayerAttributeDefaults.restoreVanillaBase(instance);
+                continue;
+            }
+            instance.setBaseValue(baseValue);
             for (AttributeModifier modifier : attributeModifiers.getOrDefault(attribute, List.of())) {
                 instance.addModifier(modifier);
             }

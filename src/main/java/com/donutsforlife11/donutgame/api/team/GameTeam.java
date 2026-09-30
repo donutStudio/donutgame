@@ -7,7 +7,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 
-import org.bukkit.Bukkit;
 import org.bukkit.damage.DamageType;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -67,7 +66,7 @@ public class GameTeam {
         Player bukkitPlayer = player.bukkitPlayer();
         if (!removed && bukkitPlayer != null) {
             team.removeEntry(bukkitPlayer.getName());
-            bukkitPlayer.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
+            player.restoreExternalScoreboard(bukkitPlayer);
         }
         refreshTeamGlow();
         return this;
@@ -106,7 +105,11 @@ public class GameTeam {
     }
 
     public boolean allSpectators() {
-        for (GamePlayer player : getPlayers()) {
+        Collection<GamePlayer> players = getPlayers();
+        if (players.isEmpty()) {
+            return false;
+        }
+        for (GamePlayer player : players) {
             if (!player.isSpectator()) {
                 return false;
             }
@@ -181,7 +184,7 @@ public class GameTeam {
 
     public GameTeam setFriendlyFire(boolean friendlyFire) {
         this.friendlyFire = friendlyFire;
-        team.setAllowFriendlyFire(true);
+        team.setAllowFriendlyFire(friendlyFire);
         return this;
     }
 
@@ -257,6 +260,7 @@ public class GameTeam {
         if (removed || bukkitPlayer == null) {
             return;
         }
+        player.captureExternalScoreboard(bukkitPlayer);
         bukkitPlayer.setScoreboard(team.getScoreboard());
         team.addEntry(bukkitPlayer.getName());
         syncGlow(player);
@@ -265,7 +269,7 @@ public class GameTeam {
     private void applyProperties() {
         team.color(color);
         team.displayName(displayName);
-        team.setAllowFriendlyFire(true);
+        team.setAllowFriendlyFire(friendlyFire);
         team.setCanSeeFriendlyInvisibles(seeFriendlyInvisibles);
         team.setOption(Team.Option.NAME_TAG_VISIBILITY, nametagVisibility);
         team.setOption(Team.Option.COLLISION_RULE, collisionRule);

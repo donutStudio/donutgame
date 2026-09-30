@@ -192,10 +192,12 @@ public class MinigameCommand implements PluginCommand {
     private int unloadModule(CommandSender sender, int index) {
         moduleService.unloadModule(index)
             .thenAccept(unloaded -> {
-                if (unloaded) {
-                    sendSuccess(sender, "Unloaded active game " + index + ".");
-                } else {
+                if (!unloaded.unloaded()) {
                     sendError(sender, "No active game exists at index " + index + ".");
+                } else if (unloaded.hadErrors()) {
+                    sendError(sender, "Unloaded active game " + index + " with errors. Check console for details.");
+                } else {
+                    sendSuccess(sender, "Unloaded active game " + index + ".");
                 }
             })
             .exceptionally(error -> {

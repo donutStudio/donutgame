@@ -36,6 +36,7 @@ public class GameTimer {
             started = true;
         }
 
+        timeManager.register(this);
         runTickActions(0);
         if (maxTicks() == 0) {
             finish();
@@ -77,9 +78,16 @@ public class GameTimer {
         return this;
     }
 
-    public synchronized GameTimer resume() {
-        if (!finished && !cancelled) {
-            paused = false;
+    public GameTimer resume() {
+        boolean shouldStartTicking;
+        synchronized (this) {
+            if (!finished && !cancelled) {
+                paused = false;
+            }
+            shouldStartTicking = needsTicks();
+        }
+        if (shouldStartTicking) {
+            timeManager.startTicking();
         }
         return this;
     }
@@ -140,7 +148,7 @@ public class GameTimer {
         tickActions.add(new TickAction(interval, action));
         boolean runNow;
         synchronized (this) {
-            runNow = started && !finished && !cancelled && elapsedTicks % interval == 0;
+            runNow = started && !paused && !finished && !cancelled && elapsedTicks % interval == 0;
         }
         if (runNow) {
             runAction(action);
@@ -170,7 +178,7 @@ public class GameTimer {
     }
 
     synchronized boolean needsTicks() {
-        return started && !finished && !cancelled;
+        return started && !paused && !finished && !cancelled;
     }
 
     void tick() {

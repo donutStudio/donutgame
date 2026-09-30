@@ -89,23 +89,29 @@ public class ModuleService {
         }
     }
 
-    public CompletableFuture<Boolean> unloadModule(int index) {
+    public CompletableFuture<ModuleUnloadResult> unloadModule(int index) {
         GameModule module = activeGames.get(index);
         if (module == null) {
-            return CompletableFuture.completedFuture(false);
+            return CompletableFuture.completedFuture(ModuleUnloadResult.missing());
         }
 
+        boolean[] hadErrors = new boolean[1];
         try {
             module.onUnload();
         } catch (Throwable throwable) {
+            hadErrors[0] = true;
             plugin.getLogger().log(Level.SEVERE, "Module " + module.id() + " threw during onUnload(). Continuing shutdown.", throwable);
         }
 
         return module.shutdown()
-            .thenApply(ignored -> {
+            .handle((ignored, throwable) -> {
+                if (throwable != null) {
+                    hadErrors[0] = true;
+                    plugin.getLogger().log(Level.SEVERE, "Module " + module.id() + " had errors during shutdown. Removing it from active games anyway.", throwable);
+                }
                 activeGames.remove(index, module);
                 freeIndexes.offer(index);
-                return true;
+                return ModuleUnloadResult.unloaded(hadErrors[0]);
             });
     }
 
@@ -160,11 +166,11 @@ public class ModuleService {
     public void unloadAll() {
         for (int index : Set.copyOf(activeGames.keySet())) {
             try {
-                CompletableFuture<Boolean> unload = unloadModule(index);
+                CompletableFuture<ModuleUnloadResult> unload = unloadModule(index);
                 if (Bukkit.isPrimaryThread()) {
                     unload.exceptionally(exception -> {
                         plugin.getLogger().log(Level.SEVERE, "Failed to unload active game " + index + ".", exception);
-                        return false;
+                        return ModuleUnloadResult.unloaded(true);
                     });
                 } else {
                     unload.join();

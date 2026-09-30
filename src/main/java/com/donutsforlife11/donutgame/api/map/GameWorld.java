@@ -281,6 +281,9 @@ public class GameWorld {
         if (region == null) {
             throw new IllegalArgumentException("region cannot be null");
         }
+        if (region.world() != null && region.world() != this) {
+            throw new IllegalArgumentException("Region must be in GameWorld " + id + ".");
+        }
     }
 
     private void requireBlock(BlockSpec<?> block) {

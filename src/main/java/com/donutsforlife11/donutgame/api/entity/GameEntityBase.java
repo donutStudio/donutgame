@@ -28,6 +28,7 @@ import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.item.GameItem;
 import com.donutsforlife11.donutgame.api.item.ItemSpec;
+import com.donutsforlife11.donutgame.api.player.PlayerAttributeDefaults;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.internal.ui.GlowService;
 
@@ -50,11 +51,11 @@ public interface GameEntityBase {
         if (location == null) {
             throw new IllegalArgumentException("location cannot be null");
         }
-        GameWorld world = world();
-        if (world == null || world.bukkitWorld() == null) {
+        GameWorld targetWorld = location.world() == null ? world() : location.world();
+        if (targetWorld == null || targetWorld.bukkitWorld() == null) {
             throw new IllegalStateException("Entity " + uuid() + " is not in a loaded GameWorld.");
         }
-        return requireEntity().teleportAsync(location.toBukkit(world.bukkitWorld()));
+        return requireEntity().teleportAsync(location.toBukkit(targetWorld.bukkitWorld()));
     }
 
     default void setHealth(float health) {
@@ -89,7 +90,12 @@ public interface GameEntityBase {
     }
 
     default void kill() {
-        requireEntity().remove();
+        Entity entity = requireEntity();
+        if (entity instanceof LivingEntity livingEntity) {
+            livingEntity.setHealth(0.0);
+            return;
+        }
+        entity.remove();
     }
 
     default boolean isDead() {
@@ -252,7 +258,7 @@ public interface GameEntityBase {
 
     default void resetAttributeBase(Attribute attribute) {
         AttributeInstance instance = requireAttribute(attribute);
-        instance.setBaseValue(instance.getAttribute().getDefaultValue());
+        PlayerAttributeDefaults.restoreVanillaBase(instance);
     }
 
     default double attributeBase(Attribute attribute) {

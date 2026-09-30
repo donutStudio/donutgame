@@ -59,6 +59,7 @@ public class WorldService {
                     World world = instance.getBukkitWorld();
                     configureWorld(world);
                     ownedWorldNames.add(world.getName());
+                    playerWorldStateService.markIsolatedWorld(world);
                     future.complete(world);
                 }, future);
             } catch (Throwable throwable) {
@@ -98,13 +99,19 @@ public class WorldService {
     public CompletableFuture<Void> unloadWorld(String worldName) {
         CompletableFuture<Void> future = new CompletableFuture<>();
         runSync(() -> {
+            boolean owned = ownedWorldNames.contains(worldName) || moduleIndexesByWorldName.containsKey(worldName);
             World world = Bukkit.getWorld(worldName);
             if (world == null) {
-                ownedWorldNames.remove(worldName);
-                moduleIndexesByWorldName.remove(worldName);
-                tryDeleteWorldFolder(worldName);
+                if (owned) {
+                    ownedWorldNames.remove(worldName);
+                    moduleIndexesByWorldName.remove(worldName);
+                    tryDeleteWorldFolder(worldName);
+                }
                 future.complete(null);
                 return;
+            }
+            if (!owned) {
+                throw new IllegalArgumentException("Refusing to unload unowned world " + worldName + ".");
             }
             evacuatePlayers(world);
             removeNonPlayerEntities(world);
@@ -140,7 +147,7 @@ public class WorldService {
     private void configureWorld(World world) {
         world.setGameRule(GameRules.ADVANCE_TIME, false);
         world.setGameRule(GameRules.ADVANCE_WEATHER, false);
-        world.setGameRule(GameRules.PVP, false);
+        world.setGameRule(GameRules.PVP, true);
         world.setGameRule(GameRules.SPAWN_MOBS, false);
         world.setGameRule(GameRules.SHOW_ADVANCEMENT_MESSAGES, false);
         world.setGameRule(GameRules.LOCATOR_BAR, false);
@@ -174,13 +181,18 @@ public class WorldService {
         Location destination = fallbackLocation(world);
         for (Player player : List.copyOf(world.getPlayers())) {
             player.closeInventory();
-            player.teleport(destination);
+            if (!player.teleport(destination)) {
+                throw new IllegalStateException("Failed to evacuate " + player.getName() + " from world " + world.getName() + ".");
+            }
+        }
+        if (!world.getPlayers().isEmpty()) {
+            throw new IllegalStateException("Cannot unload world " + world.getName() + " because players remain in it.");
         }
     }
 
     private Location fallbackLocation(World unloadingWorld) {
         for (World world : Bukkit.getWorlds()) {
-            if (!world.equals(unloadingWorld)) {
+            if (!world.equals(unloadingWorld) && !ownedWorldNames.contains(world.getName())) {
                 return world.getSpawnLocation();
             }
         }
@@ -204,7 +216,11 @@ public class WorldService {
     }
 
     private void deleteWorldFolder(String worldName) throws IOException {
-        Path worldFolder = Bukkit.getWorldContainer().toPath().resolve(worldName).normalize();
+        Path worldContainer = Bukkit.getWorldContainer().toPath().toAbsolutePath().normalize();
+        Path worldFolder = worldContainer.resolve(worldName).normalize();
+        if (!worldFolder.startsWith(worldContainer)) {
+            throw new IOException("Refusing to delete world folder outside the server world container: " + worldName);
+        }
         if (!Files.exists(worldFolder)) {
             return;
         }

@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -24,16 +25,16 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.potion.PotionEffect;
-import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.Donutgame;
+import com.donutsforlife11.donutgame.api.player.PlayerAttributeDefaults;
 
 public class PlayerWorldStateService implements Listener {
-    private static final Map<Attribute, Double> VANILLA_PLAYER_ATTRIBUTES = vanillaPlayerAttributes();
     private static final String SPECTATOR_MARKER_KEY = "spectator_session";
 
     private final Donutgame plugin;
     private final Map<UUID, Map<UUID, PlayerWorldState>> statesByPlayer = new ConcurrentHashMap<>();
+    private final Set<UUID> isolatedWorldIds = ConcurrentHashMap.newKeySet();
 
     public PlayerWorldStateService(Donutgame plugin) {
         this.plugin = plugin;
@@ -66,10 +67,26 @@ public class PlayerWorldStateService implements Listener {
         if (worldId == null) {
             return;
         }
+        isolatedWorldIds.remove(worldId);
         for (Map<UUID, PlayerWorldState> states : statesByPlayer.values()) {
             states.remove(worldId);
         }
         statesByPlayer.entrySet().removeIf(entry -> entry.getValue().isEmpty());
+    }
+
+    public void markIsolatedWorld(World world) {
+        if (world != null) {
+            isolatedWorldIds.add(world.getUID());
+        }
+    }
+
+    public void cleanupRuntimeState() {
+        statesByPlayer.clear();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (hasDonutgameSpectatorMarker(player)) {
+                clearLeakedSpectatorOverlay(player);
+            }
+        }
     }
 
     private void save(Player player, World world) {
@@ -77,7 +94,7 @@ public class PlayerWorldStateService implements Listener {
             return;
         }
         if (hasDonutgameSpectatorMarker(player)) {
-            return;
+            clearLeakedSpectatorOverlay(player);
         }
         statesByPlayer.computeIfAbsent(player.getUniqueId(), ignored -> new ConcurrentHashMap<>())
             .put(world.getUID(), PlayerWorldState.capture(player));
@@ -90,22 +107,36 @@ public class PlayerWorldStateService implements Listener {
         PlayerWorldState state = statesByPlayer
             .getOrDefault(player.getUniqueId(), Map.of())
             .get(world.getUID());
-        if (state == null) {
-            applyEmptyState(player, world);
-        } else {
+        if (state != null) {
             state.apply(player, spectatorMarkerKey());
+            player.updateInventory();
+            return;
         }
-        player.updateInventory();
+        if (hasDonutgameSpectatorMarker(player)) {
+            clearLeakedSpectatorOverlay(player);
+            player.updateInventory();
+            return;
+        }
+        if (isolatedWorldIds.contains(world.getUID())) {
+            applyEmptyGameState(player);
+            player.updateInventory();
+            return;
+        }
+        player.getPersistentDataContainer().remove(spectatorMarkerKey());
     }
 
-    private void applyEmptyState(Player player, World world) {
+    private void applyEmptyGameState(Player player) {
         PlayerInventory inventory = player.getInventory();
         inventory.clear();
         inventory.setArmorContents(new ItemStack[4]);
         inventory.setExtraContents(new ItemStack[1]);
+        inventory.setHeldItemSlot(0);
         player.getEnderChest().clear();
 
-        player.setGameMode(GameMode.SURVIVAL);
+        player.clearActivePotionEffects();
+        resetAttributes(player);
+
+        player.setGameMode(GameMode.ADVENTURE);
         player.setInvulnerable(false);
         player.setInvisible(false);
         player.setCanPickupItems(true);
@@ -115,14 +146,14 @@ public class PlayerWorldStateService implements Listener {
         player.setWalkSpeed(0.2f);
         player.setSneaking(false);
         player.setSprinting(false);
-        player.setVelocity(new Vector());
 
-        player.clearActivePotionEffects();
-        resetAttributes(player);
-        player.setHealth(20.0);
+        player.setMaximumAir(300);
+        player.setRemainingAir(player.getMaximumAir());
+        AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
+        player.setHealth(maxHealth == null ? 20.0 : maxHealth.getValue());
         player.setAbsorptionAmount(0.0);
         player.setFoodLevel(20);
-        player.setSaturation(5.0f);
+        player.setSaturation(20.0f);
         player.setExhaustion(0.0f);
         player.setExp(0.0f);
         player.setLevel(0);
@@ -130,11 +161,25 @@ public class PlayerWorldStateService implements Listener {
         player.setFireTicks(0);
         player.setFreezeTicks(0);
         player.setFallDistance(0.0f);
-        player.setRemainingAir(player.getMaximumAir());
         player.setArrowsInBody(0);
+        player.setMaximumNoDamageTicks(20);
         player.setNoDamageTicks(0);
         player.setPortalCooldown(0);
-        player.setRespawnLocation(world.getSpawnLocation(), true);
+        player.setRespawnLocation(null, true);
+        player.getPersistentDataContainer().remove(spectatorMarkerKey());
+    }
+
+    private void clearLeakedSpectatorOverlay(Player player) {
+        PlayerAttributeDefaults.repairInvalidCameraDistance(player);
+        if (player.getGameMode() == GameMode.SPECTATOR) {
+            player.setGameMode(GameMode.SURVIVAL);
+        }
+        player.setInvulnerable(false);
+        player.setInvisible(false);
+        player.setCanPickupItems(true);
+        player.setAllowFlight(player.getGameMode() == GameMode.CREATIVE);
+        player.setFlying(false);
+        player.setFallDistance(0.0f);
         player.getPersistentDataContainer().remove(spectatorMarkerKey());
     }
 
@@ -152,10 +197,8 @@ public class PlayerWorldStateService implements Listener {
             if (instance == null) {
                 continue;
             }
-            for (AttributeModifier modifier : List.copyOf(instance.getModifiers())) {
-                instance.removeModifier(modifier);
-            }
-            instance.setBaseValue(defaultBaseValue(attribute, instance));
+            PlayerAttributeDefaults.clearModifiers(instance);
+            PlayerAttributeDefaults.restoreVanillaBase(instance);
         }
     }
 
@@ -165,42 +208,6 @@ public class PlayerWorldStateService implements Listener {
             clone[i] = items[i] == null ? null : items[i].clone();
         }
         return clone;
-    }
-
-    private static Map<Attribute, Double> vanillaPlayerAttributes() {
-        Map<Attribute, Double> defaults = new HashMap<>();
-        defaults.put(Attribute.MAX_HEALTH, 20.0);
-        defaults.put(Attribute.FOLLOW_RANGE, 32.0);
-        defaults.put(Attribute.KNOCKBACK_RESISTANCE, 0.0);
-        defaults.put(Attribute.MOVEMENT_SPEED, 0.1);
-        defaults.put(Attribute.FLYING_SPEED, 0.02);
-        defaults.put(Attribute.ATTACK_DAMAGE, 1.0);
-        defaults.put(Attribute.ATTACK_KNOCKBACK, 0.0);
-        defaults.put(Attribute.ATTACK_SPEED, 4.0);
-        defaults.put(Attribute.ARMOR, 0.0);
-        defaults.put(Attribute.ARMOR_TOUGHNESS, 0.0);
-        defaults.put(Attribute.FALL_DAMAGE_MULTIPLIER, 1.0);
-        defaults.put(Attribute.LUCK, 0.0);
-        defaults.put(Attribute.MAX_ABSORPTION, 0.0);
-        defaults.put(Attribute.SAFE_FALL_DISTANCE, 3.0);
-        defaults.put(Attribute.SCALE, 1.0);
-        defaults.put(Attribute.STEP_HEIGHT, 0.6);
-        defaults.put(Attribute.GRAVITY, 0.08);
-        defaults.put(Attribute.JUMP_STRENGTH, 0.42);
-        defaults.put(Attribute.BURNING_TIME, 1.0);
-        defaults.put(Attribute.CAMERA_DISTANCE, 0.0);
-        defaults.put(Attribute.EXPLOSION_KNOCKBACK_RESISTANCE, 0.0);
-        defaults.put(Attribute.MOVEMENT_EFFICIENCY, 0.0);
-        defaults.put(Attribute.OXYGEN_BONUS, 0.0);
-        defaults.put(Attribute.WATER_MOVEMENT_EFFICIENCY, 0.0);
-        defaults.put(Attribute.BLOCK_INTERACTION_RANGE, 4.5);
-        defaults.put(Attribute.ENTITY_INTERACTION_RANGE, 3.0);
-        defaults.put(Attribute.BLOCK_BREAK_SPEED, 1.0);
-        defaults.put(Attribute.MINING_EFFICIENCY, 0.0);
-        defaults.put(Attribute.SNEAKING_SPEED, 0.3);
-        defaults.put(Attribute.SUBMERGED_MINING_SPEED, 0.2);
-        defaults.put(Attribute.SWEEPING_DAMAGE_RATIO, 0.0);
-        return defaults;
     }
 
     private record PlayerWorldState(
@@ -329,7 +336,7 @@ public class PlayerWorldStateService implements Listener {
             player.setMaximumNoDamageTicks(maximumNoDamageTicks);
             player.setNoDamageTicks(noDamageTicks);
             player.setPortalCooldown(portalCooldown);
-            player.setRespawnLocation(respawnLocation == null ? player.getWorld().getSpawnLocation() : respawnLocation.clone(), true);
+            player.setRespawnLocation(respawnLocation == null ? null : respawnLocation.clone(), true);
             player.getPersistentDataContainer().remove(spectatorMarkerKey);
         }
 
@@ -339,12 +346,14 @@ public class PlayerWorldStateService implements Listener {
                 if (instance == null) {
                     continue;
                 }
-                for (AttributeModifier modifier : List.copyOf(instance.getModifiers())) {
-                    instance.removeModifier(modifier);
-                }
+                PlayerAttributeDefaults.clearModifiers(instance);
                 AttributeState state = attributes.get(attribute);
                 if (state == null) {
-                    instance.setBaseValue(defaultBaseValue(attribute, instance));
+                    PlayerAttributeDefaults.restoreVanillaBase(instance);
+                    continue;
+                }
+                if (PlayerAttributeDefaults.isInvalidCameraDistance(attribute, state.baseValue())) {
+                    PlayerAttributeDefaults.restoreVanillaBase(instance);
                     continue;
                 }
                 instance.setBaseValue(state.baseValue());
@@ -357,17 +366,13 @@ public class PlayerWorldStateService implements Listener {
 
     private record AttributeState(double baseValue, Collection<AttributeModifier> modifiers) {
         static AttributeState capture(AttributeInstance instance) {
-            return new AttributeState(instance.getBaseValue(), List.copyOf(instance.getModifiers()));
+            double baseValue = PlayerAttributeDefaults.snapshotBaseValue(instance);
+            return new AttributeState(baseValue, List.copyOf(instance.getModifiers()));
         }
     }
 
     @SuppressWarnings("deprecation")
     private static Iterable<Attribute> allAttributes() {
         return Bukkit.getRegistry(Attribute.class);
-    }
-
-    @SuppressWarnings("deprecation")
-    private static double defaultBaseValue(Attribute attribute, AttributeInstance instance) {
-        return VANILLA_PLAYER_ATTRIBUTES.getOrDefault(attribute, instance.getDefaultValue());
     }
 }

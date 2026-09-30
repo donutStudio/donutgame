@@ -5,6 +5,7 @@ import org.bukkit.persistence.PersistentDataType;
 
 public final class GameItemComponents {
     public static final GameItemComponent<String> DUMMY = string("dummy");
+    public static final GameItemComponent<String> SPECTATOR_MENU = string("spectator_menu");
 
     private static final String NAMESPACE = "donutgame";
 

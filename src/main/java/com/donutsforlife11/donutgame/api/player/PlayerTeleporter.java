@@ -21,7 +21,6 @@ final class PlayerTeleporter {
         CompletableFuture<Boolean> result = new CompletableFuture<>();
         Runnable task = () -> {
             try {
-                destination.getChunk().load();
                 player.closeInventory();
                 player.teleportAsync(destination).whenComplete((teleported, throwable) ->
                     Bukkit.getScheduler().runTask(module.plugin(), () -> {
@@ -55,7 +54,7 @@ final class PlayerTeleporter {
 
     Location fallbackLocation(World currentWorld) {
         for (World world : Bukkit.getWorlds()) {
-            if (!world.equals(currentWorld)) {
+            if (!world.equals(currentWorld) && !module.playerManager().ownsWorld(world)) {
                 return world.getSpawnLocation();
             }
         }

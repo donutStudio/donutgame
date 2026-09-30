@@ -226,6 +226,7 @@ ItemStack copyBukkitItem() // Returns a cloned Bukkit item stack
 **GameItemComponent / GameItemComponents**
 ```java
 record GameItemComponent<T>(NamespacedKey key, PersistentDataType<?, T> type)
+GameItemComponents.SPECTATOR_MENU // Marks an item as opening the spectator teleport menu for spectators on right click
 GameItemComponents.DUMMY // Placeholder custom component for testing item-level plugin behavior
 T getData(GameItemComponent<T> component) // Reads custom plugin-owned item data from PDC
 T getDataOrDefault(GameItemComponent<T> component, T fallback) // Reads custom data with a fallback

@@ -51,6 +51,7 @@ public class VoidWars extends GameModule {
         timeManager().newTimer(1)
             .onFinish(ignored -> {
                 for (GamePlayer player : playerManager().getOnlinePlayers()) {
+                    player.setSpectatablePlayers(() -> playerManager().getPlayers());
                     player.chat(Component.text("Void Wars loaded as a blank UI test module.", NamedTextColor.GRAY));
                     player.gameMessage(Component.text("Sidebar, chat, and load countdown are active.", NamedTextColor.WHITE));
                 }
@@ -61,6 +62,7 @@ public class VoidWars extends GameModule {
     @Override
     public void onStart() {
         for (GamePlayer player : playerManager().getOnlinePlayers()) {
+            player.setSpectatablePlayers(() -> playerManager().getPlayers());
             player.giveItem(DUMMY_COMPONENT_ITEM);
         }
 

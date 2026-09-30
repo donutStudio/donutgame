@@ -27,7 +27,7 @@ public class GameLocation {
 
     public GameLocation(GameWorld world, Location location) {
         this(
-            world,
+            validateWorld(world, location),
             location.getX(),
             location.getY(),
             location.getZ(),
@@ -99,5 +99,13 @@ public class GameLocation {
 
     public int blockZ() {
         return (int) Math.floor(z);
+    }
+
+    private static GameWorld validateWorld(GameWorld world, Location location) {
+        Objects.requireNonNull(location, "location");
+        if (world != null && world.bukkitWorld() != null && location.getWorld() != null && !world.bukkitWorld().equals(location.getWorld())) {
+            throw new IllegalArgumentException("Bukkit location belongs to " + location.getWorld().getName() + ", not GameWorld " + world.id() + ".");
+        }
+        return world;
     }
 }

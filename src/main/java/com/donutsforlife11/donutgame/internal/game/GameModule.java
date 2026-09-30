@@ -135,12 +135,18 @@ public abstract class GameModule {
                         onLoad();
                         registerGameEventHandlers(this);
                         registerFieldGameEventHandlers();
+                        setLifecycleState(ModuleLifecycleState.LOADED);
                         CompletableFuture<?> beforeCountdownFuture = beforeCountdown == null
                             ? CompletableFuture.completedFuture(null)
                             : beforeCountdown.get();
-                        return beforeCountdownFuture.thenCompose(beforeCountdownIgnored -> {
+                        return beforeCountdownFuture.thenApply(beforeCountdownIgnored -> {
                             setLifecycleState(ModuleLifecycleState.COUNTDOWN);
-                            return startCountdownSequence();
+                            startCountdownSequence().whenComplete((startedModule, throwable) -> {
+                                if (throwable != null) {
+                                    logError("Failed while starting module after load.", throwable);
+                                }
+                            });
+                            return this;
                         });
                     } catch (Throwable throwable) {
                         setLifecycleState(ModuleLifecycleState.FAILED);
@@ -162,12 +168,25 @@ public abstract class GameModule {
         setLifecycleState(ModuleLifecycleState.UNLOADING);
         timeManager.cancelAll();
         unregisterDynamicEvents();
-        teamManager.clear();
+        playerManager.cleanupRuntimeState();
         return playerManager.clear()
-            .thenCompose(ignored -> mapManager.unloadWorlds())
+            .exceptionally(throwable -> {
+                logError("Player cleanup failed while unloading. Continuing shutdown.", throwable);
+                return null;
+            })
+            .thenCompose(ignored -> {
+                teamManager.clear();
+                return mapManager.unloadWorlds();
+            })
+            .exceptionally(throwable -> {
+                logError("World cleanup failed while unloading.", throwable);
+                return null;
+            })
             .whenComplete((ignored, throwable) -> {
                 uiManager.clear();
-                setLifecycleState(throwable == null ? ModuleLifecycleState.UNLOADED : ModuleLifecycleState.FAILED);
+                teamManager.clear();
+                playerManager.cleanupRuntimeState();
+                setLifecycleState(ModuleLifecycleState.UNLOADED);
             });
     }
 

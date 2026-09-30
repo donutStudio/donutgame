@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.logging.Level;
 
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -15,6 +16,7 @@ import org.bukkit.entity.Player;
 
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
+import com.donutsforlife11.donutgame.internal.game.ModuleLifecycleState;
 
 public class PlayerManager {
     private final GameModule module;
@@ -39,6 +41,9 @@ public class PlayerManager {
 
     public CompletableFuture<Boolean> join(Player player) {
         Objects.requireNonNull(player, "player");
+        if (!acceptsPlayerRegistration()) {
+            return CompletableFuture.completedFuture(false);
+        }
         World world = teleporter.defaultWorld();
         Location destination = world.getSpawnLocation();
         return teleporter.teleport(player, destination).thenApply(teleported -> {
@@ -59,7 +64,11 @@ public class PlayerManager {
         if (gamePlayer == null && !ownsWorld(player.getWorld())) {
             return CompletableFuture.completedFuture(false);
         }
-        beginExit(player, gamePlayer);
+        leavingPlayers.add(player.getUniqueId());
+        if (gamePlayer != null) {
+            gamePlayer.prepareForWorldExit();
+            module.uiManager().clear(gamePlayer);
+        }
         Location destination = teleporter.fallbackLocation(player.getWorld());
         return teleporter.teleport(player, destination).whenComplete((teleported, throwable) ->
             leavingPlayers.remove(player.getUniqueId())
@@ -67,6 +76,7 @@ public class PlayerManager {
             if (!teleported) {
                 throw new IllegalStateException("Failed to teleport " + player.getName() + " out of game " + module.index() + ".");
             }
+            beginExit(player, gamePlayer);
             module.log("Removed player " + player.getName() + " from game " + module.index() + ".");
             return true;
         });
@@ -81,6 +91,20 @@ public class PlayerManager {
                 module.uiManager().clear();
                 registry.clear();
             });
+    }
+
+    public void cleanupRuntimeState() {
+        for (GamePlayer player : List.copyOf(registry.players())) {
+            Player bukkitPlayer = player.bukkitPlayer();
+            if (bukkitPlayer != null) {
+                try {
+                    player.prepareForRemoval();
+                } catch (RuntimeException exception) {
+                    module.logError("Failed to fully clean up player " + bukkitPlayer.getName() + " while unloading.", exception);
+                }
+                module.uiManager().clear(player);
+            }
+        }
     }
 
     public boolean owns(Player player) {
@@ -147,6 +171,9 @@ public class PlayerManager {
         if (player == null || ownsWorld(player.getWorld())) {
             return;
         }
+        if (leavingPlayers.contains(player.getUniqueId())) {
+            return;
+        }
         GamePlayer gamePlayer = registry.get(player.getUniqueId());
         if (gamePlayer != null) {
             beginExit(player, gamePlayer);
@@ -170,7 +197,6 @@ public class PlayerManager {
     }
 
     private void beginExit(Player player, GamePlayer gamePlayer) {
-        leavingPlayers.add(player.getUniqueId());
         if (gamePlayer == null) {
             return;
         }
@@ -178,8 +204,19 @@ public class PlayerManager {
         if (team != null) {
             team.removePlayer(gamePlayer);
         }
-        gamePlayer.prepareForRemoval();
+        try {
+            gamePlayer.prepareForRemoval();
+        } catch (RuntimeException exception) {
+            module.plugin().getLogger().log(Level.SEVERE, "Failed to fully clean up player " + player.getName() + " while removing them from game " + module.index() + ".", exception);
+        }
         module.uiManager().clear(gamePlayer);
         registry.remove(player);
+    }
+
+    private boolean acceptsPlayerRegistration() {
+        ModuleLifecycleState state = module.lifecycleState();
+        return state == ModuleLifecycleState.LOADED
+            || state == ModuleLifecycleState.COUNTDOWN
+            || state == ModuleLifecycleState.STARTED;
     }
 }

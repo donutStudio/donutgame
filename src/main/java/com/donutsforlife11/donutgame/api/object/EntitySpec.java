@@ -18,6 +18,9 @@ public final class EntitySpec<E extends Entity> {
     private EntitySpec(EntityType type, Class<E> entityClass, List<Consumer<? super E>> configurations) {
         this.type = Objects.requireNonNull(type, "type");
         this.entityClass = Objects.requireNonNull(entityClass, "entityClass");
+        if (type.getEntityClass() != null && !entityClass.isAssignableFrom(type.getEntityClass())) {
+            throw new IllegalArgumentException("Entity type " + type + " does not spawn " + entityClass.getName() + ".");
+        }
         this.configurations = List.copyOf(configurations);
     }
 
@@ -43,6 +46,11 @@ public final class EntitySpec<E extends Entity> {
     public E spawn(World world, Location location) {
         Objects.requireNonNull(world, "world");
         Objects.requireNonNull(location, "location");
-        return world.spawn(location, entityClass, entity -> configurations.forEach(configuration -> configuration.accept(entity)));
+        if (location.getWorld() != null && !world.equals(location.getWorld())) {
+            throw new IllegalArgumentException("Spawn location belongs to " + location.getWorld().getName() + ", not " + world.getName() + ".");
+        }
+        E entity = entityClass.cast(world.spawnEntity(location, type));
+        configurations.forEach(configuration -> configuration.accept(entity));
+        return entity;
     }
 }

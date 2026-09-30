@@ -4,7 +4,7 @@ plugins {
 
 dependencies {
     compileOnly(project(":"))
-    compileOnly("io.papermc.paper:paper-api:26.2.build.+")
+    compileOnly("io.papermc.paper:paper-api:26.2.build.127-stable")
 }
 
 tasks.compileJava {

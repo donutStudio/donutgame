@@ -19,9 +19,7 @@ public class TimeManager {
     }
 
     public GameTimer newTimer() {
-        GameTimer timer = new GameTimer(this);
-        timers.add(timer);
-        return timer;
+        return new GameTimer(this);
     }
 
     public GameTimer newTimer(int ticks) {
@@ -43,6 +41,10 @@ public class TimeManager {
             }
             tickerTask = module.plugin().getServer().getScheduler().runTaskTimer(module.plugin(), this::tickTimers, 1L, 1L);
         }
+    }
+
+    void register(GameTimer timer) {
+        timers.add(timer);
     }
 
     void remove(GameTimer timer) {

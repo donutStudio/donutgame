@@ -2,8 +2,10 @@ package com.donutsforlife11.donutgame.api.player;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import org.bukkit.Bukkit;
@@ -21,6 +23,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
+import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 
@@ -49,11 +52,15 @@ public class GamePlayer implements GameEntityBase {
     private GameLocation pendingVanillaRespawnLocation;
     private int pendingPostRespawnTimerTicks;
     private Supplier<GameLocation> pendingPostRespawnTimerLocation;
+    private Supplier<Collection<GamePlayer>> spectatablePlayers;
+    private Supplier<Collection<GameTeam>> spectatableTeams = List::of;
+    private Scoreboard previousScoreboard;
 
     GamePlayer(GameModule module, UUID uuid) {
         this.module = module;
         this.uuid = uuid;
         this.state = PlayerState.OFFLINE;
+        this.spectatablePlayers = () -> module.playerManager().getPlayers();
     }
 
     public UUID uuid() {
@@ -163,17 +170,9 @@ public class GamePlayer implements GameEntityBase {
 
     public void setSpawnPoint(GameLocation location) {
         spawnPoint = location;
-        Player player = bukkitPlayer();
-        if (player != null && location != null && world().bukkitWorld() != null) {
-            player.setRespawnLocation(location.toBukkit(world().bukkitWorld()), true);
-        }
     }
     public void clearSpawnPoint() {
         spawnPoint = world().worldSpawn();
-        Player player = bukkitPlayer();
-        if (player != null && world().bukkitWorld() != null) {
-            player.setRespawnLocation(world().bukkitWorld().getSpawnLocation());
-        }
     }
 
     public GameLocation spawnPoint() {
@@ -188,13 +187,54 @@ public class GamePlayer implements GameEntityBase {
         return respawnTimer;
     }
 
+    public void setSpectatablePlayers(Collection<GamePlayer> players) {
+        List<GamePlayer> snapshot = players == null ? List.of() : List.copyOf(players);
+        setSpectatablePlayers(() -> snapshot);
+    }
+
+    public void setSpectatablePlayers(Supplier<Collection<GamePlayer>> players) {
+        spectatablePlayers = players == null ? List::of : players;
+    }
+
+    public Collection<GamePlayer> spectatablePlayers() {
+        Collection<GamePlayer> players = spectatablePlayers.get();
+        return players == null ? List.of() : List.copyOf(players);
+    }
+
+    public void setSpectatableTeams(Collection<GameTeam> teams) {
+        List<GameTeam> snapshot = teams == null ? List.of() : List.copyOf(teams);
+        setSpectatableTeams(() -> snapshot);
+    }
+
+    public void setSpectatableTeams(Supplier<Collection<GameTeam>> teams) {
+        spectatableTeams = teams == null ? List::of : teams;
+    }
+
+    public Collection<GameTeam> spectatableTeams() {
+        Collection<GameTeam> teams = spectatableTeams.get();
+        return teams == null ? List.of() : List.copyOf(teams);
+    }
+
     public GameTeam getTeam() {
         return module().teamManager().getPlayerTeam(this);
     }
 
+    public void captureExternalScoreboard(Player player) {
+        if (player != null && previousScoreboard == null) {
+            previousScoreboard = player.getScoreboard();
+        }
+    }
+
+    public void restoreExternalScoreboard(Player player) {
+        if (player != null && previousScoreboard != null) {
+            player.setScoreboard(previousScoreboard);
+        }
+        previousScoreboard = null;
+    }
+
     public void setGameMode(GameMode gameMode) {
         playingState.gameMode = gameMode == null ? GameMode.SURVIVAL : gameMode;
-        applyPlayingStateIfVisible();
+        applyVisiblePlayer(player -> player.setGameMode(playingState.gameMode));
     }
 
     public GameMode gameMode() {
@@ -203,7 +243,7 @@ public class GamePlayer implements GameEntityBase {
 
     public void setHunger(int hunger) {
         playingState.foodLevel = Math.max(0, Math.min(20, hunger));
-        applyPlayingStateIfVisible();
+        applyVisiblePlayer(player -> player.setFoodLevel(playingState.foodLevel));
     }
 
     public int hunger() {
@@ -212,7 +252,7 @@ public class GamePlayer implements GameEntityBase {
 
     public void setSaturation(float saturation) {
         playingState.saturation = Math.max(0, saturation);
-        applyPlayingStateIfVisible();
+        applyVisiblePlayer(player -> player.setSaturation(playingState.saturation));
     }
 
     public float saturation() {
@@ -221,7 +261,7 @@ public class GamePlayer implements GameEntityBase {
 
     public void setArrowsInBody(int arrows) {
         playingState.arrowsInBody = Math.max(0, arrows);
-        applyPlayingStateIfVisible();
+        applyVisiblePlayer(player -> player.setArrowsInBody(playingState.arrowsInBody));
     }
 
     public int arrowsInBody() {
@@ -278,8 +318,14 @@ public class GamePlayer implements GameEntityBase {
         if (item == null) {
             return;
         }
+        Player player = visiblePlayer();
+        if (player != null) {
+            player.getInventory().addItem(item.copyBukkitItem());
+            player.updateInventory();
+            playingState.capture(player);
+            return;
+        }
         playingState.addItem(item.copyBukkitItem());
-        applyPlayingStateIfVisible();
     }
 
     public List<GameItem> inventory() {
@@ -301,7 +347,11 @@ public class GamePlayer implements GameEntityBase {
     @Override
     public void setHealth(float health) {
         playingState.health = Math.max(0.0, Math.min(health, maxHealth()));
-        applyPlayingStateIfVisible();
+        applyVisiblePlayer(player -> {
+            AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
+            double maximum = maxHealth == null ? 20.0 : maxHealth.getValue();
+            player.setHealth(Math.min(Math.max(0.0, playingState.health), maximum));
+        });
     }
 
     @Override
@@ -338,6 +388,11 @@ public class GamePlayer implements GameEntityBase {
     }
 
     @Override
+    public void kill() {
+        setHealth(0.0f);
+    }
+
+    @Override
     public void setVelocity(Vector velocity) {
         Player player = bukkitPlayer();
         if (player != null) {
@@ -354,7 +409,7 @@ public class GamePlayer implements GameEntityBase {
     @Override
     public void setInvulnerable(boolean invulnerable) {
         playingState.invulnerable = invulnerable;
-        applyPlayingStateIfVisible();
+        applyVisiblePlayer(player -> player.setInvulnerable(invulnerable));
     }
 
     @Override
@@ -365,7 +420,7 @@ public class GamePlayer implements GameEntityBase {
     @Override
     public void setInvisible(boolean invisible) {
         playingState.invisible = invisible;
-        applyPlayingStateIfVisible();
+        applyVisiblePlayer(player -> player.setInvisible(invisible));
     }
 
     @Override
@@ -376,7 +431,7 @@ public class GamePlayer implements GameEntityBase {
     @Override
     public void setFireTicks(int ticks) {
         playingState.fireTicks = Math.max(0, ticks);
-        applyPlayingStateIfVisible();
+        applyVisiblePlayer(player -> player.setFireTicks(playingState.fireTicks));
     }
 
     @Override
@@ -391,13 +446,16 @@ public class GamePlayer implements GameEntityBase {
         }
         playingState.effects.removeIf(current -> current.getType().equals(effect.getType()));
         playingState.effects.add(effect);
-        applyPlayingStateIfVisible();
+        applyVisiblePlayer(player -> {
+            player.removePotionEffect(effect.getType());
+            player.addPotionEffect(effect);
+        });
     }
 
     @Override
     public void clearEffects() {
         playingState.effects.clear();
-        applyPlayingStateIfVisible();
+        applyVisiblePlayer(Player::clearActivePotionEffects);
     }
 
     @Override
@@ -406,7 +464,7 @@ public class GamePlayer implements GameEntityBase {
             return;
         }
         playingState.effects.removeIf(current -> current.getType().equals(effect));
-        applyPlayingStateIfVisible();
+        applyVisiblePlayer(player -> player.removePotionEffect(effect));
     }
 
     @Override
@@ -425,7 +483,7 @@ public class GamePlayer implements GameEntityBase {
             throw new IllegalArgumentException("attribute cannot be null");
         }
         playingState.attributeBases.put(attribute, value);
-        applyPlayingStateIfVisible();
+        applyVisibleAttribute(attribute, instance -> instance.setBaseValue(value));
     }
 
     @Override
@@ -434,7 +492,7 @@ public class GamePlayer implements GameEntityBase {
             throw new IllegalArgumentException("attribute cannot be null");
         }
         playingState.attributeBases.remove(attribute);
-        applyPlayingStateIfVisible();
+        applyVisibleAttribute(attribute, PlayerAttributeDefaults::restoreVanillaBase);
     }
 
     @Override
@@ -448,7 +506,7 @@ public class GamePlayer implements GameEntityBase {
         }
         Player player = bukkitPlayer();
         AttributeInstance instance = player == null ? null : player.getAttribute(attribute);
-        return instance == null ? 0.0 : instance.getAttribute().getDefaultValue();
+        return instance == null ? 0.0 : PlayerAttributeDefaults.baseValue(instance);
     }
 
     @Override
@@ -460,7 +518,7 @@ public class GamePlayer implements GameEntityBase {
             throw new IllegalArgumentException("modifier cannot be null");
         }
         playingState.attributeModifiers.computeIfAbsent(attribute, ignored -> new ArrayList<>()).add(modifier);
-        applyPlayingStateIfVisible();
+        applyVisibleAttribute(attribute, instance -> instance.addModifier(modifier));
     }
 
     @Override
@@ -475,7 +533,7 @@ public class GamePlayer implements GameEntityBase {
         if (modifiers != null) {
             modifiers.remove(modifier);
         }
-        applyPlayingStateIfVisible();
+        applyVisibleAttribute(attribute, instance -> instance.removeModifier(modifier));
     }
 
     @Override
@@ -527,7 +585,10 @@ public class GamePlayer implements GameEntityBase {
             throw new IllegalArgumentException("slot cannot be null");
         }
         playingState.setItem(slot, item == null ? null : item.copyBukkitItem());
-        applyPlayingStateIfVisible();
+        applyVisiblePlayer(player -> {
+            setPlayerInventorySlot(player, slot, item == null ? null : item.copyBukkitItem());
+            player.updateInventory();
+        });
     }
 
     @Override
@@ -543,7 +604,12 @@ public class GamePlayer implements GameEntityBase {
         playingState.inventory = new ItemStack[36];
         playingState.armor = new ItemStack[4];
         playingState.extra = new ItemStack[1];
-        applyPlayingStateIfVisible();
+        applyVisiblePlayer(player -> {
+            player.getInventory().clear();
+            player.getInventory().setArmorContents(new ItemStack[4]);
+            player.getInventory().setExtraContents(new ItemStack[1]);
+            player.updateInventory();
+        });
     }
 
     @Override
@@ -634,6 +700,7 @@ public class GamePlayer implements GameEntityBase {
             state = PlayerState.OFFLINE;
             return;
         }
+        PlayerAttributeDefaults.repairInvalidCameraDistance(player);
         state = PlayerState.ONLINE;
         World world = player.getWorld();
         lastWorldName = world == null ? null : world.getName();
@@ -646,6 +713,22 @@ public class GamePlayer implements GameEntityBase {
         } else {
             spectatorSession.apply(player);
         }
+    }
+
+    void startFreshSession(Player player) {
+        if (player == null) {
+            state = PlayerState.OFFLINE;
+            return;
+        }
+        closeSpectatorSession(player);
+        SpectatorSession.clearMarker(this, player);
+        resetPlayingStateForGame();
+        state = PlayerState.ONLINE;
+        World world = player.getWorld();
+        lastWorldName = world == null ? null : world.getName();
+        lastLocation = player.getLocation().clone();
+        spawnPoint = defaultSpawnPoint();
+        applyPlayingStateIfVisible();
     }
 
     void markOffline() {
@@ -685,8 +768,12 @@ public class GamePlayer implements GameEntityBase {
 
     void prepareForRemoval() {
         cancelRespawn();
-        closeSpectatorSession();
-        assertNoSpectatorOverlay(bukkitPlayer());
+        forcePlayingState("removal");
+    }
+
+    void prepareForWorldExit() {
+        cancelRespawn();
+        forcePlayingState("world exit");
     }
 
     private void respawnNow(GameLocation location) {
@@ -736,7 +823,12 @@ public class GamePlayer implements GameEntityBase {
 
     private void clearItems(java.util.function.Predicate<ItemStack> matcher) {
         playingState.clearItems(matcher);
-        applyPlayingStateIfVisible();
+        applyVisiblePlayer(player -> {
+            clearInventoryItems(player.getInventory().getStorageContents(), matcher, player.getInventory()::setStorageContents);
+            clearInventoryItems(player.getInventory().getArmorContents(), matcher, player.getInventory()::setArmorContents);
+            clearInventoryItems(player.getInventory().getExtraContents(), matcher, player.getInventory()::setExtraContents);
+            player.updateInventory();
+        });
     }
 
     private void enterSpectator(GameLocation location) {
@@ -784,7 +876,7 @@ public class GamePlayer implements GameEntityBase {
             throw new IllegalStateException("Player " + uuid + " still has an active Donutgame spectator session after spectator exit.");
         }
         if (SpectatorSession.hasMarker(this, player)) {
-            throw new IllegalStateException("Player " + uuid + " still has a Donutgame spectator marker after spectator exit.");
+            SpectatorSession.clearMarker(this, player);
         }
     }
 
@@ -795,6 +887,95 @@ public class GamePlayer implements GameEntityBase {
         playingState.effects.clear();
         playingState.arrowsInBody = 0;
         playingState.fireTicks = 0;
+        playingState.invulnerable = false;
+        playingState.invisible = false;
+        playingState.canPickupItems = true;
+        playingState.gameMode = playingState.gameMode == GameMode.SPECTATOR ? GameMode.SURVIVAL : playingState.gameMode;
+        playingState.allowFlight = playingState.gameMode == GameMode.CREATIVE;
+        playingState.flying = false;
+    }
+
+    private void resetPlayingStateForGame() {
+        playingState.reset(GameMode.SURVIVAL);
+        playingState.gameMode = GameMode.ADVENTURE;
+        playingState.allowFlight = false;
+        playingState.flying = false;
+        playingState.invulnerable = false;
+        playingState.invisible = false;
+        playingState.canPickupItems = true;
+        playingState.health = maxHealth();
+        playingState.foodLevel = 20;
+        playingState.saturation = 20.0f;
+        playingState.fireTicks = 0;
+        playingState.arrowsInBody = 0;
+    }
+
+    private void forcePlayingState(String transition) {
+        Player player = bukkitPlayer();
+        closeSpectatorSession(player);
+        assertNoSpectatorOverlay(player);
+        if (player == null) {
+            return;
+        }
+        player.setInvulnerable(playingState.invulnerable);
+        player.setInvisible(playingState.invisible);
+        player.setCanPickupItems(playingState.canPickupItems);
+        player.setAllowFlight(playingState.allowFlight);
+        player.setFlying(playingState.allowFlight && playingState.flying);
+        if (player.getGameMode() == GameMode.SPECTATOR) {
+            player.setGameMode(playingState.gameMode == GameMode.SPECTATOR ? GameMode.SURVIVAL : playingState.gameMode);
+        }
+        if (SpectatorSession.hasMarker(this, player) || player.isInvulnerable() != playingState.invulnerable || player.isInvisible() != playingState.invisible) {
+            throw new IllegalStateException("Player " + uuid + " still has spectator state during " + transition + ".");
+        }
+        player.updateInventory();
+    }
+
+    private Player visiblePlayer() {
+        Player player = bukkitPlayer();
+        return player != null && spectatorSession == null ? player : null;
+    }
+
+    private void applyVisiblePlayer(Consumer<Player> action) {
+        Player player = visiblePlayer();
+        if (player != null) {
+            action.accept(player);
+        }
+    }
+
+    private void applyVisibleAttribute(Attribute attribute, Consumer<AttributeInstance> action) {
+        applyVisiblePlayer(player -> {
+            AttributeInstance instance = player.getAttribute(attribute);
+            if (instance != null) {
+                action.accept(instance);
+            }
+        });
+    }
+
+    private void setPlayerInventorySlot(Player player, EquipmentSlot slot, ItemStack item) {
+        switch (slot) {
+            case HAND -> player.getInventory().setItemInMainHand(item);
+            case OFF_HAND -> player.getInventory().setItemInOffHand(item);
+            case FEET -> player.getInventory().setBoots(item);
+            case LEGS -> player.getInventory().setLeggings(item);
+            case CHEST -> player.getInventory().setChestplate(item);
+            case HEAD -> player.getInventory().setHelmet(item);
+            default -> {
+            }
+        }
+    }
+
+    private void clearInventoryItems(
+        ItemStack[] items,
+        java.util.function.Predicate<ItemStack> matcher,
+        Consumer<ItemStack[]> setter
+    ) {
+        for (int index = 0; index < items.length; index++) {
+            if (matcher.test(items[index])) {
+                items[index] = null;
+            }
+        }
+        setter.accept(items);
     }
 
     private GameLocation locationOrSpawn() {

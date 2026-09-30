@@ -8,9 +8,10 @@ plugins {
 
 group = "com.donutsforlife11"
 version = "1.0.0"
+val paperVersion = "26.2.build.127-stable"
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:26.2.build.+")
+    compileOnly("io.papermc.paper:paper-api:$paperVersion")
     compileOnly("com.github.retrooper:packetevents-spigot:2.13.0")
     compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.4.5")
     compileOnly("com.infernalsuite.asp:api:4.0.0-SNAPSHOT")
@@ -44,7 +45,7 @@ val paperApiSources by configurations.creating {
 }
 
 dependencies {
-    paperApiSources("io.papermc.paper:paper-api:26.2.build.+:sources")
+    paperApiSources("io.papermc.paper:paper-api:$paperVersion:sources")
 }
 
 allprojects {

@@ -83,6 +83,9 @@ public class SpectatorGuardEvents implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void preventContainerOpen(InventoryOpenEvent event) {
+        if (event.getInventory().getHolder() instanceof SpectatorMenuEvents.MenuHolder) {
+            return;
+        }
         if (event.getPlayer() instanceof Player player && isSpectator(player)) {
             event.setCancelled(true);
         }

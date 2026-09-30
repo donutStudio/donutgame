@@ -31,8 +31,14 @@ final class PlayerRegistry {
     }
 
     GamePlayer register(Player player) {
+        boolean freshSession = !playersById.containsKey(player.getUniqueId());
         GamePlayer gamePlayer = playersById.computeIfAbsent(player.getUniqueId(), uuid -> new GamePlayer(module, uuid));
-        gamePlayer.remember(player);
+        gamePlayer.captureExternalScoreboard(player);
+        if (freshSession) {
+            gamePlayer.startFreshSession(player);
+        } else {
+            gamePlayer.remember(player);
+        }
         return gamePlayer;
     }
 
