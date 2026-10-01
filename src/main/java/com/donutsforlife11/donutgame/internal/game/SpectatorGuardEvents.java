@@ -62,6 +62,9 @@ public class SpectatorGuardEvents implements Listener {
         if (!isSpectator(event.getPlayer())) {
             return;
         }
+        if (event.getAction() == Action.LEFT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_AIR) {
+            return;
+        }
         event.setCancelled(true);
         event.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY);
         event.setUseItemInHand(org.bukkit.event.Event.Result.DENY);

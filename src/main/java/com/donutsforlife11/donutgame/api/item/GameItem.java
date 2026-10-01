@@ -7,7 +7,7 @@ import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 
 public final class GameItem implements GameItemBase {
-    private final ItemStack item;
+    private ItemStack item;
 
     public GameItem(Material material) {
         this(new ItemStack(Objects.requireNonNull(material, "material")));
@@ -27,6 +27,11 @@ public final class GameItem implements GameItemBase {
 
     public Material material() {
         return getType();
+    }
+
+    @Override
+    public void setType(Material type) {
+        item = item.withType(Objects.requireNonNull(type, "type"));
     }
 
     public int amount() {

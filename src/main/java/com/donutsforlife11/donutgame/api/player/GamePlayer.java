@@ -235,6 +235,11 @@ public class GamePlayer implements GameEntityBase {
 
     public void setGameMode(GameMode gameMode) {
         playingState.gameMode = gameMode == null ? GameMode.SURVIVAL : gameMode;
+        if (playingState.gameMode == GameMode.CREATIVE) {
+            playingState.allowFlight = true;
+        } else if (playingState.gameMode != GameMode.SPECTATOR) {
+            playingState.flying = false;
+        }
         applyVisiblePlayer(player -> player.setGameMode(playingState.gameMode));
     }
 
@@ -923,10 +928,11 @@ public class GamePlayer implements GameEntityBase {
         player.setInvulnerable(playingState.invulnerable);
         player.setInvisible(playingState.invisible);
         player.setCanPickupItems(playingState.canPickupItems);
-        player.setAllowFlight(playingState.allowFlight);
-        player.setFlying(playingState.allowFlight && playingState.flying);
         if (player.getGameMode() == GameMode.SPECTATOR) {
             player.setGameMode(playingState.gameMode == GameMode.SPECTATOR ? GameMode.SURVIVAL : playingState.gameMode);
+            boolean effectiveAllowFlight = playingState.allowsFlight();
+            player.setAllowFlight(effectiveAllowFlight);
+            player.setFlying(effectiveAllowFlight && playingState.flying);
         }
         if (SpectatorSession.hasMarker(this, player) || player.isInvulnerable() != playingState.invulnerable || player.isInvisible() != playingState.invisible) {
             throw new IllegalStateException("Player " + uuid + " still has spectator state during " + transition + ".");

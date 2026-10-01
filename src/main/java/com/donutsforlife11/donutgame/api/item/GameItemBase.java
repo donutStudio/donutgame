@@ -23,10 +23,7 @@ public interface GameItemBase {
         return bukkitItem().getType();
     }
 
-    @SuppressWarnings("deprecation")
-    default void setType(Material type) {
-        bukkitItem().setType(Objects.requireNonNull(type, "type"));
-    }
+    void setType(Material type);
 
     default int getAmount() {
         return bukkitItem().getAmount();

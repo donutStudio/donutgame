@@ -214,8 +214,9 @@ public class SpectatorMenuEvents implements Listener {
     }
 
     private static ItemStack playerHead(GamePlayer player) {
-        ItemStack item = namedItem(Material.PLAYER_HEAD, Component.text(player.bukkitPlayer().getName(), NamedTextColor.WHITE));
+        ItemStack item = new ItemStack(Material.PLAYER_HEAD);
         item.editMeta(SkullMeta.class, meta -> meta.setOwningPlayer(player.bukkitPlayer()));
+        item.setData(DataComponentTypes.ITEM_NAME, Component.text(player.bukkitPlayer().getName(), NamedTextColor.WHITE));
         return item;
     }
 

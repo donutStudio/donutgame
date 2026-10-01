@@ -18,6 +18,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 public final class GameItemComponents {
     public static final GameItemComponent<Byte> INFINITE_BUILD = bool("infinite_build");
     public static final GameItemComponent<Byte> TEAM_SYNC = bool("team_sync");
+    public static final GameItemComponent<Byte> VANILLA_PROJECTILE = bool("vanilla_projectile");
     public static final GameItemComponent<Integer> AUTO_IGNITE = integer("auto_ignite");
     public static final GameItemComponent<String> SPECTATOR_MENU = string("spectator_menu");
 
@@ -55,6 +56,10 @@ public final class GameItemComponents {
         return booleanValue(item, TEAM_SYNC);
     }
 
+    public static boolean hasVanillaProjectile(ItemStack item) {
+        return booleanValue(item, VANILLA_PROJECTILE);
+    }
+
     public static int autoIgniteFuse(ItemStack item) {
         if (item == null) {
             return 0;
@@ -72,7 +77,7 @@ public final class GameItemComponents {
             return item;
         }
         if (player != null && hasTeamSync(item)) {
-            applyTeamSync(player == null ? null : player.getTeam(), item);
+            item = applyTeamSync(player.getTeam(), item);
         }
         if (hasInfiniteBuild(item) && !item.isDataOverridden(DataComponentTypes.MAX_STACK_SIZE)) {
             item.unsetData(DataComponentTypes.DAMAGE);
@@ -110,15 +115,16 @@ public final class GameItemComponents {
         return DyeColor.WHITE;
     }
 
-    private static void applyTeamSync(GameTeam team, ItemStack item) {
+    private static ItemStack applyTeamSync(GameTeam team, ItemStack item) {
         DyeColor dyeColor = teamDyeColor(team);
         Material dyedType = dyedVariant(dyeColor, item.getType());
         if (dyedType != null) {
-            item.setType(dyedType);
+            item = item.withType(dyedType);
         } else if (item.hasData(DataComponentTypes.DYED_COLOR) || item.getType().name().startsWith("LEATHER_") || item.getType() == Material.WOLF_ARMOR) {
             item.setData(DataComponentTypes.DYED_COLOR, DyedItemColor.dyedItemColor(teamColor(team)));
         }
         item.editPersistentDataContainer(pdc -> pdc.remove(TEAM_SYNC.key()));
+        return item;
     }
 
     private static Color teamColor(GameTeam team) {

@@ -32,10 +32,6 @@ import net.kyori.adventure.text.object.ObjectContents;
 public class GameKillCreditEvents implements Listener {
     private static final long KILL_CREDIT_MILLIS = 60_000L;
     private static final long BLOCK_CREDIT_MILLIS = 90_000L;
-
-    // TODO: spectator damage and kill credit handling
-    // TODO: custom projectile implementations (snowball egg stuff)
-
     private final ModuleService moduleService;
     private final Map<UUID, DamageCredit> damageCredits = new HashMap<>();
     private final Map<BlockKey, DamageCredit> blockCredits = new HashMap<>();

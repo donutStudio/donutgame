@@ -7,12 +7,19 @@ void onLoad() // Runs after the game is loaded
 void onStart() // Runs when the game first starts
 void unload() // Unloads the game module
 void onUnload() // Runs when the game unloads
+GameData data() // Returns the module's data
 MapManager mapManager() // Returns the module's map manager
 UIManager uiManager() // Returns the module's UI Manager
 PlayerManager playerManager() // Returns the module's player manager
 TimeManager timeManager() // Returns the module's time manager
 TeamManager teamManager() // Returns the module's team manager
+BorderManager borderManager() // Returns the module's border manager
 GameWorld world() // Returns this module's active world
+```
+**GameData**
+```java
+LootTable lootTable(NamespacedKey key) // Returns a loot table from a namespaced key
+LootTable lootTable(String key) // Similar to above but takes a string with a namespace, like "namespace:loot_table"
 ```
 
 ## MAP SYSTEM
@@ -424,4 +431,34 @@ GameTeam setNametagVisibility(Team.OptionStatus nametagVisibility) // Sets team 
 Team.OptionStatus nametagVisibility() // Returns team nametag visibility rule
 GameTeam setCollisionRule(Team.OptionStatus nametagVisibility) // Sets team collision rule
 Team.OptionStatus collisionRule() // Returns team collision rule
+```
+## BORDER SYSTEM
+**BorderManager**
+```java
+enum BorderShape {CUBOID, CYLINDROID, ELLIPSOID} // The available 3D geometric border shapes
+GameBorder newBorder(GameRegion region) // Creates a cuboid border from a region
+GameBorder newBorder(BorderShape shape, GameLocation center, Vector dimensions) // Creates a border with specified shape, center, and dimensions
+void setDamage(double damage) // Sets border damage
+void setDamageInterval(int interval) // Sets interval in ticks
+Collection<GameBorder> borders() // Returns active borders
+void clear() // Removes all borders
+double damage() // Returns border damage amount
+double damageInterval() // Returns border damage interval
+double particleSpacing() // Returns particle spacing
+double particleViewDistance() // Returns particle view distance
+Particle defaultParticle() // Returns border particle
+Particle movingParticle() // Returns moving border particle
+```
+**GameBorder**
+```java
+GameBorder setCenter(GameLocation target) // Moves center instantly
+GameBorder setCenter(GameLocation target, int ticks) // Moves center over time
+GameBorder setDimensions(Vector target) // Changes dimensions instantly
+GameBorder setDimensions(Vector target, int ticks) // Changes dimensions over time
+boolean containsLocation(GameLocation location) // Returns whether location is inside border
+boolean containsLocation(double x, double y, double z) // Returns whether relative coordinates are inside border
+BorderShape shape() // Returns border shape
+GameLocation center() // Returns border center
+Vector dimensions() // Returns border dimensions
+boolean isMoving() // Returns whether border is moving or resizing
 ```

@@ -23,6 +23,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.EventExecutor;
 
 import com.donutsforlife11.donutgame.Donutgame;
+import com.donutsforlife11.donutgame.api.border.BorderManager;
 import com.donutsforlife11.donutgame.api.entity.GameEntity;
 import com.donutsforlife11.donutgame.api.event.GameEventAdapterRegistry;
 import com.donutsforlife11.donutgame.api.event.GameEventRegistrar;
@@ -59,6 +60,7 @@ public abstract class GameModule {
     private TeamManager teamManager;
     private TimeManager timeManager;
     private UIManager uiManager;
+    private BorderManager borderManager;
     private GameEventRegistrar eventRegistrar;
     private String id;
     private String name;
@@ -82,7 +84,8 @@ public abstract class GameModule {
         PlayerManager playerManager,
         TeamManager teamManager,
         TimeManager timeManager,
-        UIManager uiManager
+        UIManager uiManager,
+        BorderManager borderManager
     ) {
         this.plugin = plugin;
         this.id = descriptor.id();
@@ -94,6 +97,7 @@ public abstract class GameModule {
         this.teamManager = teamManager;
         this.timeManager = timeManager;
         this.uiManager = uiManager;
+        this.borderManager = borderManager;
         this.eventRegistrar = new GameEventRegistrar(this);
     }
 
@@ -166,6 +170,7 @@ public abstract class GameModule {
 
     protected final CompletableFuture<Void> shutdown() {
         setLifecycleState(ModuleLifecycleState.UNLOADING);
+        borderManager.clear();
         timeManager.cancelAll();
         unregisterDynamicEvents();
         playerManager.cleanupRuntimeState();
@@ -232,6 +237,10 @@ public abstract class GameModule {
 
     public UIManager uiManager() {
         return uiManager;
+    }
+
+    public BorderManager borderManager() {
+        return borderManager;
     }
 
     protected final void setBlock(GameLocation location, BlockSpec<?> block) {

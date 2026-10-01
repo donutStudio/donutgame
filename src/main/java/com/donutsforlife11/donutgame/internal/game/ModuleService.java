@@ -15,6 +15,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
 import com.donutsforlife11.donutgame.Donutgame;
+import com.donutsforlife11.donutgame.api.border.BorderManager;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.team.TeamManager;
@@ -55,12 +56,14 @@ public class ModuleService {
             TeamManager teamManager = new TeamManager(playerManager);
             TimeManager timeManager = new TimeManager(module);
             UIManager uiManager = new UIManager(module);
+            BorderManager borderManager = new BorderManager(module);
             module.initialize(plugin, descriptor, index, config, 
                 mapManager, 
                 playerManager, 
                 teamManager,
                 timeManager,
-                uiManager
+                uiManager,
+                borderManager
             );
             teamManager.initialize();
             plugin.getLogger().info("Loading module " + descriptor.id() + " as active game " + index + ".");

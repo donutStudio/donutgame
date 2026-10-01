@@ -90,8 +90,9 @@ final class PlayerSnapshot {
         player.setInvulnerable(invulnerable);
         player.setInvisible(invisible);
         player.setCanPickupItems(canPickupItems);
-        player.setAllowFlight(allowFlight);
-        player.setFlying(allowFlight && flying);
+        boolean effectiveAllowFlight = allowsFlight();
+        player.setAllowFlight(effectiveAllowFlight);
+        player.setFlying(effectiveAllowFlight && flying);
         player.setFoodLevel(foodLevel);
         player.setSaturation(saturation);
         player.setArrowsInBody(arrowsInBody);
@@ -99,6 +100,10 @@ final class PlayerSnapshot {
         AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
         player.setHealth(Math.min(Math.max(1.0, health), maxHealth == null ? 20.0 : maxHealth.getValue()));
         touchTimedValues();
+    }
+
+    boolean allowsFlight() {
+        return allowFlight || gameMode == GameMode.CREATIVE;
     }
 
     void reset(GameMode gameMode) {

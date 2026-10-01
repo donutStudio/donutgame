@@ -10,20 +10,29 @@ import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Creeper;
+import org.bukkit.entity.Egg;
 import org.bukkit.entity.EnderCrystal;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
+import org.bukkit.entity.Snowball;
 import org.bukkit.entity.TNTPrimed;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.entity.ProjectileHitEvent;
+import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.entity.EntitySpawnEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCreativeEvent;
@@ -42,6 +51,12 @@ import com.donutsforlife11.donutgame.api.item.GameItemComponents;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 
 public class GameItemComponentEvents implements Listener {
+    private static final String VANILLA_PROJECTILE_KEY = "vanilla_projectile";
+    private static final double SNOWBALL_DAMAGE = 0.33;
+    private static final double EGG_KNOCKBACK_DAMAGE = 0.0001;
+    private static final double SNOWBALL_KNOCKBACK = 0.42;
+    private static final double EGG_KNOCKBACK = 0.24;
+
     private final ModuleService moduleService;
     private final Map<UUID, PendingAutoIgnite> pendingAutoIgnites = new LinkedHashMap<>();
     private final Set<BlockKey> infinitePlacedBlocks = new HashSet<>();
@@ -100,6 +115,45 @@ public class GameItemComponentEvents implements Listener {
         }
         pendingAutoIgnites.put(player.uuid(), new PendingAutoIgnite(player.uuid(), entityType, fuse));
         Bukkit.getScheduler().runTaskLater(moduleService.plugin(), () -> pendingAutoIgnites.remove(player.uuid()), 2L);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onProjectileLaunch(ProjectileLaunchEvent event) {
+        if (!(event.getEntity().getShooter() instanceof Player player)) {
+            return;
+        }
+        if (gamePlayer(player) == null) {
+            return;
+        }
+        ItemStack item = launchedProjectileItem(player, event.getEntity());
+        if (GameItemComponents.hasVanillaProjectile(item)) {
+            event.getEntity().getPersistentDataContainer().set(vanillaProjectileKey(), org.bukkit.persistence.PersistentDataType.BYTE, (byte) 1);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onProjectileHit(ProjectileHitEvent event) {
+        Projectile projectile = event.getEntity();
+        if (!(projectile instanceof Snowball) && !(projectile instanceof Egg)) {
+            return;
+        }
+        if (isVanillaProjectile(projectile)) {
+            return;
+        }
+        if (!(projectile.getShooter() instanceof Player player) || gamePlayer(player) == null) {
+            return;
+        }
+        if (!(event.getHitEntity() instanceof LivingEntity target)) {
+            return;
+        }
+
+        if (projectile instanceof Snowball) {
+            target.damage(SNOWBALL_DAMAGE, projectile);
+            knockbackFromProjectile(target, projectile, SNOWBALL_KNOCKBACK);
+        } else {
+            damageWithoutHealthLoss(target, projectile);
+            knockbackFromProjectile(target, projectile, EGG_KNOCKBACK);
+        }
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -274,6 +328,48 @@ public class GameItemComponentEvents implements Listener {
 
     private boolean isUseAction(Action action) {
         return action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK;
+    }
+
+    private ItemStack launchedProjectileItem(Player player, Projectile projectile) {
+        Material material = projectile instanceof Snowball ? Material.SNOWBALL : projectile instanceof Egg ? Material.EGG : null;
+        if (material == null) {
+            return null;
+        }
+        ItemStack mainHand = player.getInventory().getItemInMainHand();
+        if (mainHand.getType() == material) {
+            return mainHand;
+        }
+        ItemStack offHand = player.getInventory().getItemInOffHand();
+        return offHand.getType() == material ? offHand : null;
+    }
+
+    private boolean isVanillaProjectile(Projectile projectile) {
+        return projectile.getPersistentDataContainer().has(vanillaProjectileKey(), org.bukkit.persistence.PersistentDataType.BYTE);
+    }
+
+    private org.bukkit.NamespacedKey vanillaProjectileKey() {
+        return new org.bukkit.NamespacedKey(moduleService.plugin(), VANILLA_PROJECTILE_KEY);
+    }
+
+    private void damageWithoutHealthLoss(LivingEntity target, Projectile projectile) {
+        double health = target.getHealth();
+        target.damage(EGG_KNOCKBACK_DAMAGE, projectile);
+        if (target.isDead() || !target.isValid()) {
+            return;
+        }
+        AttributeInstance maxHealth = target.getAttribute(Attribute.MAX_HEALTH);
+        target.setHealth(Math.min(health, maxHealth == null ? health : maxHealth.getValue()));
+    }
+
+    private void knockbackFromProjectile(LivingEntity target, Projectile projectile, double strength) {
+        Vector velocity = projectile.getVelocity();
+        if (velocity.lengthSquared() < 1.0e-6) {
+            velocity = target.getLocation().toVector().subtract(projectile.getLocation().toVector());
+        }
+        if (velocity.lengthSquared() < 1.0e-6) {
+            return;
+        }
+        target.knockback(strength, -velocity.getX(), -velocity.getZ());
     }
 
     private GamePlayer gamePlayer(Player player) {
