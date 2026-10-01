@@ -39,7 +39,7 @@ public class VoidWars extends GameModule {
     private GameBorder border;
     private VoidWarsEvents events;
     private VoidWarsPlayers players;
-    private VoidWarsRegionProtection regionProtection;
+    // private VoidWarsRegionProtection regionProtection;
     private VoidWarsSidebar sidebar;
 
     @Override
@@ -48,7 +48,7 @@ public class VoidWars extends GameModule {
         validateMap();
         events = new VoidWarsEvents(this);
         players = new VoidWarsPlayers(this);
-        regionProtection = new VoidWarsRegionProtection(this);
+        new VoidWarsRegionProtection(this);
         events.load();
         players.assignTeams();
         loadRound();

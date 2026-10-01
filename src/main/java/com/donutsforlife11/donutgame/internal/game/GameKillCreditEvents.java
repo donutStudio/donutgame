@@ -448,9 +448,9 @@ public class GameKillCreditEvents implements Listener {
         BLOCK("☒"),
         FIRE("🔥"),
         FREEZE("❄"),
-        EXPLOSION("☄"),
-        POTION("🧪"),
-        LIGHTNING("☀"),
+        EXPLOSION("☀"),
+        POTION("⚗"),
+        LIGHTNING("⚡"),
         AXE("🪓"),
         FALLBACK("☠");
 
