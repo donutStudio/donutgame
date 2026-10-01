@@ -21,6 +21,15 @@ public final class ItemSpec {
         return new ItemSpec(material, List.of());
     }
 
+    public static ItemSpec of(String shorthand) {
+        GameItem item = ItemNotation.item(shorthand);
+        return ItemSpec.of(item.material()).configure(target -> {
+            target.setAmount(item.amount());
+            target.copyDataFrom(item, type -> true);
+            target.setItemMeta(item.bukkitItem().getItemMeta());
+        });
+    }
+
     public Material material() {
         return material;
     }

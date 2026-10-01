@@ -1,0 +1,37 @@
+item_drops:
+  - {time: 0, pool: ["white_wool[custom_data={\"donutgame:team_sync\":true,\"donutgame:infinite_build\":true}] 65", "cooked_beef 16", "shears"]}
+  - {time: 20, pool: ["oak_planks 64", "snowball 16"]}
+  - {time: 50, pool: ["flint_and_steel", "wind_charge 4", "ender_pearl"]}
+  - {time: 80, pool: ["golden_apple", "tnt[custom_data={\"donutgame:auto_ignite\":80}]", "lava_bucket"]}
+  - {time: 110, pool: ["arrow 5", "tnt[custom_data={\"donutgame:auto_ignite\":80}] 2", "ender_pearl 3", "cobweb 8"]}
+  - {time: 140, pool: ["cobblestone 64", "scaffolding 32"]}
+  - {time: 220, pool: ["tnt[custom_data={\"donutgame:auto_ignite\":80}]", "wind_charge 16", "water_bucket"]}
+  - {time: 280, pool: ["arrow 20", "tipped_arrow[potion_contents={potion:strong_harming}] 10"]}
+  - {time: 310, pool: ["bow[enchantments={power:1,punch:1}]", "crossbow[enchantments={quick_charge:1}]", "trident"]}
+  - {time: 380, pool: ["iron_ingot 12", "gold_ingot 16", "diamond 4"]}
+  - {time: 460, pool: ["mace", "totem_of_undying"]}
+  - {time: 540, pool: ["wooden_sword[enchantments={knockback:2,fire_aspect:1}]", "shield[damage=328]"]}
+  - {time: 630, pool: ["splash_potion[potion_contents={potion:invisibility}]", "splash_potion[potion_contents={potion:strong_strength}]", "splash_potion[potion_contents={potion:strong_swiftness}]"]}
+  - {time: 750, pool: ["enchanting_table", "bookshelf 64", "grindstone", "lapis_lazuli 32"]}
+  - {time: 830, pool: ["wind_charge 20", "bow[enchantments={power:5,flame:1,punch:2}]"]}
+  - {time: 880, pool: ["obsidian 2", "end_crystal 2"]}
+  - {time: 960, pool: ["rail 64", "tnt_minecart 3"]}
+
+chest_fills:
+  - {time: 0, pool: ["wooden_sword", "wooden_axe", "golden_carrot 4", "oak_planks 16", "snowball 8"]}
+  - {time: 200, pool: ["stone_sword", "stone_axe", "arrow 8", "wind_charge 5", "cobweb 2", "ender_pearl", "tnt[custom_data={\"donutgame:auto_ignite\":80}]"]}
+  - {time: 400, pool: ["iron_sword", "bow", "crossbow", "shield", "arrow 12", "water_bucket", "lava_bucket", "golden_apple"]}
+  - {time: 600, pool: ["iron_sword[enchantments={sharpness:2}]", "mace", "ender_pearl 2", "wind_charge 12", "diamond 2", "totem_of_undying"]}
+  - {time: 800, pool: ["diamond_sword[enchantments={sharpness:2,knockback:1}]", "enchanted_golden_apple", "totem_of_undying", "diamond_chestplate", "experience_bottle 12"]}
+
+border_shrinks:
+  - {time: 75, scale: 0.9}
+  - {time: 180, scale: 0.889}
+  - {time: 270, scale: 0.875}
+  - {time: 390, scale: 0.857}
+  - {time: 480, scale: 0.833}
+  - {time: 600, scale: 0.8}
+  - {time: 690, scale: 0.75}
+  - {time: 810, scale: 0.667}
+  - {time: 900, scale: 0.5}
+  - {time: 990, scale: 0.0}

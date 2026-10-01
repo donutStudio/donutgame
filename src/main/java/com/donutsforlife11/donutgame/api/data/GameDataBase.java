@@ -2,6 +2,7 @@ package com.donutsforlife11.donutgame.api.data;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
@@ -13,6 +14,8 @@ import org.bukkit.advancement.Advancement;
 import org.bukkit.inventory.Recipe;
 import org.bukkit.loot.LootTable;
 
+import com.donutsforlife11.donutgame.api.item.GameItem;
+import com.donutsforlife11.donutgame.api.item.GameItems;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
 import io.papermc.paper.registry.RegistryAccess;
@@ -59,6 +62,18 @@ public abstract class GameDataBase {
 
     public final LootTable lootTable(String key) {
         return lootTable(ownedKey(key));
+    }
+
+    public final LootTable lootPool(String item) {
+        return GameItems.lootTable(item);
+    }
+
+    public final LootTable lootPool(Collection<?> items) {
+        return GameItems.lootTable(items);
+    }
+
+    public final GameItem item(String shorthand) {
+        return GameItems.item(shorthand);
     }
 
     public final Advancement advancement(NamespacedKey key) {
