@@ -3,6 +3,7 @@ package com.donutsforlife11.donutgame.internal.ui;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -11,16 +12,29 @@ import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.protocol.entity.data.EntityData;
+import com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
 
 import fr.skytasul.glowingentities.GlowingEntities;
 import net.kyori.adventure.text.format.NamedTextColor;
 
 @SuppressWarnings("deprecation")
 public class GlowService {
+    private static final byte ON_FIRE_FLAG = 0x01;
+    private static final byte CROUCHING_FLAG = 0x02;
+    private static final byte SPRINTING_FLAG = 0x08;
+    private static final byte SWIMMING_FLAG = 0x10;
+    private static final byte INVISIBLE_FLAG = 0x20;
+    private static final byte GLOWING_FLAG = 0x40;
+    private static final byte GLIDING_FLAG = (byte) 0x80;
+
     private final Donutgame plugin;
     private final Map<UUID, GlowState> glowStates = new HashMap<>();
     private GlowingEntities glowingEntities;
@@ -31,12 +45,11 @@ public class GlowService {
     }
 
     public void enable() {
+        packetGlowAvailable = true;
         try {
             glowingEntities = new GlowingEntities(plugin);
-            packetGlowAvailable = true;
         } catch (Throwable ignored) {
             glowingEntities = null;
-            packetGlowAvailable = false;
         }
     }
 
@@ -64,6 +77,7 @@ public class GlowService {
         }
         GlowState state = glowStates.computeIfAbsent(entity.getUniqueId(), GlowState::new);
         state.color(color);
+        state.packetOnly(false);
         state.global(glowing);
         state.viewerSupplier(null);
         return apply(state, entity, true);
@@ -75,6 +89,7 @@ public class GlowService {
         }
         GlowState state = glowStates.computeIfAbsent(entity.getUniqueId(), GlowState::new);
         state.color(color);
+        state.packetOnly(false);
         state.global(false);
         state.viewerSupplier(glowing ? () -> viewers : null);
         return apply(state, entity, true);
@@ -86,6 +101,7 @@ public class GlowService {
         }
         GlowState state = glowStates.computeIfAbsent(entity.getUniqueId(), GlowState::new);
         state.color(color);
+        state.packetOnly(false);
         state.global(false);
         state.viewerSupplier(glowing ? viewers : null);
         return apply(state, entity, true);
@@ -96,7 +112,8 @@ public class GlowService {
             return false;
         }
         GlowState state = glowStates.computeIfAbsent(entity.getUniqueId(), GlowState::new);
-        state.color(color);
+        state.color(null);
+        state.packetOnly(true);
         state.global(false);
         state.viewerSupplier(glowing ? viewers : null);
         return apply(state, entity, false);
@@ -108,16 +125,22 @@ public class GlowService {
         }
         GlowState state = glowStates.computeIfAbsent(entity.getUniqueId(), GlowState::new);
         state.color(color);
+        state.packetOnly(false);
         apply(state, entity, true);
     }
 
     public boolean packetGlowAvailable() {
-        return packetGlowAvailable && glowingEntities != null;
+        try {
+            return packetGlowAvailable && PacketEvents.getAPI() != null;
+        } catch (NoClassDefFoundError | RuntimeException exception) {
+            return false;
+        }
     }
 
     private boolean apply(GlowState state, Entity entity, boolean fallbackToVanilla) {
-        clearPacketGlow(entity, state.appliedViewers());
+        clearPacketGlow(entity, state.appliedViewers(), state.appliedPacketOnly());
         state.appliedViewers().clear();
+        state.appliedPacketOnly(state.packetOnly());
 
         if (state.global()) {
             entity.setGlowing(true);
@@ -144,13 +167,18 @@ public class GlowService {
     }
 
     private boolean applyPacketGlow(Entity entity, Collection<? extends Player> viewers, GlowState state, boolean fallbackToVanilla) {
-        if (!packetGlowAvailable()) {
+        if (state.packetOnly() && !packetGlowAvailable()) {
+            return fallbackToVanilla;
+        }
+        if (!state.packetOnly() && glowingEntities == null) {
             return fallbackToVanilla;
         }
         ChatColor chatColor = chatColor(state.color());
         for (Player viewer : viewers) {
             try {
-                if (chatColor == null) {
+                if (state.packetOnly()) {
+                    sendMetadataGlow(entity, viewer, true);
+                } else if (chatColor == null) {
                     glowingEntities.setGlowing(entity, viewer);
                 } else {
                     glowingEntities.setGlowing(entity, viewer, chatColor);
@@ -158,7 +186,7 @@ public class GlowService {
                 state.appliedViewers().add(viewer.getUniqueId());
             } catch (Throwable ignored) {
                 packetGlowAvailable = false;
-                clearPacketGlow(entity, state.appliedViewers());
+                clearPacketGlow(entity, state.appliedViewers(), state.appliedPacketOnly());
                 state.appliedViewers().clear();
                 if (state.global() || fallbackToVanilla) {
                     entity.setGlowing(true);
@@ -171,8 +199,8 @@ public class GlowService {
         return true;
     }
 
-    private void clearPacketGlow(Entity entity, Collection<UUID> viewers) {
-        if (glowingEntities == null) {
+    private void clearPacketGlow(Entity entity, Collection<UUID> viewers, boolean packetOnly) {
+        if (!packetOnly && glowingEntities == null) {
             return;
         }
         for (UUID viewerId : Set.copyOf(viewers)) {
@@ -181,11 +209,60 @@ public class GlowService {
                 continue;
             }
             try {
-                glowingEntities.unsetGlowing(entity, viewer);
+                if (packetOnly) {
+                    sendMetadataGlow(entity, viewer, false);
+                } else {
+                    glowingEntities.unsetGlowing(entity, viewer);
+                }
             } catch (Throwable ignored) {
                 packetGlowAvailable = false;
             }
         }
+    }
+
+    private void sendMetadataGlow(Entity entity, Player viewer, boolean glowing) {
+        var api = PacketEvents.getAPI();
+        if (api == null) {
+            throw new IllegalStateException("PacketEvents is not available.");
+        }
+        Object channel = api.getProtocolManager().getChannel(viewer.getUniqueId());
+        if (channel == null) {
+            throw new IllegalStateException("PacketEvents channel is not available for " + viewer.getName());
+        }
+        byte flags = sharedFlags(entity);
+        flags = glowing ? (byte) (flags | GLOWING_FLAG) : (byte) (flags & ~GLOWING_FLAG);
+        api.getProtocolManager().sendPacket(channel, new WrapperPlayServerEntityMetadata(
+            entity.getEntityId(),
+            List.of(new EntityData<>(0, EntityDataTypes.BYTE, flags))
+        ));
+    }
+
+    private byte sharedFlags(Entity entity) {
+        byte flags = 0;
+        if (entity.getFireTicks() > 0 || entity.isVisualFire()) {
+            flags |= ON_FIRE_FLAG;
+        }
+        if (entity instanceof Player player) {
+            if (player.isSneaking()) {
+                flags |= CROUCHING_FLAG;
+            }
+            if (player.isSprinting()) {
+                flags |= SPRINTING_FLAG;
+            }
+            if (player.isSwimming()) {
+                flags |= SWIMMING_FLAG;
+            }
+        }
+        if (entity.isInvisible()) {
+            flags |= INVISIBLE_FLAG;
+        }
+        if (entity.isGlowing()) {
+            flags |= GLOWING_FLAG;
+        }
+        if (entity instanceof LivingEntity livingEntity && livingEntity.isGliding()) {
+            flags |= GLIDING_FLAG;
+        }
+        return flags;
     }
 
     private ChatColor chatColor(NamedTextColor color) {
@@ -218,6 +295,8 @@ public class GlowService {
         private Supplier<Collection<GamePlayer>> viewerSupplier;
         private NamedTextColor color;
         private boolean global;
+        private boolean packetOnly;
+        private boolean appliedPacketOnly;
 
         private GlowState(UUID entityId) {
             this.entityId = entityId;
@@ -253,6 +332,22 @@ public class GlowService {
 
         private Set<UUID> appliedViewers() {
             return appliedViewers;
+        }
+
+        private boolean packetOnly() {
+            return packetOnly;
+        }
+
+        private void packetOnly(boolean packetOnly) {
+            this.packetOnly = packetOnly;
+        }
+
+        private boolean appliedPacketOnly() {
+            return appliedPacketOnly;
+        }
+
+        private void appliedPacketOnly(boolean appliedPacketOnly) {
+            this.appliedPacketOnly = appliedPacketOnly;
         }
     }
 }

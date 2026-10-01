@@ -289,7 +289,7 @@ public class GameTeam {
             return;
         }
         GlowService glowService = manager.playerManager().module().plugin().glowService();
-        if (glowService == null || !glowService.setPacketGlowing(player.bukkitEntity(), true, () -> glowViewers(player), color())) {
+        if (glowService == null || !glowService.setPacketGlowing(player.bukkitEntity(), true, () -> glowViewers(player), null)) {
             clearGlow(player);
         }
     }
@@ -297,7 +297,7 @@ public class GameTeam {
     private void clearGlow(GamePlayer player) {
         GlowService glowService = manager.playerManager().module().plugin().glowService();
         if (glowService != null && player != null) {
-            glowService.setPacketGlowing(player.bukkitEntity(), false, Set::of, color());
+            glowService.setPacketGlowing(player.bukkitEntity(), false, Set::of, null);
         }
     }
 
