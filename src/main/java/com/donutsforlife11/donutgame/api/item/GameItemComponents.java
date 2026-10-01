@@ -68,6 +68,13 @@ public final class GameItemComponents {
         return value == null ? 0 : Math.max(0, value);
     }
 
+    public static boolean isSpectatorMenu(ItemStack item) {
+        if (item == null) {
+            return false;
+        }
+        return item.getPersistentDataContainer().has(SPECTATOR_MENU.key(), SPECTATOR_MENU.type());
+    }
+
     public static ItemStack normalize(ItemStack item) {
         return normalize(null, item);
     }

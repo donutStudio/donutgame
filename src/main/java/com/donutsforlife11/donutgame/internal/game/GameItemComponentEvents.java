@@ -258,6 +258,9 @@ public class GameItemComponentEvents implements Listener {
 
     private void syncInventory(Player player) {
         GamePlayer gamePlayer = gamePlayer(player);
+        if (gamePlayer != null && gamePlayer.isSpectator()) {
+            return;
+        }
         PlayerInventory inventory = player.getInventory();
         for (int index = 0; index < inventory.getSize(); index++) {
             ItemStack item = inventory.getItem(index);

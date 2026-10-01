@@ -1,6 +1,14 @@
 package com.donutsforlife11.donutgame.api.player;
 
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+
+import com.donutsforlife11.donutgame.api.item.GameItemComponents;
+
+import io.papermc.paper.datacomponent.DataComponentTypes;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 
 /**
  * Runtime-only spectator state.
@@ -11,6 +19,8 @@ import org.bukkit.entity.Player;
  * Bukkit Player while the player is online.
  */
 final class SpectatorSession implements AutoCloseable {
+    private static final int MENU_SLOT = 0;
+
     private final GamePlayer owner;
     private boolean closed;
 
@@ -48,6 +58,8 @@ final class SpectatorSession implements AutoCloseable {
             return;
         }
         owner.module().plugin().spectatorService().hideSpectator(owner);
+        removeMenuItem(player);
+        owner.module().log("[spectator-debug] Cleared spectator visibility/list projection for " + player.getName() + " (" + owner.uuid() + ").");
     }
 
     void apply(Player player) {
@@ -60,6 +72,32 @@ final class SpectatorSession implements AutoCloseable {
         player.setAllowFlight(true);
         player.setFlying(true);
         player.setFallDistance(0.0f);
+        player.getInventory().setItem(MENU_SLOT, menuItem());
+        player.updateInventory();
         owner.module().plugin().spectatorService().showSpectator(owner);
+        owner.module().log(
+            "[spectator-debug] Applied spectator projection for " + player.getName() + " (" + owner.uuid() + ")"
+                + "; allowFlight=" + player.getAllowFlight() + "; flying=" + player.isFlying()
+                + "; invulnerable=" + player.isInvulnerable() + "; invisible=" + player.isInvisible()
+        );
+    }
+
+    private void removeMenuItem(Player player) {
+        for (int slot = 0; slot < player.getInventory().getSize(); slot++) {
+            ItemStack item = player.getInventory().getItem(slot);
+            if (GameItemComponents.isSpectatorMenu(item)) {
+                player.getInventory().setItem(slot, null);
+            }
+        }
+        player.updateInventory();
+    }
+
+    private ItemStack menuItem() {
+        ItemStack item = new ItemStack(Material.COMPASS);
+        item.setData(DataComponentTypes.ITEM_NAME, Component.text("Spectator Menu", NamedTextColor.AQUA));
+        item.editPersistentDataContainer(pdc ->
+            pdc.set(GameItemComponents.SPECTATOR_MENU.key(), GameItemComponents.SPECTATOR_MENU.type(), "menu")
+        );
+        return item;
     }
 }

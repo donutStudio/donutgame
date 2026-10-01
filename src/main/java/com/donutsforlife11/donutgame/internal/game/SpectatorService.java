@@ -17,6 +17,10 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPl
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
+
 public class SpectatorService {
     private final Donutgame plugin;
 
@@ -117,11 +121,11 @@ public class SpectatorService {
                 userProfile(player),
                 true,
                 player.getPing(),
-                spectator ? GameMode.SPECTATOR : packetGameMode(player),
-                null,
+                spectator && !viewer.equals(player) ? GameMode.SPECTATOR : packetGameMode(player),
+                spectatorDisplayName(viewer, player, spectator),
                 null
             );
-            EnumSet<Action> actions = EnumSet.of(Action.UPDATE_LISTED, Action.UPDATE_GAME_MODE, Action.UPDATE_LATENCY);
+            EnumSet<Action> actions = EnumSet.of(Action.UPDATE_LISTED, Action.UPDATE_GAME_MODE, Action.UPDATE_LATENCY, Action.UPDATE_DISPLAY_NAME);
             if (!viewer.equals(player)) {
                 actions.add(Action.ADD_PLAYER);
             }
@@ -142,6 +146,14 @@ public class SpectatorService {
             case SPECTATOR -> GameMode.SPECTATOR;
             case SURVIVAL -> GameMode.SURVIVAL;
         };
+    }
+
+    private Component spectatorDisplayName(Player viewer, Player player, boolean spectator) {
+        if (!spectator || !viewer.equals(player)) {
+            return null;
+        }
+        return Component.text(player.getName(), NamedTextColor.GRAY)
+            .decorate(TextDecoration.ITALIC);
     }
 
     private UserProfile userProfile(Player player) {

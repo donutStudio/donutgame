@@ -12,6 +12,8 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.inventory.ClickType;
+import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
@@ -100,7 +102,7 @@ public class SpectatorGuardEvents implements Listener {
         if (event.getInventory().getHolder() instanceof SpectatorMenuEvents.MenuHolder) {
             return;
         }
-        if (event.getWhoClicked() instanceof Player player && isSpectator(player)) {
+        if (event.getWhoClicked() instanceof Player player && isSpectator(player) && !isHotbarSelection(event)) {
             event.setCancelled(true);
         }
     }
@@ -171,6 +173,11 @@ public class SpectatorGuardEvents implements Listener {
 
     private boolean isSpectator(Player player) {
         return spectator(player) != null;
+    }
+
+    private boolean isHotbarSelection(InventoryClickEvent event) {
+        return event.getClick() == ClickType.NUMBER_KEY
+            || event.getAction() == InventoryAction.HOTBAR_SWAP;
     }
 
     private GamePlayer spectator(Player player) {

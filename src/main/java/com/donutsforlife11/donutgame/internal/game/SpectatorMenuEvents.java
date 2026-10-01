@@ -19,6 +19,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 
 import com.donutsforlife11.donutgame.api.item.GameItem;
+import com.donutsforlife11.donutgame.api.item.GameItemComponents;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
 
@@ -46,6 +47,9 @@ public class SpectatorMenuEvents implements Listener {
         }
         GamePlayer viewer = spectator(event.getPlayer());
         if (viewer == null) {
+            return;
+        }
+        if (!GameItemComponents.isSpectatorMenu(event.getItem())) {
             return;
         }
         event.setCancelled(true);

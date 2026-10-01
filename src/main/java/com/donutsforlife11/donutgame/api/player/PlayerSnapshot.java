@@ -139,6 +139,17 @@ final class PlayerSnapshot {
         touchTimedValues();
     }
 
+    void clearSpectatorProjection() {
+        if (gameMode == GameMode.SPECTATOR) {
+            gameMode = GameMode.SURVIVAL;
+        }
+        invulnerable = false;
+        invisible = false;
+        canPickupItems = true;
+        allowFlight = gameMode == GameMode.CREATIVE;
+        flying = false;
+    }
+
     void ageTimedValues() {
         long now = System.currentTimeMillis();
         int elapsedTicks = (int) ((now - lastTimedUpdateMillis) / 50L);

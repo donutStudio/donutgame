@@ -79,6 +79,9 @@ public class PlayerManager {
             // prepareForWorldExit() already ran before teleport. Do not apply the game
             // snapshot again here: PlayerWorldStateService has just restored the
             // destination world's state during PlayerChangedWorldEvent.
+            if (gamePlayer != null) {
+                gamePlayer.clearSpectatorStateAfterWorldExit(player);
+            }
             finishExit(player, gamePlayer, false);
             module.log("Removed player " + player.getName() + " from game " + module.index() + ".");
             return true;

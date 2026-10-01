@@ -112,18 +112,11 @@ public class GamePlayer implements GameEntityBase {
             return;
         }
 
-        // Treat leaving spectator mode as an idempotent state transition. Fresh
-        // players are already non-spectators, and forcing them through the full
-        // spectator teardown path can race an in-flight teleport and incorrectly
-        // classify transient Bukkit state as a leaked spectator projection.
-        if (!isSpectator()) {
-            Player player = attachedPlayer();
-            if (player != null && location != null) {
-                teleport(location);
-            }
-            return;
-        }
-
+        // Leaving spectator mode is intentionally idempotent, but it is never a
+        // no-op. A player can be logically non-spectating while stale Bukkit
+        // projection bits (flight, invisibility, invulnerability, etc.) remain
+        // from an interrupted transition. Always reconcile the physical player
+        // back to the authoritative playing snapshot before continuing.
         exitSpectator(location);
     }
 
@@ -807,6 +800,7 @@ public class GamePlayer implements GameEntityBase {
         pendingDeathSpectatorLocation = null;
         closeSpectatorSession(player);
         resetPlayingStateForGame();
+        clearSpectatorProjectionFromPlayingState();
         state = PlayerState.ONLINE;
         World world = player.getWorld();
         lastWorldName = world == null ? null : world.getName();
@@ -898,6 +892,13 @@ public class GamePlayer implements GameEntityBase {
         forcePlayingState("world exit");
     }
 
+    void clearSpectatorStateAfterWorldExit(Player player) {
+        pendingDeathSpectatorLocation = null;
+        closeSpectatorSession(player);
+        clearSpectatorProjectionFromPlayingState();
+        clearPhysicalSpectatorProjection(player);
+    }
+
     private void respawnNow(GameLocation location) {
         Player player = attachedPlayer();
         if (player != null && player.isDead()) {
@@ -905,6 +906,7 @@ public class GamePlayer implements GameEntityBase {
             return;
         }
         pendingDeathSpectatorLocation = null;
+        clearSpectatorProjectionFromPlayingState();
         GameLocation target = location == null ? spawnPoint() : location;
         if (target != null) {
             setSpawnPoint(target);
@@ -913,7 +915,7 @@ public class GamePlayer implements GameEntityBase {
         exitSpectator(target);
         player = attachedPlayer();
         if (player != null) {
-            player.setNoDamageTicks(20);
+            player.setNoDamageTicks(0);
         }
     }
 
@@ -963,16 +965,23 @@ public class GamePlayer implements GameEntityBase {
         Player player = attachedPlayer();
         if (player != null && player.isDead()) {
             pendingDeathSpectatorLocation = location == null ? locationOrSpawn() : location;
+            debugSpectator("queued post-death spectator", player, null);
             return;
         }
         pendingDeathSpectatorLocation = null;
         if (spectatorSession == null) {
             if (player != null) {
-                capturePlayingState(player);
+                // Repair any stale spectator projection before snapshotting. This
+                // prevents leaked spectator flags from becoming the next round's
+                // authoritative playing state.
+                repairPhysicalPlayingOverlay(player, "before spectator snapshot");
+                capturePlayingStateWithoutSpectatorProjection(player);
             }
             spectatorSession = SpectatorSession.open(this, player);
+            debugSpectator("entered spectator", player, null);
         } else if (player != null) {
             spectatorSession.apply(player);
+            debugSpectator("refreshed spectator projection", player, null);
         }
         if (player != null && location != null) {
             teleport(location);
@@ -981,10 +990,23 @@ public class GamePlayer implements GameEntityBase {
 
     private void exitSpectator(GameLocation location) {
         Player player = attachedPlayer();
+        String before = player == null ? null : describePhysicalState(player);
         pendingDeathSpectatorLocation = null;
         closeSpectatorSession(player);
-        applyPlayingStateIfVisible();
+        clearSpectatorProjectionFromPlayingState();
+
+        if (player != null) {
+            if (player.isDead()) {
+                applyNonSpectatorOverlayState(player);
+            } else {
+                playingState.apply(player);
+                applyNonSpectatorOverlayState(player);
+            }
+            player.updateInventory();
+        }
+
         assertNoSpectatorOverlay(player);
+        debugSpectator("exited spectator", player, before);
         if (player != null && location != null) {
             teleport(location);
         }
@@ -1009,12 +1031,31 @@ public class GamePlayer implements GameEntityBase {
         if (player == null) {
             return;
         }
+        repairPhysicalPlayingOverlay(player, transition);
         if (!matchesPlayingOverlay(player)) {
-            applyNonSpectatorOverlayState(player);
+            String differences = describeOverlayMismatch(player);
+            module.logError(
+                "Spectator cleanup failed for " + player.getName() + " (" + uuid + ") during " + transition
+                    + ". Remaining mismatch: " + differences
+                    + "; physical={" + describePhysicalState(player) + "}"
+                    + "; expected={" + describeExpectedPlayingState() + "}",
+                new IllegalStateException("Spectator projection could not be fully cleared")
+            );
+            scheduleSpectatorOverlayRepair(transition);
         }
-        if (!matchesPlayingOverlay(player)) {
-            throw new IllegalStateException("Player " + uuid + " still has spectator projection state during " + transition + ".");
+    }
+
+    private void repairPhysicalPlayingOverlay(Player player, String transition) {
+        if (player == null || matchesPlayingOverlay(player)) {
+            return;
         }
+        String before = describePhysicalState(player);
+        String mismatch = describeOverlayMismatch(player);
+        applyNonSpectatorOverlayState(player);
+        module.log(
+            "[spectator-debug] Repaired stale spectator projection for " + player.getName() + " (" + uuid + ") during "
+                + transition + ": " + mismatch + "; before={" + before + "}; after={" + describePhysicalState(player) + "}"
+        );
     }
 
     private void revivePlayingState(double maxHealth) {
@@ -1052,8 +1093,10 @@ public class GamePlayer implements GameEntityBase {
 
     private void forcePlayingState(String transition) {
         Player player = attachedPlayer();
+        String before = player == null ? null : describePhysicalState(player);
         pendingDeathSpectatorLocation = null;
         closeSpectatorSession(player);
+        clearSpectatorProjectionFromPlayingState();
         if (player == null) {
             return;
         }
@@ -1061,11 +1104,14 @@ public class GamePlayer implements GameEntityBase {
             applyNonSpectatorOverlayState(player);
             player.updateInventory();
             assertNoSpectatorOverlay(player);
+            debugSpectator("forced playing state during " + transition, player, before);
             return;
         }
         playingState.apply(player);
+        applyNonSpectatorOverlayState(player);
         assertNoSpectatorOverlay(player);
         player.updateInventory();
+        debugSpectator("forced playing state during " + transition, player, before);
     }
 
     private void capturePlayingState(Player player) {
@@ -1079,45 +1125,74 @@ public class GamePlayer implements GameEntityBase {
         playingState.capture(player);
     }
 
+    private void capturePlayingStateWithoutSpectatorProjection(Player player) {
+        capturePlayingState(player);
+        clearSpectatorProjectionFromPlayingState();
+    }
+
+    private void clearSpectatorProjectionFromPlayingState() {
+        playingState.clearSpectatorProjection();
+    }
+
+    private void scheduleSpectatorOverlayRepair(String transition) {
+        Bukkit.getScheduler().runTask(module.plugin(), () -> {
+            Player player = attachedPlayer();
+            if (player == null) {
+                return;
+            }
+            applyNonSpectatorOverlayState(player);
+            player.setNoDamageTicks(0);
+            player.updateInventory();
+            if (!matchesPlayingOverlay(player)) {
+                module.logError(
+                    "Spectator cleanup still has a physical mismatch for " + player.getName() + " (" + uuid + ") after deferred "
+                        + transition + " repair. Remaining mismatch: " + describeOverlayMismatch(player)
+                        + "; physical={" + describePhysicalState(player) + "}"
+                        + "; expected={" + describeExpectedPlayingState() + "}",
+                    new IllegalStateException("Deferred spectator projection repair did not fully clear")
+                );
+            }
+        });
+    }
+
     private void applyNonSpectatorOverlayState(Player player) {
-        GameMode playingMode =
-            playingState.gameMode == GameMode.SPECTATOR
-                ? GameMode.SURVIVAL
-                : playingState.gameMode;
+        SpectatorProjection.applyNonSpectatorOverlay(player, playingState);
+    }
 
-        player.setGameMode(playingMode);
-        player.setInvulnerable(playingState.invulnerable);
-        player.setInvisible(playingState.invisible);
-        player.setCanPickupItems(playingState.canPickupItems);
-
-        boolean effectiveAllowFlight = playingState.allowsFlight();
-
-        player.setAllowFlight(effectiveAllowFlight);
-        player.setFlying(
-            effectiveAllowFlight && playingState.flying
-        );
-
-        player.setFallDistance(0.0f);
+    private void clearPhysicalSpectatorProjection(Player player) {
+        SpectatorProjection.clearPhysical(player);
     }
 
     private boolean matchesPlayingOverlay(Player player) {
-        if (player == null) {
-            return true;
+        return SpectatorProjection.matches(player, playingState);
+    }
+
+    private String describeOverlayMismatch(Player player) {
+        return SpectatorProjection.describeMismatch(player, playingState);
+    }
+
+    private String describePhysicalState(Player player) {
+        return SpectatorProjection.describePhysical(player);
+    }
+
+    private String describeExpectedPlayingState() {
+        return SpectatorProjection.describeExpected(playingState);
+    }
+
+    private void debugSpectator(String action, Player player, String before) {
+        StringBuilder message = new StringBuilder("[spectator-debug] ")
+            .append(action)
+            .append(" for ")
+            .append(player == null ? uuid : player.getName() + " (" + uuid + ")")
+            .append("; logicalSpectator=").append(isSpectator())
+            .append("; spectatorSession=").append(spectatorSession != null)
+            .append("; pendingDeathSpectator=").append(pendingDeathSpectatorLocation != null)
+            .append("; physical={").append(describePhysicalState(player)).append("}")
+            .append("; expected={").append(describeExpectedPlayingState()).append("}");
+        if (before != null) {
+            message.append("; before={").append(before).append("}");
         }
-
-        GameMode playingMode =
-            playingState.gameMode == GameMode.SPECTATOR
-                ? GameMode.SURVIVAL
-                : playingState.gameMode;
-
-        boolean effectiveAllowFlight = playingState.allowsFlight();
-
-        return player.getGameMode() == playingMode
-            && player.isInvulnerable() == playingState.invulnerable
-            && player.isInvisible() == playingState.invisible
-            && player.getCanPickupItems() == playingState.canPickupItems
-            && player.getAllowFlight() == effectiveAllowFlight
-            && player.isFlying() == (effectiveAllowFlight && playingState.flying);
+        module.log(message.toString());
     }
 
     private Player attachedPlayer() {
