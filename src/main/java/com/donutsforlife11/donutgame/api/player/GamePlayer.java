@@ -11,8 +11,6 @@ import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
-import org.bukkit.Sound;
-import org.bukkit.SoundCategory;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
@@ -344,26 +342,6 @@ public class GamePlayer implements GameEntityBase {
         return lastLocation == null ? null : lastLocation.clone();
     }
 
-    public void title(Component title) {
-        module().uiManager().title(this, title);
-    }
-
-    public void subtitle(Component subtitle) {
-        module().uiManager().subtitle(this, subtitle);
-    }
-
-    public void actionbar(Component actionbar) {
-        module().uiManager().actionbar(this, actionbar);
-    }
-
-    public void chat(Component message) {
-        module().uiManager().chat(this, message);
-    }
-
-    public void gameMessage(Component message) {
-        module().uiManager().gameMessage(this, message);
-    }
-
     public void give(ItemSpec item) {
         giveItem(item);
     }
@@ -692,70 +670,6 @@ public class GamePlayer implements GameEntityBase {
         }
         ItemStack bukkitItem = item.bukkitItem();
         clearItems(stack -> stack != null && stack.isSimilar(bukkitItem));
-    }
-
-    public void playSound(Sound sound) {
-        playSound(sound, SoundCategory.MASTER, null, 1f, 1f, 0f);
-    }
-
-    public void playSound(Sound sound, GameLocation location) {
-        playSound(sound, SoundCategory.MASTER, location, 1f, 1f, 0f);
-    }
-
-    public void playSound(Sound sound, SoundCategory track) {
-        playSound(sound, track, null, 1f, 1f, 0f);
-    }
-
-    public void playSound(Sound sound, SoundCategory track, GameLocation location) {
-        playSound(sound, track, location, 1f, 1f, 0f);
-    }
-
-    public void playSound(Sound sound, float volume) {
-        playSound(sound, SoundCategory.MASTER, null, volume, 1f, 0f);
-    }
-
-    public void playSound(Sound sound, GameLocation location, float volume) {
-        playSound(sound, SoundCategory.MASTER, location, volume, 1f, 0f);
-    }
-
-    public void playSound(Sound sound, SoundCategory track, float volume) {
-        playSound(sound, track, null, volume, 1f, 0f);
-    }
-
-    public void playSound(Sound sound, SoundCategory track, GameLocation location, float volume) {
-        playSound(sound, track, location, volume, 1f, 0f);
-    }
-
-    public void playSound(Sound sound, float volume, float pitch) {
-        playSound(sound, SoundCategory.MASTER, null, volume, pitch, 0f);
-    }
-
-    public void playSound(Sound sound, GameLocation location, float volume, float pitch) {
-        playSound(sound, SoundCategory.MASTER, location, volume, pitch, 0f);
-    }
-
-    public void playSound(Sound sound, SoundCategory track, float volume, float pitch) {
-        playSound(sound, track, null, volume, pitch, 0f);
-    }
-
-    public void playSound(Sound sound, SoundCategory track, GameLocation location, float volume, float pitch) {
-        playSound(sound, track, location, volume, pitch, 0f);
-    }
-
-    public void playSound(Sound sound, float volume, float pitch, float minVolume) {
-        playSound(sound, SoundCategory.MASTER, null, volume, pitch, minVolume);
-    }
-
-    public void playSound(Sound sound, GameLocation location, float volume, float pitch, float minVolume) {
-        playSound(sound, SoundCategory.MASTER, location, volume, pitch, minVolume);
-    }
-
-    public void playSound(Sound sound, SoundCategory track, float volume, float pitch, float minVolume) {
-        playSound(sound, track, null, volume, pitch, minVolume);
-    }
-
-    public void playSound(Sound sound, SoundCategory track, GameLocation location, float volume, float pitch, float minVolume) {
-        module().uiManager().playSound(this, sound, track, location, volume, pitch, minVolume);
     }
 
     void remember(Player player) {

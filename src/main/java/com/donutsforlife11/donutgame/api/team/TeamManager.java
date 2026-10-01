@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -19,17 +20,33 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.scoreboard.Scoreboard;
 
+import com.donutsforlife11.donutgame.api.item.GameItem;
+import com.donutsforlife11.donutgame.api.item.GameItemComponents;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
 
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 
 public class TeamManager {
-    private static final List<NamedTextColor> COLORS = List.of(
-        NamedTextColor.RED, NamedTextColor.BLUE, NamedTextColor.GREEN, NamedTextColor.YELLOW,
-        NamedTextColor.LIGHT_PURPLE, NamedTextColor.GOLD, NamedTextColor.AQUA, NamedTextColor.DARK_GREEN,
-        NamedTextColor.DARK_PURPLE, NamedTextColor.DARK_RED, NamedTextColor.DARK_AQUA, NamedTextColor.DARK_BLUE,
-        NamedTextColor.GRAY, NamedTextColor.DARK_GRAY, NamedTextColor.BLACK, NamedTextColor.WHITE
+    private static final List<ColoredTeamPreset> COLORED_TEAM_PRESETS = List.of(
+        new ColoredTeamPreset(NamedTextColor.RED, "Red"),
+        new ColoredTeamPreset(NamedTextColor.BLUE, "Blue"),
+        new ColoredTeamPreset(NamedTextColor.GREEN, "Green"),
+        new ColoredTeamPreset(NamedTextColor.YELLOW, "Yellow"),
+        new ColoredTeamPreset(NamedTextColor.LIGHT_PURPLE, "Pink"),
+        new ColoredTeamPreset(NamedTextColor.GOLD, "Gold"),
+        new ColoredTeamPreset(NamedTextColor.AQUA, "Aqua"),
+        new ColoredTeamPreset(NamedTextColor.DARK_GREEN, "Dark Green"),
+        new ColoredTeamPreset(NamedTextColor.DARK_PURPLE, "Purple"),
+        new ColoredTeamPreset(NamedTextColor.DARK_RED, "Dark Red"),
+        new ColoredTeamPreset(NamedTextColor.DARK_AQUA, "Dark Aqua"),
+        new ColoredTeamPreset(NamedTextColor.DARK_BLUE, "Dark Blue"),
+        new ColoredTeamPreset(NamedTextColor.GRAY, "Gray"),
+        new ColoredTeamPreset(NamedTextColor.DARK_GRAY, "Dark Gray"),
+        new ColoredTeamPreset(NamedTextColor.BLACK, "Black"),
+        new ColoredTeamPreset(NamedTextColor.WHITE, "White")
     );
 
     private final PlayerManager playerManager;
@@ -53,7 +70,19 @@ public class TeamManager {
     }
 
     public GameTeam newColoredTeam() {
-        return newTeam().setColor(COLORS.get(colorIndex++ % COLORS.size()));
+        int index = colorIndex++;
+        ColoredTeamPreset preset = COLORED_TEAM_PRESETS.get(index % COLORED_TEAM_PRESETS.size());
+        GameTeam team = newTeam().setColor(preset.color());
+        Material dyeMaterial = Material.matchMaterial(GameItemComponents.teamDyeColor(team).name() + "_DYE");
+        if (dyeMaterial != null) {
+            team.setItem(GameItem.of(dyeMaterial));
+        }
+        if (index < COLORED_TEAM_PRESETS.size()) {
+            team.setDisplayName(Component.text(preset.label() + " Team", preset.color()));
+            team.setPrefix(Component.text(preset.label().toUpperCase(), preset.color(), TextDecoration.BOLD)
+                .append(Component.text(" ", preset.color())));
+        }
+        return team;
     }
 
     public Collection<GameTeam> getTeams() {
@@ -164,5 +193,8 @@ public class TeamManager {
             return player;
         }
         return null;
+    }
+
+    private record ColoredTeamPreset(NamedTextColor color, String label) {
     }
 }

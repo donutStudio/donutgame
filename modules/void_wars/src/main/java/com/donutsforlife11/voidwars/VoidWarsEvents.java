@@ -28,6 +28,7 @@ import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameRegion;
 import com.donutsforlife11.donutgame.api.object.BlockSpec;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.ui.GameSound;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -74,8 +75,8 @@ final class VoidWarsEvents {
         if (elapsed == game.pvpTicks) {
             game.world().gamerules().pvp(true);
             if (elapsed > 0) {
-                game.sound(Sound.ENTITY_ENDER_DRAGON_HURT, 1f, 0.75f);
-                game.gameMessage(Component.text("PvP is now enabled!"));
+                game.uiManager().playSound(game.playerManager().getPlayers(), GameSound.of(Sound.ENTITY_ENDER_DRAGON_HURT).volume(1f).pitch(0.75f));
+                game.uiManager().gameMessage(game.playerManager().getPlayers(), Component.text("PvP is now enabled!"));
             }
         }
         itemDrops.stream().filter(event -> event.ticks() == elapsed).forEach(event -> dropItems(event.lootTable()));
@@ -151,10 +152,10 @@ final class VoidWarsEvents {
     private void collapseSpawn() {
         for (GameRegion region : game.world().getRegions(VoidWars.SPAWN_PLATFORM)) {
             game.world().fill(region, BlockSpec.of(Material.AIR));
-            game.sound(Sound.ENTITY_WARDEN_DEATH, 1f, 0.5f);
+            game.uiManager().playSound(game.playerManager().getPlayers(), GameSound.of(Sound.ENTITY_WARDEN_DEATH).volume(1f).pitch(0.5f));
         }
         if (game.roundTimer() != null && game.roundTimer().elapsedTicks() > 0) {
-            game.gameMessage(Component.text("The ground has collapsed!"));
+            game.uiManager().gameMessage(game.playerManager().getPlayers(), Component.text("The ground has collapsed!"));
         }
     }
 
@@ -184,12 +185,12 @@ final class VoidWarsEvents {
             }
         }
         if (game.roundTimer() != null && game.roundTimer().elapsedTicks() > 0) {
-            game.subtitle(game.playerManager().getPlayers(), Component.empty()
+            game.uiManager().subtitle(game.playerManager().getPlayers(), Component.empty()
                 .append(Component.text("! ", NamedTextColor.DARK_GREEN, TextDecoration.BOLD))
                 .append(Component.text("Chests Refilled", NamedTextColor.GREEN))
                 .append(Component.text(" !", NamedTextColor.DARK_GREEN, TextDecoration.BOLD))
             );
-            game.sound(Sound.BLOCK_CHEST_OPEN, 1f, 1.25f);
+            game.uiManager().playSound(game.playerManager().getPlayers(), GameSound.of(Sound.BLOCK_CHEST_OPEN).volume(1f).pitch(1.25f));
         }
     }
 
@@ -202,12 +203,12 @@ final class VoidWarsEvents {
         }
         if (game.roundTimer() != null && game.roundTimer().elapsedTicks() > 0 && !items.isEmpty()) {
             for (ItemStack item : items) {
-                game.gameMessage(Component.text("Gave players ")
+                game.uiManager().gameMessage(game.playerManager().getPlayers(), Component.text("Gave players ")
                     .append(displayName(item))
                     .append(Component.text(" x" + item.getAmount()))
                 );
             }
-            game.sound(Sound.ENTITY_ITEM_PICKUP, 1f, 0f);
+            game.uiManager().playSound(game.playerManager().getPlayers(), GameSound.of(Sound.ENTITY_ITEM_PICKUP).volume(1f).pitch(0f));
         }
     }
 
@@ -223,12 +224,12 @@ final class VoidWarsEvents {
             Math.max(Math.abs(dimensions.getY() - target.getY()), Math.abs(dimensions.getZ() - target.getZ()))
         );
         border.setDimensions(target, Math.max(1, (int) Math.ceil(maxChange / 0.015)));
-        game.subtitle(game.playerManager().getPlayers(), Component.empty()
+        game.uiManager().subtitle(game.playerManager().getPlayers(), Component.empty()
             .append(Component.text("! ", NamedTextColor.DARK_RED, TextDecoration.BOLD))
             .append(Component.text("Border Shrinking", NamedTextColor.RED))
             .append(Component.text(" !", NamedTextColor.DARK_RED, TextDecoration.BOLD))
         );
-        game.sound(Sound.BLOCK_BEACON_AMBIENT, 0.9f, 0.75f);
+        game.uiManager().playSound(game.playerManager().getPlayers(), GameSound.of(Sound.BLOCK_BEACON_AMBIENT).volume(0.9f).pitch(0.75f));
     }
 
     private List<Integer> allEventTicks() {

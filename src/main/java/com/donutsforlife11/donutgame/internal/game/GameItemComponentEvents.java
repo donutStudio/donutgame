@@ -182,13 +182,6 @@ public class GameItemComponentEvents implements Listener {
         if (!(event.getEntity() instanceof Player player)) {
             return;
         }
-        ItemStack pickedUp = event.getItem().getItemStack();
-        if (pickedUp != null && hasInfiniteBuildItem(player, pickedUp.getType())) {
-            event.setCancelled(true);
-            event.getItem().remove();
-            syncInventory(player);
-            return;
-        }
         Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(player));
     }
 

@@ -1,7 +1,6 @@
 package com.donutsforlife11.voidwars;
 
 import java.util.Collection;
-import java.util.stream.Collectors;
 
 import org.bukkit.Sound;
 import org.bukkit.potion.PotionEffect;
@@ -9,7 +8,9 @@ import org.bukkit.potion.PotionEffectType;
 
 import com.donutsforlife11.donutgame.api.border.GameBorder;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.team.GameTeam;
 import com.donutsforlife11.donutgame.api.time.GameTimer;
+import com.donutsforlife11.donutgame.api.ui.GameSound;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
 import net.kyori.adventure.text.Component;
@@ -74,6 +75,7 @@ public class VoidWars extends GameModule {
         round++;
         roundStarted = false;
         roundEnding = false;
+        players.cancelRespawns();
         world().setHungerEnabled(false);
         world().gamerules().fallDamage(false);
         world().gamerules().pvp(false);
@@ -105,6 +107,7 @@ public class VoidWars extends GameModule {
         }
         roundEnding = true;
         roundStarted = false;
+        players.cancelRespawns();
         if (roundTimer != null) {
             roundTimer.cancel();
             roundTimer = null;
@@ -114,22 +117,19 @@ public class VoidWars extends GameModule {
             border = null;
         }
         timeManager().newTimer(round >= maxRounds ? 100 : 50).onFinish(timer -> {
-            title(playerManager().getSpectators(), Component.text("Round Over!"));
-            sound(playerManager().getSpectators(), Sound.BLOCK_BEACON_DEACTIVATE, 1f, 1.5f);
-            title(winners, Component.text("VICTORY", NamedTextColor.GOLD, TextDecoration.BOLD));
-            sound(winners, Sound.UI_TOAST_CHALLENGE_COMPLETE, 1f, 1.675f);
+            uiManager().title(playerManager().getSpectators(), Component.text("Round Over!"));
+            uiManager().playSound(playerManager().getSpectators(), GameSound.of(Sound.BLOCK_BEACON_DEACTIVATE).volume(1f).pitch(1.5f));
+            uiManager().title(winners, Component.text("VICTORY", NamedTextColor.GOLD, TextDecoration.BOLD));
+            uiManager().playSound(winners, GameSound.of(Sound.UI_TOAST_CHALLENGE_COMPLETE).volume(1f).pitch(1.675f));
             if (!winners.isEmpty()) {
-                String label = winners.size() == 1 ? "Winner: " : "Winners: ";
-                subtitle(playerManager().getPlayers(), Component.text(label + winners.stream()
-                    .map(player -> player.bukkitPlayer() == null ? player.uuid().toString() : player.bukkitPlayer().getName())
-                    .collect(Collectors.joining(", "))));
+                uiManager().subtitle(playerManager().getPlayers(), winnerSubtitle(winners));
             }
             for (GamePlayer winner : winners) {
                 winner.setSpectator(true, winner.location());
             }
             if (round >= maxRounds) {
                 timeManager().newTimer(100).onFinish(ignored -> {
-                    title(playerManager().getPlayers(), Component.text("Game over!", NamedTextColor.WHITE, TextDecoration.BOLD));
+                    uiManager().title(playerManager().getPlayers(), Component.text("Game over!", NamedTextColor.WHITE, TextDecoration.BOLD));
                     timeManager().newTimer(40).onFinish(ignored2 -> unload()).start();
                 }).start();
             } else {
@@ -143,6 +143,15 @@ public class VoidWars extends GameModule {
             logError("Failed to reset Void Wars for the next round.", throwable);
             return null;
         });
+    }
+
+    private Component winnerSubtitle(Collection<GamePlayer> winners) {
+        if (teamSize <= 1) {
+            GamePlayer winner = winners.iterator().next();
+            return Component.text("Winner: " + (winner.bukkitPlayer() == null ? winner.uuid().toString() : winner.bukkitPlayer().getName()));
+        }
+        GameTeam team = winners.iterator().next().getTeam();
+        return Component.text("Winning Team: ").append(team == null ? Component.text("Unknown Team") : team.displayName());
     }
 
     GameTimer roundTimer() {
@@ -194,31 +203,4 @@ public class VoidWars extends GameModule {
         }
     }
 
-    void title(Collection<GamePlayer> players, Component title) {
-        for (GamePlayer player : players) {
-            player.title(title);
-        }
-    }
-
-    void subtitle(Collection<GamePlayer> players, Component subtitle) {
-        for (GamePlayer player : players) {
-            player.subtitle(subtitle);
-        }
-    }
-
-    void sound(Sound sound, float volume, float pitch) {
-        sound(playerManager().getPlayers(), sound, volume, pitch);
-    }
-
-    void sound(Collection<GamePlayer> players, Sound sound, float volume, float pitch) {
-        for (GamePlayer player : players) {
-            player.playSound(sound, volume, pitch);
-        }
-    }
-
-    void gameMessage(Component message) {
-        for (GamePlayer player : playerManager().getPlayers()) {
-            player.gameMessage(message);
-        }
-    }
 }

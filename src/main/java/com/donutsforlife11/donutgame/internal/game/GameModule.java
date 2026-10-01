@@ -42,6 +42,7 @@ import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.team.TeamManager;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.ui.UIManager;
+import com.donutsforlife11.donutgame.api.ui.GameSound;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -415,18 +416,14 @@ public abstract class GameModule {
 
     private void startCountdown(int countdownTicks, Runnable action) {
         timeManager.newTimer(50).onFinish(ignored -> {
-            for (GamePlayer player : playerManager.getOnlinePlayers()) {
-                player.title(Component.text(name, NamedTextColor.LIGHT_PURPLE));
-            }
+            uiManager.title(playerManager.getOnlinePlayers(), Component.text(name, NamedTextColor.LIGHT_PURPLE));
             timeManager.newTimer(50).onFinish(ignoredTimer -> {
                 sendCountdownTitle(countdownTicks, countdownTicks);
                 timeManager.newTimer(countdownTicks)
                     .onTick(20, timer -> sendCountdownTitle(timer.remainingTicks(), timer.maxTicks()))
                     .onFinish(ignored2 -> {
-                        for (GamePlayer player : playerManager.getOnlinePlayers()) {
-                            player.title(Component.text("> START <", NamedTextColor.WHITE, TextDecoration.BOLD));
-                            player.playSound(Sound.BLOCK_NOTE_BLOCK_PLING, 0.9f, 2f);
-                        }
+                        uiManager.title(playerManager.getOnlinePlayers(), Component.text("> START <", NamedTextColor.WHITE, TextDecoration.BOLD));
+                        uiManager.playSound(playerManager.getOnlinePlayers(), GameSound.of(Sound.BLOCK_NOTE_BLOCK_PLING).volume(0.9f).pitch(2f));
                         action.run();
                     })
                     .start();
@@ -437,10 +434,8 @@ public abstract class GameModule {
     private void sendCountdownTitle(int remainingTicks, int totalTicks) {
         int seconds = Math.max(1, (int) Math.ceil(Math.max(0, remainingTicks) / 20.0));
         Component title = Component.text(seconds, countdownColor(remainingTicks, totalTicks), TextDecoration.BOLD);
-        for (GamePlayer player : playerManager.getOnlinePlayers()) {
-            player.title(title);
-            player.playSound(Sound.UI_BUTTON_CLICK, 0.7f, 1.1f);
-        }
+        uiManager.title(playerManager.getOnlinePlayers(), title);
+        uiManager.playSound(playerManager.getOnlinePlayers(), GameSound.of(Sound.UI_BUTTON_CLICK).volume(0.7f).pitch(1.1f));
     }
 
     private NamedTextColor countdownColor(int remainingTicks, int totalTicks) {

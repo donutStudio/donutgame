@@ -30,6 +30,7 @@ import org.bukkit.event.player.PlayerBucketEmptyEvent;
 
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
+import com.donutsforlife11.donutgame.api.ui.GameSound;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -89,7 +90,7 @@ public class GameKillCreditEvents implements Listener {
             return;
         }
         rememberBlockCredit(event.getBlockPlaced(), player);
-        rememberNearbyBlockInteraction(event.getBlockPlaced(), player);
+        rememberNearbyBlockInteraction(event.getBlockPlaced(), player, KillIcon.BLOCK);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -99,7 +100,7 @@ public class GameKillCreditEvents implements Listener {
             return;
         }
         rememberBlockCredit(event.getBlock(), player);
-        rememberNearbyBlockInteraction(event.getBlock(), player);
+        rememberNearbyBlockInteraction(event.getBlock(), player, KillIcon.BLOCK);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -107,7 +108,7 @@ public class GameKillCreditEvents implements Listener {
         if (game(event.getPlayer()) == null) {
             return;
         }
-        rememberNearbyBlockInteraction(event.getBlock(), event.getPlayer());
+        rememberNearbyBlockInteraction(event.getBlock(), event.getPlayer(), KillIcon.SPLEEF);
         blockCredits.remove(BlockKey.of(event.getBlock()));
     }
 
@@ -168,8 +169,8 @@ public class GameKillCreditEvents implements Listener {
         }
 
         int streak = rememberKillStreak(attacker);
-        attackerPlayer.playSound(Sound.ITEM_TRIDENT_RETURN, 1.3f, 0.35f);
-        attackerPlayer.playSound(Sound.ITEM_TRIDENT_RETURN, 1.3f, 1.15f);
+        game.uiManager().playSound(attackerPlayer, GameSound.of(Sound.ITEM_TRIDENT_RETURN).volume(1.3f).pitch(0.35f));
+        game.uiManager().playSound(attackerPlayer, GameSound.of(Sound.ITEM_TRIDENT_RETURN).volume(1.3f).pitch(1.15f));
         enqueueKillSubtitle(attackerPlayer, target, icons, streak);
     }
 
@@ -219,7 +220,7 @@ public class GameKillCreditEvents implements Listener {
         blockCredits.put(BlockKey.of(block), new DamageCredit(attacker.getUniqueId(), System.currentTimeMillis(), Set.of(KillIcon.BLOCK)));
     }
 
-    private void rememberNearbyBlockInteraction(Block block, Player attacker) {
+    private void rememberNearbyBlockInteraction(Block block, Player attacker, KillIcon icon) {
         GameModule game = game(attacker);
         if (game == null) {
             return;
@@ -235,7 +236,7 @@ public class GameKillCreditEvents implements Listener {
             double dz = Math.abs(location.getZ() - center.getZ());
             double dy = location.getY() - block.getY();
             if (dx <= 1.25 && dz <= 1.25 && dy >= 0.0 && dy <= 3.0) {
-                rememberDamageCredit(target, attacker, Set.of(KillIcon.BLOCK));
+                rememberDamageCredit(target, attacker, Set.of(icon));
             }
         }
     }
@@ -288,8 +289,10 @@ public class GameKillCreditEvents implements Listener {
             icons.add(KillIcon.FIRE);
         } else if (damageType == DamageType.MAGIC || damageType == DamageType.INDIRECT_MAGIC) {
             icons.add(KillIcon.POTION);
-        } else if (damageType == DamageType.FALL || damageType == DamageType.OUT_OF_WORLD) {
-            icons.add(KillIcon.SPLEEF);
+        } else if (damageType == DamageType.FALL) {
+            icons.add(KillIcon.FALL);
+        } else if (damageType == DamageType.OUT_OF_WORLD) {
+            icons.add(KillIcon.VOID);
         } else if (damageType == DamageType.FREEZE) {
             icons.add(KillIcon.FREEZE);
         } else if (damageType == DamageType.LIGHTNING_BOLT) {
@@ -360,7 +363,7 @@ public class GameKillCreditEvents implements Listener {
             return;
         }
         KillSubtitle subtitle = queue.peekFirst();
-        attackerPlayer.subtitle(subtitle.component());
+        attackerPlayer.module().uiManager().subtitle(attackerPlayer, subtitle.component());
         moduleService.plugin().getServer().getScheduler().runTaskLater(moduleService.plugin(), () -> {
             Deque<KillSubtitle> current = killSubtitles.get(attackerId);
             if (current == null) {
@@ -423,11 +426,17 @@ public class GameKillCreditEvents implements Listener {
 
     private Component killSubtitle(String targetName, TextColor targetColor, Player target, Set<KillIcon> icons, int streak) {
         Component component = Component.empty();
+        boolean hasIcon = false;
         for (KillIcon icon : icons) {
-            component = component.append(Component.text(icon.text()));
+            if (!icon.text().isEmpty()) {
+                component = component.append(Component.text(icon.text()));
+                hasIcon = true;
+            }
+        }
+        if (hasIcon) {
+            component = component.append(Component.text(" "));
         }
         component = component
-            .append(Component.text(" "))
             .append(Component.text(targetName + " ", targetColor))
             .append(Component.object(ObjectContents.playerHead(target)));
         if (streak >= 2) {
@@ -449,9 +458,11 @@ public class GameKillCreditEvents implements Listener {
         FIRE("🔥"),
         FREEZE("❄"),
         EXPLOSION("☀"),
+        FALL("☄"),
         POTION("⚗"),
         LIGHTNING("⚡"),
         AXE("🪓"),
+        VOID(""),
         FALLBACK("☠");
 
         private final String text;

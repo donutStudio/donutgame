@@ -1,12 +1,12 @@
 package com.donutsforlife11.donutgame.api.ui;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Location;
-import org.bukkit.Sound;
-import org.bukkit.SoundCategory;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
@@ -31,61 +31,83 @@ public class UIManager {
     }
 
     public void title(GamePlayer gamePlayer, Component title) {
-        Player player = resolvePlayer(gamePlayer);
-        if (player == null) {
-            return;
+        title(single(gamePlayer), title);
+    }
+
+    public void title(Collection<GamePlayer> gamePlayers, Component title) {
+        Component component = component(title);
+        for (Player player : resolvePlayers(gamePlayers)) {
+            player.sendTitlePart(TitlePart.TITLE, component);
+            titleTracker.markTitle(player);
         }
-        player.sendTitlePart(TitlePart.TITLE, component(title));
-        titleTracker.markTitle(player);
     }
 
     public void subtitle(GamePlayer gamePlayer, Component subtitle) {
-        Player player = resolvePlayer(gamePlayer);
-        if (player == null) {
-            return;
+        subtitle(single(gamePlayer), subtitle);
+    }
+
+    public void subtitle(Collection<GamePlayer> gamePlayers, Component subtitle) {
+        Component component = component(subtitle);
+        for (Player player : resolvePlayers(gamePlayers)) {
+            if (!titleTracker.hasActiveTitle(player)) {
+                player.sendTitlePart(TitlePart.TITLE, Component.empty());
+                titleTracker.markTitle(player);
+            }
+            player.sendTitlePart(TitlePart.SUBTITLE, component);
         }
-        if (!titleTracker.hasActiveTitle(player)) {
-            player.sendTitlePart(TitlePart.TITLE, Component.empty());
-            titleTracker.markTitle(player);
-        }
-        player.sendTitlePart(TitlePart.SUBTITLE, component(subtitle));
     }
 
     public void actionbar(GamePlayer gamePlayer, Component actionbar) {
-        Player player = resolvePlayer(gamePlayer);
-        if (player != null) {
-            player.sendActionBar(component(actionbar));
+        actionbar(single(gamePlayer), actionbar);
+    }
+
+    public void actionbar(Collection<GamePlayer> gamePlayers, Component actionbar) {
+        Component component = component(actionbar);
+        for (Player player : resolvePlayers(gamePlayers)) {
+            player.sendActionBar(component);
         }
     }
 
     public void chat(GamePlayer gamePlayer, Component message) {
-        Player player = resolvePlayer(gamePlayer);
-        if (player != null) {
-            player.sendMessage(component(message));
+        chat(single(gamePlayer), message);
+    }
+
+    public void chat(Collection<GamePlayer> gamePlayers, Component message) {
+        Component component = component(message);
+        for (Player player : resolvePlayers(gamePlayers)) {
+            player.sendMessage(component);
         }
     }
 
     public void gameMessage(GamePlayer gamePlayer, Component message) {
+        gameMessage(single(gamePlayer), message);
+    }
+
+    public void gameMessage(Collection<GamePlayer> gamePlayers, Component message) {
         Component body = component(message).decorationIfAbsent(TextDecoration.BOLD, TextDecoration.State.FALSE);
-        chat(gamePlayer, Component.empty()
+        chat(gamePlayers, Component.empty()
             .append(Component.text("Game > ", NamedTextColor.GREEN, TextDecoration.BOLD))
             .append(body));
     }
 
-    public void playSound(GamePlayer gamePlayer, Sound sound, SoundCategory category, GameLocation location, float volume, float pitch, float minVolume) {
-        Player player = resolvePlayer(gamePlayer);
-        if (player == null || sound == null) {
+    public void playSound(GamePlayer gamePlayer, GameSound sound) {
+        playSound(single(gamePlayer), sound);
+    }
+
+    public void playSound(Collection<GamePlayer> gamePlayers, GameSound sound) {
+        if (sound == null || sound.sound() == null) {
             return;
         }
-        SoundCategory resolvedCategory = category == null ? SoundCategory.MASTER : category;
-        Location source = resolveLocation(player, location);
-        if (!player.getWorld().equals(source.getWorld())) {
-            if (minVolume > 0) {
-                player.playSound(player.getLocation(), sound, resolvedCategory, minVolume, pitch);
+        for (Player player : resolvePlayers(gamePlayers)) {
+            Location source = resolveLocation(player, sound.location());
+            if (!player.getWorld().equals(source.getWorld())) {
+                if (sound.minVolume() > 0) {
+                    player.playSound(player.getLocation(), sound.sound(), sound.category(), sound.minVolume(), sound.pitch());
+                }
+                continue;
             }
-            return;
+            player.playSound(source, sound.sound(), sound.category(), sound.volume(), sound.pitch());
         }
-        player.playSound(source, sound, resolvedCategory, volume, pitch);
     }
 
     public GameSidebar newSidebar() {
@@ -119,6 +141,24 @@ public class UIManager {
 
     private Player resolvePlayer(GamePlayer gamePlayer) {
         return gamePlayer == null ? null : gamePlayer.bukkitPlayer();
+    }
+
+    private Collection<GamePlayer> single(GamePlayer gamePlayer) {
+        return gamePlayer == null ? List.of() : List.of(gamePlayer);
+    }
+
+    private Collection<Player> resolvePlayers(Collection<GamePlayer> gamePlayers) {
+        List<Player> players = new ArrayList<>();
+        if (gamePlayers == null) {
+            return players;
+        }
+        for (GamePlayer gamePlayer : gamePlayers) {
+            Player player = resolvePlayer(gamePlayer);
+            if (player != null) {
+                players.add(player);
+            }
+        }
+        return players;
     }
 
     private Location resolveLocation(Player player, GameLocation location) {

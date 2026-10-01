@@ -157,8 +157,29 @@ boolean isFinished() // Returns whether or not the timer is finished
 ## UI SYSTEM
 **UIManager**
 ```java
+void title(GamePlayer player, Component title) // Shows a title on one player's screen
+void title(Collection<GamePlayer> players, Component title) // Shows a title on players' screens
+void subtitle(GamePlayer player, Component subtitle) // Shows a subtitle on one player's screen (uses packet tracking so it can display even when no title is currently visible)
+void subtitle(Collection<GamePlayer> players, Component subtitle) // Shows a subtitle on players' screens
+void actionbar(GamePlayer player, Component actionbar) // Shows an actionbar on one player's screen
+void actionbar(Collection<GamePlayer> players, Component actionbar) // Shows an actionbar on players' screens
+void chat(GamePlayer player, Component message) // Sends a chat message to one player
+void chat(Collection<GamePlayer> players, Component message) // Sends a chat message to players
+void gameMessage(GamePlayer player, Component message) // Sends a formatted "game message" to one player's chat
+void gameMessage(Collection<GamePlayer> players, Component message) // Sends a formatted "game message" to players' chat
+void playSound(GamePlayer player, GameSound sound) // Plays a sound for one player
+void playSound(Collection<GamePlayer> players, GameSound sound) // Plays a sound for players
 GameSidebar newSidebar() // Creates a new sidebar
 List<GameSidebar> sidebars() // Returns active sidebars
+```
+**GameSound**
+```java
+static GameSound of(Sound sound) // Creates a sound with default MASTER category, player location, 1 volume, 1 pitch, and 0 min volume
+GameSound category(SoundCategory category) // Returns a copy using the specified sound category
+GameSound location(GameLocation location) // Returns a copy using the specified location; null uses the receiving player's current location
+GameSound volume(float volume) // Returns a copy using the specified volume
+GameSound pitch(float pitch) // Returns a copy using the specified pitch
+GameSound minVolume(float minVolume) // Returns a copy using the specified cross-world fallback/minimum volume
 ```
 **GameSidebar**
 ```java
@@ -347,33 +368,6 @@ float saturation() // Returns the player's saturation
 void setArrowsInBody(int arrows) // Sets the arrows in a player's body
 int arrowsInBody() // Returns the arrows in a player's body
 void reset() // Resets the player to the default state, including gamemode, inventory, health, attributes, effects, arrows in body, fire ticks, everything
-// UI methods
-void title(Component title) // Shows title on the player's screen
-void subtitle(Component subtitle) // Shows subtitle on the player's screen (and uses packet tracking to work and display the subtitle regardless of if a title is already shown currently)
-void actionbar(Component actionbar) // Shows an actionbar on the player's screen
-void chat(Component message) // Shows a chat message on the player's screen
-void gameMessage(Component message) // Sends a formatted "game message" to the player's chat
-// Sound section of UI methods because there are lots of overloads for this
-// Just a sound, no volume pitch or min volume
-void playSound(Sound sound) // Plays sound audible to specified player
-void playSound(Sound sound, GameLocation location) // Plays sound at a specific location audible to specified player
-void playSound(Sound sound, SoundCategory track) // Plays sound on specified track (overloads without the track use MASTER)
-void playSound(Sound sound, SoundCategory track, GameLocation location) // Plays sound on track at location
-// volume
-void playSound(Sound sound, float volume)
-void playSound(Sound sound, GameLocation location, float volume)
-void playSound(Sound sound, SoundCategory track, float volume)
-void playSound(Sound sound, SoundCategory track, GameLocation location, float volume)
-// volume + pitch
-void playSound(Sound sound, float volume, float pitch)
-void playSound(Sound sound, GameLocation location, float volume, float pitch)
-void playSound(Sound sound, SoundCategory track, float volume, float pitch)
-void playSound(Sound sound, SoundCategory track, GameLocation location, float volume, float pitch)
-// volume + pitch + min volume
-void playSound(Sound sound, float volume, float pitch, float minVolume)
-void playSound(Sound sound, GameLocation location, float volume, float pitch, float minVolume)
-void playSound(Sound sound, SoundCategory track, float volume, float pitch, float minVolume)
-void playSound(Sound sound, SoundCategory track, GameLocation location, float volume, float pitch, float minVolume)
 // Items (more may be added in future)
 void giveItem(ItemSpec item) // Gives an item to a player
 void giveItem(GameItem item) // Similar to above but takes in a GameItem

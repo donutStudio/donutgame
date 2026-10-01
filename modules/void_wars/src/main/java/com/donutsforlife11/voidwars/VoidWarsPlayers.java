@@ -98,7 +98,13 @@ final class VoidWarsPlayers {
         for (GamePlayer teammate : team.getPlayers()) {
             teammate.cancelRespawn();
         }
-        game.title(team.getPlayers(), Component.text(game.teamSize == 1 ? "Eliminated!" : "Team Eliminated!", NamedTextColor.RED, TextDecoration.BOLD));
+        game.uiManager().title(team.getPlayers(), Component.text(game.teamSize == 1 ? "Eliminated!" : "Team Eliminated!", NamedTextColor.RED, TextDecoration.BOLD));
+    }
+
+    void cancelRespawns() {
+        for (GamePlayer player : game.playerManager().getPlayers()) {
+            player.cancelRespawn();
+        }
     }
 
     private GamePlayer livingTeammate(GamePlayer player) {

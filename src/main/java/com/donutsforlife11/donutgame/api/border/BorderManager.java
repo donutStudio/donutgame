@@ -193,7 +193,7 @@ public class BorderManager {
             if (player == null || location == null || insideAnyBorder(location) || !canTakeBorderDamage(player)) {
                 continue;
             }
-            gamePlayer.actionbar(Component.text("You are outside the border!", NamedTextColor.RED));
+            module.uiManager().actionbar(gamePlayer, Component.text("You are outside the border!", NamedTextColor.RED));
             player.damage(damage, OUTSIDE_BORDER_DAMAGE);
         }
     }
