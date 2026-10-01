@@ -113,7 +113,7 @@ public class SpectatorMenuEvents implements Listener {
         for (GamePlayer player : spectatablePlayers(viewer)) {
             entries.add(new TeleportToPlayer(player));
         }
-        return buildMenu(viewer, null, Component.text("Spectator Menu", NamedTextColor.AQUA), entries, MAIN_MIN_ROWS, false, page);
+        return buildMenu(viewer, null, Component.text("Spectator Menu", NamedTextColor.BLACK), entries, MAIN_MIN_ROWS, false, page);
     }
 
     private MenuHolder teamMenu(GamePlayer viewer, GameTeam team, int page) {

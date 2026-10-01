@@ -272,9 +272,6 @@ public class VoidWars extends GameModule {
     private void setupPlayer(GamePlayer player, boolean clearItems, boolean preserveLocation) {
         GameLocation spawn = world().getPoint(SPAWN);
         GameLocation startLocation = preserveLocation && player.location() != null ? player.location() : spawn;
-        if (!preserveLocation) {
-            player.teleport(spawn);
-        }
         player.setSpawnPoint(startLocation);
         player.setSpectatablePlayers(teamSize <= 1 ? () -> playerManager().getPlayers() : List::of);
         player.setSpectatableTeams(teamSize <= 1 ? List::of : () -> teamManager().getTeams());

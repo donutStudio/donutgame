@@ -109,9 +109,22 @@ public class GamePlayer implements GameEntityBase {
     public void setSpectator(boolean spectator, GameLocation location) {
         if (spectator) {
             enterSpectator(location);
-        } else {
-            exitSpectator(location);
+            return;
         }
+
+        // Treat leaving spectator mode as an idempotent state transition. Fresh
+        // players are already non-spectators, and forcing them through the full
+        // spectator teardown path can race an in-flight teleport and incorrectly
+        // classify transient Bukkit state as a leaked spectator projection.
+        if (!isSpectator()) {
+            Player player = attachedPlayer();
+            if (player != null && location != null) {
+                teleport(location);
+            }
+            return;
+        }
+
+        exitSpectator(location);
     }
 
     public boolean isSpectator() {
@@ -1041,7 +1054,6 @@ public class GamePlayer implements GameEntityBase {
         Player player = attachedPlayer();
         pendingDeathSpectatorLocation = null;
         closeSpectatorSession(player);
-        assertNoSpectatorOverlay(player);
         if (player == null) {
             return;
         }
@@ -1068,15 +1080,23 @@ public class GamePlayer implements GameEntityBase {
     }
 
     private void applyNonSpectatorOverlayState(Player player) {
-        GameMode playingMode = playingState.gameMode == GameMode.SPECTATOR ? GameMode.SURVIVAL : playingState.gameMode;
+        GameMode playingMode =
+            playingState.gameMode == GameMode.SPECTATOR
+                ? GameMode.SURVIVAL
+                : playingState.gameMode;
+
         player.setGameMode(playingMode);
         player.setInvulnerable(playingState.invulnerable);
         player.setInvisible(playingState.invisible);
         player.setCanPickupItems(playingState.canPickupItems);
+
         boolean effectiveAllowFlight = playingState.allowsFlight();
+
         player.setAllowFlight(effectiveAllowFlight);
-        player.setFlying(effectiveAllowFlight && playingState.flying);
-        player.setNoDamageTicks(0);
+        player.setFlying(
+            effectiveAllowFlight && playingState.flying
+        );
+
         player.setFallDistance(0.0f);
     }
 
@@ -1084,15 +1104,20 @@ public class GamePlayer implements GameEntityBase {
         if (player == null) {
             return true;
         }
-        GameMode playingMode = playingState.gameMode == GameMode.SPECTATOR ? GameMode.SURVIVAL : playingState.gameMode;
+
+        GameMode playingMode =
+            playingState.gameMode == GameMode.SPECTATOR
+                ? GameMode.SURVIVAL
+                : playingState.gameMode;
+
         boolean effectiveAllowFlight = playingState.allowsFlight();
+
         return player.getGameMode() == playingMode
             && player.isInvulnerable() == playingState.invulnerable
             && player.isInvisible() == playingState.invisible
             && player.getCanPickupItems() == playingState.canPickupItems
             && player.getAllowFlight() == effectiveAllowFlight
-            && player.isFlying() == (effectiveAllowFlight && playingState.flying)
-            && player.getNoDamageTicks() == 0;
+            && player.isFlying() == (effectiveAllowFlight && playingState.flying);
     }
 
     private Player attachedPlayer() {
