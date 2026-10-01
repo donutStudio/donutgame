@@ -16,11 +16,6 @@ TeamManager teamManager() // Returns the module's team manager
 BorderManager borderManager() // Returns the module's border manager
 GameWorld world() // Returns this module's active world
 ```
-**GameData**
-```java
-LootTable lootTable(NamespacedKey key) // Returns a loot table from a namespaced key
-LootTable lootTable(String key) // Similar to above but takes a string with a namespace, like "namespace:loot_table"
-```
 
 ## MAP SYSTEM
 

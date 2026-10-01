@@ -1,6 +1,7 @@
 name: Donutgame
 version: ${version}
 main: com.donutsforlife11.donutgame.Donutgame
+bootstrapper: com.donutsforlife11.donutgame.DonutgameBootstrap
 description: Donutsforlife11's base for creating minigames
 api-version: '26.2'
 authors:

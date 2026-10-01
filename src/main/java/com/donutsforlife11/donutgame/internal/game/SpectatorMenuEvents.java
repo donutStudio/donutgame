@@ -26,6 +26,7 @@ import com.donutsforlife11.donutgame.api.team.GameTeam;
 import io.papermc.paper.datacomponent.DataComponentTypes;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 
 public class SpectatorMenuEvents implements Listener {
     private static final int ROW_SIZE = 9;
@@ -215,8 +216,12 @@ public class SpectatorMenuEvents implements Listener {
 
     private static ItemStack playerHead(GamePlayer player) {
         ItemStack item = new ItemStack(Material.PLAYER_HEAD);
-        item.editMeta(SkullMeta.class, meta -> meta.setOwningPlayer(player.bukkitPlayer()));
-        item.setData(DataComponentTypes.ITEM_NAME, Component.text(player.bukkitPlayer().getName(), NamedTextColor.WHITE));
+        item.editMeta(SkullMeta.class, meta -> {
+            meta.setOwningPlayer(player.bukkitPlayer());
+            meta.customName(
+                Component.text(player.bukkitPlayer().getName()).decoration(TextDecoration.ITALIC, false)
+            );
+        });
         return item;
     }
 

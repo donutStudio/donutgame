@@ -142,6 +142,9 @@ public class FileService {
         if (gameId == null || gameId.isBlank()) {
             throw new IllegalArgumentException("Module config is missing id");
         }
+        if (!gameId.matches("[a-z0-9._-]+")) {
+            throw new IllegalArgumentException("Module id must be a valid Minecraft namespace ([a-z0-9._-]+): " + gameId);
+        }
 
         if (mainClass == null || mainClass.isBlank()) {
             throw new IllegalArgumentException("Module config is missing main_class");

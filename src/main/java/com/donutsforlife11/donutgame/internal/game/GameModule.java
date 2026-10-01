@@ -24,6 +24,7 @@ import org.bukkit.plugin.EventExecutor;
 
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.border.BorderManager;
+import com.donutsforlife11.donutgame.api.data.GameData;
 import com.donutsforlife11.donutgame.api.entity.GameEntity;
 import com.donutsforlife11.donutgame.api.event.GameEventAdapterRegistry;
 import com.donutsforlife11.donutgame.api.event.GameEventRegistrar;
@@ -61,6 +62,7 @@ public abstract class GameModule {
     private TimeManager timeManager;
     private UIManager uiManager;
     private BorderManager borderManager;
+    private GameData data;
     private GameEventRegistrar eventRegistrar;
     private String id;
     private String name;
@@ -98,6 +100,7 @@ public abstract class GameModule {
         this.timeManager = timeManager;
         this.uiManager = uiManager;
         this.borderManager = borderManager;
+        this.data = new GameData(this, descriptor.file());
         this.eventRegistrar = new GameEventRegistrar(this);
     }
 
@@ -213,6 +216,10 @@ public abstract class GameModule {
 
     public YamlConfiguration config() {
         return config;
+    }
+
+    public GameData data() {
+        return data;
     }
 
     public MapManager mapManager() {

@@ -42,8 +42,11 @@ public class DonutgameCommand implements PluginCommand {
         plugin.moduleService().unloadAll();
         plugin.reloadConfig();
         plugin.fileService().reload();
+        plugin.getServer().getDatapackManager().refreshPacks();
+        plugin.getServer().reloadData();
+        plugin.getServer().updateResources();
         plugin.getLogger().info(
-            "Reloaded Donutgame configuration with "
+            "Reloaded Donutgame configuration and server data with "
                 + plugin.fileService().gameModules().size()
                 + " discovered module(s) and "
                 + plugin.fileService().gameMaps().size()
