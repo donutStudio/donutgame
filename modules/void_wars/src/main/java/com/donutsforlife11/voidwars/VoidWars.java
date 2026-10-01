@@ -316,11 +316,10 @@ public class VoidWars extends GameModule {
                 block = location.bukkitLocation().getBlock();
             }
             if (block.getState() instanceof Chest chest) {
-                for (int i = 0; i < Math.max(1, teamSize); i++) {
-                    for (ItemStack item : GameItems.fromLootTable(lootTable)) {
-                        chest.getBlockInventory().addItem(item);
-                    }
-                }
+                chest.getBlockInventory().clear();
+                chest.setLootTable(lootTable);
+                chest.setSeed(ThreadLocalRandom.current().nextLong());
+                chest.update(true);
             }
         }
         if (roundTimer != null && roundTimer.elapsedTicks() > 0) {

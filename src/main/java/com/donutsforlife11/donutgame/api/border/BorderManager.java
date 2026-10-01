@@ -34,6 +34,7 @@ public class BorderManager {
     private Particle movingParticle = Particle.RAID_OMEN;
     private GameTimer damageTimer;
     private GameTimer particleTimer;
+    private boolean damageTimerArmed;
 
     public BorderManager(GameModule module) {
         this.module = module;
@@ -140,6 +141,7 @@ public class BorderManager {
                 .start();
         }
         if (damageTimer == null || damageTimer.isCancelled() || damageTimer.isFinished()) {
+            damageTimerArmed = false;
             damageTimer = module.timeManager().newTimer()
                 .onTick(damageInterval, timer -> damagePlayersOutsideBorders())
                 .start();
@@ -157,6 +159,7 @@ public class BorderManager {
         if (damageTimer != null) {
             damageTimer.cancel();
             damageTimer = null;
+            damageTimerArmed = false;
         }
     }
 
@@ -168,6 +171,10 @@ public class BorderManager {
 
     private void damagePlayersOutsideBorders() {
         if (borders.isEmpty() || damage <= 0.0) {
+            return;
+        }
+        if (!damageTimerArmed) {
+            damageTimerArmed = true;
             return;
         }
         for (var gamePlayer : module.playerManager().getNonSpectators()) {

@@ -127,6 +127,38 @@ public class WorldService {
         return future;
     }
 
+    public CompletableFuture<Void> movePlayers(World from, World to) {
+        Objects.requireNonNull(from, "from");
+        Objects.requireNonNull(to, "to");
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        runSync(() -> {
+            List<Player> players = List.copyOf(from.getPlayers());
+            if (players.isEmpty()) {
+                future.complete(null);
+                return;
+            }
+            List<CompletableFuture<Boolean>> teleports = players.stream()
+                .map(player -> teleportToMatchingLocation(player, to))
+                .toList();
+            CompletableFuture.allOf(teleports.toArray(CompletableFuture[]::new))
+                .whenComplete((ignored, throwable) -> runSync(() -> {
+                    if (throwable != null) {
+                        throw new IllegalStateException("Failed to move players from " + from.getName() + " to " + to.getName() + ".", throwable);
+                    }
+                    for (int i = 0; i < players.size(); i++) {
+                        if (!Boolean.TRUE.equals(teleports.get(i).getNow(false))) {
+                            throw new IllegalStateException("Failed to move " + players.get(i).getName() + " from " + from.getName() + " to " + to.getName() + ".");
+                        }
+                    }
+                    if (!from.getPlayers().isEmpty()) {
+                        throw new IllegalStateException("Cannot unload world " + from.getName() + " because players remain in it after replacement world teleport.");
+                    }
+                    future.complete(null);
+                }, future));
+        }, future);
+        return future;
+    }
+
     public void unloadAll() {
         for (String worldName : List.copyOf(ownedWorldNames)) {
             try {
@@ -188,6 +220,20 @@ public class WorldService {
         if (!world.getPlayers().isEmpty()) {
             throw new IllegalStateException("Cannot unload world " + world.getName() + " because players remain in it.");
         }
+    }
+
+    private CompletableFuture<Boolean> teleportToMatchingLocation(Player player, World destinationWorld) {
+        player.closeInventory();
+        Location from = player.getLocation();
+        Location destination = new Location(
+            destinationWorld,
+            from.getX(),
+            from.getY(),
+            from.getZ(),
+            from.getYaw(),
+            from.getPitch()
+        );
+        return player.teleportAsync(destination);
     }
 
     private Location fallbackLocation(World unloadingWorld) {
