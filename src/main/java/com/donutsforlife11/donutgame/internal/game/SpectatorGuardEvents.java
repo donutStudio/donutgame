@@ -11,6 +11,9 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
@@ -18,6 +21,7 @@ import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
@@ -62,9 +66,6 @@ public class SpectatorGuardEvents implements Listener {
         if (!isSpectator(event.getPlayer())) {
             return;
         }
-        if (event.getAction() == Action.LEFT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_AIR) {
-            return;
-        }
         event.setCancelled(true);
         event.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY);
         event.setUseItemInHand(org.bukkit.event.Event.Result.DENY);
@@ -95,8 +96,42 @@ public class SpectatorGuardEvents implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
+    public void preventInventoryClick(InventoryClickEvent event) {
+        if (event.getInventory().getHolder() instanceof SpectatorMenuEvents.MenuHolder) {
+            return;
+        }
+        if (event.getWhoClicked() instanceof Player player && isSpectator(player)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void preventInventoryDrag(InventoryDragEvent event) {
+        if (event.getInventory().getHolder() instanceof SpectatorMenuEvents.MenuHolder) {
+            return;
+        }
+        if (event.getWhoClicked() instanceof Player player && isSpectator(player)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void preventSwapHands(PlayerSwapHandItemsEvent event) {
+        if (isSpectator(event.getPlayer())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void preventItemDrop(PlayerDropItemEvent event) {
         if (isSpectator(event.getPlayer())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void preventItemPickup(EntityPickupItemEvent event) {
+        if (event.getEntity() instanceof Player player && isSpectator(player)) {
             event.setCancelled(true);
         }
     }

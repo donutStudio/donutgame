@@ -74,7 +74,16 @@ public class GamePlayer implements GameEntityBase {
     }
 
     public Entity bukkitEntity() {
-        return bukkitPlayer();
+        return attachedPlayer();
+    }
+
+    @Override
+    public GameLocation location() {
+        Player player = attachedPlayer();
+        if (player != null) {
+            return new GameLocation(world(), player.getLocation());
+        }
+        return lastLocation == null ? null : new GameLocation(world(), lastLocation);
     }
 
     public GameModule module() {
@@ -133,7 +142,7 @@ public class GamePlayer implements GameEntityBase {
             throw new IllegalArgumentException("location cannot be null");
         }
         cancelRespawn();
-        Player player = bukkitPlayer();
+        Player player = attachedPlayer();
         if (player != null && player.isDead()) {
             if (ticks > 0) {
                 if (pendingDeathSpectatorLocation == null) {
@@ -242,10 +251,14 @@ public class GamePlayer implements GameEntityBase {
     }
 
     public void setGameMode(GameMode gameMode) {
-        playingState.gameMode = gameMode == null ? GameMode.SURVIVAL : gameMode;
-        if (playingState.gameMode == GameMode.CREATIVE) {
-            playingState.allowFlight = true;
-        } else if (playingState.gameMode != GameMode.SPECTATOR) {
+        GameMode nextMode = gameMode == null ? GameMode.SURVIVAL : gameMode;
+        if (nextMode == GameMode.SPECTATOR) {
+            setSpectator(true);
+            return;
+        }
+        playingState.gameMode = nextMode;
+        playingState.allowFlight = playingState.gameMode == GameMode.CREATIVE;
+        if (!playingState.allowFlight) {
             playingState.flying = false;
         }
         applyVisiblePlayer(player -> player.setGameMode(playingState.gameMode));
@@ -313,9 +326,8 @@ public class GamePlayer implements GameEntityBase {
 
     public void reset() {
         cancelRespawn();
-        closeSpectatorSession();
         playingState.reset(GameMode.SURVIVAL);
-        applyPlayingStateIfVisible();
+        forcePlayingState("reset");
     }
 
     public String lastWorldName() {
@@ -438,7 +450,7 @@ public class GamePlayer implements GameEntityBase {
 
     @Override
     public void setVelocity(Vector velocity) {
-        Player player = bukkitPlayer();
+        Player player = attachedPlayer();
         if (player != null) {
             player.setVelocity(velocity == null ? new Vector() : velocity.clone());
         }
@@ -753,16 +765,23 @@ public class GamePlayer implements GameEntityBase {
         if (spawnPoint == null) {
             spawnPoint = defaultSpawnPoint();
         }
-        if (!isSpectator() && SpectatorSession.hasMarker(this, player)) {
-            forcePlayingState("reattach");
-        } else if (!isSpectator()) {
+        if (!isSpectator()) {
             capturePlayingState(player);
-        } else {
-            if (spectatorSession != null) {
-                spectatorSession.apply(player);
-            } else {
-                playingState.ageTimedValues();
+        } else if (spectatorSession != null) {
+            spectatorSession.apply(player);
+        } else if (pendingDeathSpectatorLocation != null && !player.isDead()) {
+            // A disconnect can happen between death and the post-respawn callback.
+            // On reconnect the Bukkit player is alive again, so promote the pending
+            // in-memory death state into a real spectator session instead of leaving
+            // an invisible logical-spectator flag that only the damage guards see.
+            GameLocation spectatorLocation = pendingDeathSpectatorLocation;
+            pendingDeathSpectatorLocation = null;
+            spectatorSession = SpectatorSession.open(this, player);
+            if (spectatorLocation != null) {
+                teleport(spectatorLocation);
             }
+        } else {
+            playingState.ageTimedValues();
         }
     }
 
@@ -774,7 +793,6 @@ public class GamePlayer implements GameEntityBase {
         cancelRespawn();
         pendingDeathSpectatorLocation = null;
         closeSpectatorSession(player);
-        SpectatorSession.clearMarker(this, player);
         resetPlayingStateForGame();
         state = PlayerState.ONLINE;
         World world = player.getWorld();
@@ -786,13 +804,35 @@ public class GamePlayer implements GameEntityBase {
 
     void markOffline() {
         Player player = bukkitPlayer();
-        if (player != null && !isSpectator()) {
+        if (player == null) {
+            state = PlayerState.OFFLINE;
+            return;
+        }
+
+        boolean logicalSpectator = isSpectator();
+        if (!logicalSpectator) {
             capturePlayingState(player);
         }
-        closeSpectatorSession(player);
-        pendingDeathSpectatorLocation = null;
-        forcePlayingState("disconnect");
+
+        // Detach first. From this point onward, game/module code may still run
+        // during PlayerQuitEvent, but attachedPlayer() will return null and no
+        // spectator overlay can be written back onto the disconnecting entity.
         state = PlayerState.OFFLINE;
+
+        // Spectatorship is intentionally preserved in memory across relogs.
+        // Only remove its Bukkit projection so Minecraft cannot serialize
+        // spectator flight/inventory state or any legacy projection bits.
+        if (logicalSpectator) {
+            if (spectatorSession != null) {
+                spectatorSession.detach(player);
+            }
+            if (!player.isDead()) {
+                playingState.apply(player);
+            }
+            applyNonSpectatorOverlayState(player);
+            assertPhysicalPlayingOverlay(player, "disconnect");
+            player.updateInventory();
+        }
     }
 
     public void enterPostDeathSpectator(GameLocation location) {
@@ -846,7 +886,7 @@ public class GamePlayer implements GameEntityBase {
     }
 
     private void respawnNow(GameLocation location) {
-        Player player = bukkitPlayer();
+        Player player = attachedPlayer();
         if (player != null && player.isDead()) {
             pendingVanillaRespawnLocation = location == null ? spawnPoint() : location;
             return;
@@ -858,7 +898,7 @@ public class GamePlayer implements GameEntityBase {
         }
         revivePlayingState(maxHealth());
         exitSpectator(target);
-        player = bukkitPlayer();
+        player = attachedPlayer();
         if (player != null) {
             player.setNoDamageTicks(20);
         }
@@ -874,7 +914,7 @@ public class GamePlayer implements GameEntityBase {
 
     private void captureVisiblePlayingState() {
         if (!isSpectator()) {
-            Player player = bukkitPlayer();
+            Player player = attachedPlayer();
             if (player != null) {
                 capturePlayingState(player);
             }
@@ -884,7 +924,7 @@ public class GamePlayer implements GameEntityBase {
     }
 
     private void applyPlayingStateIfVisible() {
-        Player player = bukkitPlayer();
+        Player player = attachedPlayer();
         if (player != null && !isSpectator()) {
             if (player.isDead()) {
                 applyNonSpectatorOverlayState(player);
@@ -892,7 +932,6 @@ public class GamePlayer implements GameEntityBase {
                 return;
             }
             playingState.apply(player);
-            SpectatorSession.clearMarker(this, player);
             player.updateInventory();
         }
     }
@@ -908,7 +947,7 @@ public class GamePlayer implements GameEntityBase {
     }
 
     private void enterSpectator(GameLocation location) {
-        Player player = bukkitPlayer();
+        Player player = attachedPlayer();
         if (player != null && player.isDead()) {
             pendingDeathSpectatorLocation = location == null ? locationOrSpawn() : location;
             return;
@@ -928,7 +967,7 @@ public class GamePlayer implements GameEntityBase {
     }
 
     private void exitSpectator(GameLocation location) {
-        Player player = bukkitPlayer();
+        Player player = attachedPlayer();
         pendingDeathSpectatorLocation = null;
         closeSpectatorSession(player);
         applyPlayingStateIfVisible();
@@ -936,10 +975,6 @@ public class GamePlayer implements GameEntityBase {
         if (player != null && location != null) {
             teleport(location);
         }
-    }
-
-    private void closeSpectatorSession() {
-        closeSpectatorSession(bukkitPlayer());
     }
 
     private void closeSpectatorSession(Player player) {
@@ -951,11 +986,21 @@ public class GamePlayer implements GameEntityBase {
     }
 
     private void assertNoSpectatorOverlay(Player player) {
-        if (spectatorSession != null) {
-            throw new IllegalStateException("Player " + uuid + " still has an active Donutgame spectator session after spectator exit.");
+        if (spectatorSession != null || pendingDeathSpectatorLocation != null) {
+            throw new IllegalStateException("Player " + uuid + " still has an active in-memory spectator session after spectator exit.");
         }
-        if (SpectatorSession.hasMarker(this, player)) {
-            SpectatorSession.clearMarker(this, player);
+        assertPhysicalPlayingOverlay(player, "spectator exit");
+    }
+
+    private void assertPhysicalPlayingOverlay(Player player, String transition) {
+        if (player == null) {
+            return;
+        }
+        if (!matchesPlayingOverlay(player)) {
+            applyNonSpectatorOverlayState(player);
+        }
+        if (!matchesPlayingOverlay(player)) {
+            throw new IllegalStateException("Player " + uuid + " still has spectator projection state during " + transition + ".");
         }
     }
 
@@ -993,7 +1038,7 @@ public class GamePlayer implements GameEntityBase {
     }
 
     private void forcePlayingState(String transition) {
-        Player player = bukkitPlayer();
+        Player player = attachedPlayer();
         pendingDeathSpectatorLocation = null;
         closeSpectatorSession(player);
         assertNoSpectatorOverlay(player);
@@ -1003,13 +1048,11 @@ public class GamePlayer implements GameEntityBase {
         if (player.isDead()) {
             applyNonSpectatorOverlayState(player);
             player.updateInventory();
+            assertNoSpectatorOverlay(player);
             return;
         }
         playingState.apply(player);
-        SpectatorSession.clearMarker(this, player);
-        if (SpectatorSession.hasMarker(this, player) || player.isInvulnerable() != playingState.invulnerable || player.isInvisible() != playingState.invisible) {
-            throw new IllegalStateException("Player " + uuid + " still has spectator state during " + transition + ".");
-        }
+        assertNoSpectatorOverlay(player);
         player.updateInventory();
     }
 
@@ -1017,7 +1060,7 @@ public class GamePlayer implements GameEntityBase {
         if (player == null) {
             return;
         }
-        if (isSpectator() || SpectatorSession.hasMarker(this, player)) {
+        if (isSpectator()) {
             playingState.ageTimedValues();
             return;
         }
@@ -1025,21 +1068,40 @@ public class GamePlayer implements GameEntityBase {
     }
 
     private void applyNonSpectatorOverlayState(Player player) {
+        GameMode playingMode = playingState.gameMode == GameMode.SPECTATOR ? GameMode.SURVIVAL : playingState.gameMode;
+        player.setGameMode(playingMode);
         player.setInvulnerable(playingState.invulnerable);
         player.setInvisible(playingState.invisible);
         player.setCanPickupItems(playingState.canPickupItems);
-        if (player.getGameMode() == GameMode.SPECTATOR) {
-            player.setGameMode(playingState.gameMode == GameMode.SPECTATOR ? GameMode.SURVIVAL : playingState.gameMode);
-        }
         boolean effectiveAllowFlight = playingState.allowsFlight();
         player.setAllowFlight(effectiveAllowFlight);
         player.setFlying(effectiveAllowFlight && playingState.flying);
-        SpectatorSession.clearMarker(this, player);
+        player.setNoDamageTicks(0);
+        player.setFallDistance(0.0f);
+    }
+
+    private boolean matchesPlayingOverlay(Player player) {
+        if (player == null) {
+            return true;
+        }
+        GameMode playingMode = playingState.gameMode == GameMode.SPECTATOR ? GameMode.SURVIVAL : playingState.gameMode;
+        boolean effectiveAllowFlight = playingState.allowsFlight();
+        return player.getGameMode() == playingMode
+            && player.isInvulnerable() == playingState.invulnerable
+            && player.isInvisible() == playingState.invisible
+            && player.getCanPickupItems() == playingState.canPickupItems
+            && player.getAllowFlight() == effectiveAllowFlight
+            && player.isFlying() == (effectiveAllowFlight && playingState.flying)
+            && player.getNoDamageTicks() == 0;
+    }
+
+    private Player attachedPlayer() {
+        return state == PlayerState.ONLINE ? bukkitPlayer() : null;
     }
 
     private Player visiblePlayer() {
-        Player player = bukkitPlayer();
-        return player != null && !isSpectator() && !SpectatorSession.hasMarker(this, player) ? player : null;
+        Player player = attachedPlayer();
+        return player != null && !isSpectator() ? player : null;
     }
 
     private void applyVisiblePlayer(Consumer<Player> action) {
@@ -1085,11 +1147,8 @@ public class GamePlayer implements GameEntityBase {
     }
 
     private GameLocation locationOrSpawn() {
-        Player player = bukkitPlayer();
-        if (player != null) {
-            return new GameLocation(world(), player.getLocation());
-        }
-        return spawnPoint();
+        GameLocation location = location();
+        return location == null ? spawnPoint() : location;
     }
 
     private GameLocation defaultSpawnPoint() {

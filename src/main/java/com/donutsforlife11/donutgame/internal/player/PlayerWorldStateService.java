@@ -30,7 +30,8 @@ import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.player.PlayerAttributeDefaults;
 
 public class PlayerWorldStateService implements Listener {
-    private static final String SPECTATOR_MARKER_KEY = "spectator_session";
+    // Migration-only key from pre-memory-only spectator builds. New code never writes it.
+    private static final String LEGACY_SPECTATOR_MARKER_KEY = "spectator_session";
 
     private final Donutgame plugin;
     private final Map<UUID, Map<UUID, PlayerWorldState>> statesByPlayer = new ConcurrentHashMap<>();
@@ -83,7 +84,7 @@ public class PlayerWorldStateService implements Listener {
     public void cleanupRuntimeState() {
         statesByPlayer.clear();
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (hasDonutgameSpectatorMarker(player)) {
+            if (hasLegacySpectatorMarker(player)) {
                 clearLeakedSpectatorOverlay(player);
             }
         }
@@ -93,7 +94,24 @@ public class PlayerWorldStateService implements Listener {
         if (player == null || world == null) {
             return;
         }
-        if (hasDonutgameSpectatorMarker(player)) {
+
+        // The current spectator system is memory-only. This marker is recognized
+        // solely so servers upgrading from older builds can erase stale data.
+        boolean hadLegacySpectatorMarker = hasLegacySpectatorMarker(player);
+        if (hadLegacySpectatorMarker) {
+            player.getPersistentDataContainer().remove(legacySpectatorMarkerKey());
+        }
+
+        // Game worlds are owned by GamePlayer. Never snapshot their transient Bukkit
+        // representation here or spectator overlays can become durable world state.
+        if (isolatedWorldIds.contains(world.getUID())) {
+            if (hadLegacySpectatorMarker) {
+                clearLeakedSpectatorOverlay(player);
+            }
+            return;
+        }
+
+        if (hadLegacySpectatorMarker) {
             clearLeakedSpectatorOverlay(player);
         }
         statesByPlayer.computeIfAbsent(player.getUniqueId(), ignored -> new ConcurrentHashMap<>())
@@ -104,25 +122,27 @@ public class PlayerWorldStateService implements Listener {
         if (player == null || world == null) {
             return;
         }
-        PlayerWorldState state = statesByPlayer
-            .getOrDefault(player.getUniqueId(), Map.of())
-            .get(world.getUID());
-        if (state != null) {
-            state.apply(player, spectatorMarkerKey());
-            player.updateInventory();
-            return;
-        }
-        if (hasDonutgameSpectatorMarker(player)) {
-            clearLeakedSpectatorOverlay(player);
-            player.updateInventory();
-            return;
-        }
+        // Isolated game worlds never restore a PlayerWorldState snapshot. GamePlayer is
+        // the single authority for in-game player state, so always start from a clean base.
         if (isolatedWorldIds.contains(world.getUID())) {
             applyEmptyGameState(player);
             player.updateInventory();
             return;
         }
-        player.getPersistentDataContainer().remove(spectatorMarkerKey());
+        PlayerWorldState state = statesByPlayer
+            .getOrDefault(player.getUniqueId(), Map.of())
+            .get(world.getUID());
+        if (state != null) {
+            state.apply(player, legacySpectatorMarkerKey());
+            player.updateInventory();
+            return;
+        }
+        if (hasLegacySpectatorMarker(player)) {
+            clearLeakedSpectatorOverlay(player);
+            player.updateInventory();
+            return;
+        }
+        player.getPersistentDataContainer().remove(legacySpectatorMarkerKey());
     }
 
     private void applyEmptyGameState(Player player) {
@@ -166,7 +186,7 @@ public class PlayerWorldStateService implements Listener {
         player.setNoDamageTicks(0);
         player.setPortalCooldown(0);
         player.setRespawnLocation(null, true);
-        player.getPersistentDataContainer().remove(spectatorMarkerKey());
+        player.getPersistentDataContainer().remove(legacySpectatorMarkerKey());
     }
 
     private void clearLeakedSpectatorOverlay(Player player) {
@@ -179,16 +199,17 @@ public class PlayerWorldStateService implements Listener {
         player.setCanPickupItems(true);
         player.setAllowFlight(player.getGameMode() == GameMode.CREATIVE);
         player.setFlying(false);
+        player.setNoDamageTicks(0);
         player.setFallDistance(0.0f);
-        player.getPersistentDataContainer().remove(spectatorMarkerKey());
+        player.getPersistentDataContainer().remove(legacySpectatorMarkerKey());
     }
 
-    private boolean hasDonutgameSpectatorMarker(Player player) {
-        return player.getPersistentDataContainer().has(spectatorMarkerKey());
+    private boolean hasLegacySpectatorMarker(Player player) {
+        return player.getPersistentDataContainer().has(legacySpectatorMarkerKey());
     }
 
-    private NamespacedKey spectatorMarkerKey() {
-        return new NamespacedKey(plugin, SPECTATOR_MARKER_KEY);
+    private NamespacedKey legacySpectatorMarkerKey() {
+        return new NamespacedKey(plugin, LEGACY_SPECTATOR_MARKER_KEY);
     }
 
     private static void resetAttributes(Player player) {
@@ -295,7 +316,7 @@ public class PlayerWorldStateService implements Listener {
             );
         }
 
-        void apply(Player player, NamespacedKey spectatorMarkerKey) {
+        void apply(Player player, NamespacedKey legacySpectatorMarkerKey) {
             PlayerInventory playerInventory = player.getInventory();
             playerInventory.setStorageContents(cloneItems(inventory));
             playerInventory.setArmorContents(cloneItems(armor));
@@ -337,7 +358,7 @@ public class PlayerWorldStateService implements Listener {
             player.setNoDamageTicks(noDamageTicks);
             player.setPortalCooldown(portalCooldown);
             player.setRespawnLocation(respawnLocation == null ? null : respawnLocation.clone(), true);
-            player.getPersistentDataContainer().remove(spectatorMarkerKey);
+            player.getPersistentDataContainer().remove(legacySpectatorMarkerKey);
         }
 
         private void applyAttributes(Player player) {

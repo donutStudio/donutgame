@@ -1,39 +1,27 @@
 package com.donutsforlife11.donutgame.api.player;
 
-import org.bukkit.GameMode;
-import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.persistence.PersistentDataType;
 
-import com.donutsforlife11.donutgame.api.item.GameItem;
-import com.donutsforlife11.donutgame.api.item.GameItemComponents;
-
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-
+/**
+ * Runtime-only spectator state.
+ *
+ * This class deliberately does not persist logical spectator state. The
+ * GamePlayer instance is the sole authority for whether the player is currently
+ * spectating; this object only projects that in-memory state onto an attached
+ * Bukkit Player while the player is online.
+ */
 final class SpectatorSession implements AutoCloseable {
-    private static final String MARKER_KEY = "spectator_session";
-
     private final GamePlayer owner;
     private boolean closed;
 
-    private SpectatorSession(GamePlayer owner, Player player) {
+    private SpectatorSession(GamePlayer owner) {
         this.owner = owner;
     }
 
     static SpectatorSession open(GamePlayer owner, Player player) {
-        SpectatorSession session = new SpectatorSession(owner, player);
-        if (player != null) {
-            session.apply(player);
-        }
+        SpectatorSession session = new SpectatorSession(owner);
+        session.apply(player);
         return session;
-    }
-
-    static boolean hasMarker(GamePlayer owner, Player player) {
-        return player != null
-            && player.getPersistentDataContainer().has(markerKey(owner), PersistentDataType.STRING);
     }
 
     @Override
@@ -46,50 +34,32 @@ final class SpectatorSession implements AutoCloseable {
             return;
         }
         closed = true;
+        detach(player);
+    }
+
+    /**
+     * Removes spectator-only visibility/list presentation from an attached
+     * Bukkit player without changing the logical spectator session. This is
+     * used on disconnect while GamePlayer restores the normal Bukkit
+     * projection without clearing the in-memory spectator session.
+     */
+    void detach(Player player) {
         if (player == null) {
             return;
         }
         owner.module().plugin().spectatorService().hideSpectator(owner);
-        clearMarker(owner, player);
-        player.updateInventory();
     }
 
     void apply(Player player) {
-        if (closed || player == null) {
+        if (closed || player == null || !owner.isOnline() || !owner.uuid().equals(player.getUniqueId())) {
             return;
         }
-        player.setGameMode(GameMode.ADVENTURE);
-        player.setInvulnerable(true);
-        player.setInvisible(true);
-        player.setCanPickupItems(false);
+        // Spectator restrictions are authoritative in memory and enforced by
+        // SpectatorGuardEvents/SpectatorService. Do not set Bukkit invulnerability,
+        // invisibility, pickup, or game-mode flags that can be serialized to player.dat.
         player.setAllowFlight(true);
         player.setFlying(true);
         player.setFallDistance(0.0f);
-        player.setFireTicks(0);
-        player.setFreezeTicks(0);
-        player.setNoDamageTicks(Math.max(player.getNoDamageTicks(), 20));
-        player.getInventory().clear();
-        player.getInventory().setItem(0, spectatorMenuItem());
-        player.getPersistentDataContainer().set(markerKey(owner), PersistentDataType.STRING, "active");
-        player.updateInventory();
         owner.module().plugin().spectatorService().showSpectator(owner);
-    }
-
-    static void clearMarker(GamePlayer owner, Player player) {
-        if (player == null) {
-            return;
-        }
-        player.getPersistentDataContainer().remove(markerKey(owner));
-    }
-
-    private static NamespacedKey markerKey(GamePlayer owner) {
-        return new NamespacedKey(owner.module().plugin(), MARKER_KEY);
-    }
-
-    private ItemStack spectatorMenuItem() {
-        GameItem item = GameItem.of(Material.COMPASS);
-        item.setData(GameItemComponents.SPECTATOR_MENU, "true");
-        item.editMeta(meta -> meta.itemName(Component.text("Spectator Menu", NamedTextColor.AQUA)));
-        return item.copyBukkitItem();
     }
 }

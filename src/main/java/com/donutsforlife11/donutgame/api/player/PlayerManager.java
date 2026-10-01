@@ -76,7 +76,10 @@ public class PlayerManager {
             if (!teleported) {
                 throw new IllegalStateException("Failed to teleport " + player.getName() + " out of game " + module.index() + ".");
             }
-            beginExit(player, gamePlayer);
+            // prepareForWorldExit() already ran before teleport. Do not apply the game
+            // snapshot again here: PlayerWorldStateService has just restored the
+            // destination world's state during PlayerChangedWorldEvent.
+            finishExit(player, gamePlayer, false);
             module.log("Removed player " + player.getName() + " from game " + module.index() + ".");
             return true;
         });
@@ -176,7 +179,7 @@ public class PlayerManager {
         }
         GamePlayer gamePlayer = registry.get(player.getUniqueId());
         if (gamePlayer != null) {
-            beginExit(player, gamePlayer);
+            finishExit(player, gamePlayer, true);
             leavingPlayers.remove(player.getUniqueId());
             module.log("Detached player " + player.getName() + " after leaving game world " + module.index() + ".");
         }
@@ -196,7 +199,7 @@ public class PlayerManager {
         return Collections.unmodifiableSet(players);
     }
 
-    private void beginExit(Player player, GamePlayer gamePlayer) {
+    private void finishExit(Player player, GamePlayer gamePlayer, boolean cleanupPhysicalState) {
         if (gamePlayer == null) {
             return;
         }
@@ -204,10 +207,12 @@ public class PlayerManager {
         if (team != null) {
             team.removePlayer(gamePlayer);
         }
-        try {
-            gamePlayer.prepareForRemoval();
-        } catch (RuntimeException exception) {
-            module.plugin().getLogger().log(Level.SEVERE, "Failed to fully clean up player " + player.getName() + " while removing them from game " + module.index() + ".", exception);
+        if (cleanupPhysicalState) {
+            try {
+                gamePlayer.prepareForRemoval();
+            } catch (RuntimeException exception) {
+                module.plugin().getLogger().log(Level.SEVERE, "Failed to fully clean up player " + player.getName() + " while removing them from game " + module.index() + ".", exception);
+            }
         }
         module.uiManager().clear(gamePlayer);
         registry.remove(player);
