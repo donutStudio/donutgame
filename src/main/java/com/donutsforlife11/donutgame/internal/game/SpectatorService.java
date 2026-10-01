@@ -17,10 +17,6 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPl
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
-
 public class SpectatorService {
     private final Donutgame plugin;
 
@@ -45,12 +41,11 @@ public class SpectatorService {
         if (player == null) {
             return;
         }
-        player.playerListName(spectatorDisplayName(spectator, player, false));
         for (Player viewer : Bukkit.getOnlinePlayers()) {
             if (!viewer.equals(player)) {
                 viewer.hidePlayer(plugin, player);
             }
-            listSpectator(viewer, player, spectatorDisplayName(spectator, player, viewer.equals(player)));
+            listSpectator(viewer, player);
         }
     }
 
@@ -61,7 +56,7 @@ public class SpectatorService {
         }
         for (Player viewer : Bukkit.getOnlinePlayers()) {
             viewer.showPlayer(plugin, player);
-            listPlayer(viewer, player, false, player.playerListName());
+            listPlayer(viewer, player, false);
         }
     }
 
@@ -78,7 +73,7 @@ public class SpectatorService {
                 if (!viewer.equals(player)) {
                     viewer.hidePlayer(plugin, player);
                 }
-                listSpectator(viewer, player, spectatorDisplayName(spectator, player, viewer.equals(player)));
+                listSpectator(viewer, player);
             }
         }
     }
@@ -89,15 +84,15 @@ public class SpectatorService {
         return gamePlayer != null && gamePlayer.isSpectator();
     }
 
-    private void listSpectator(Player viewer, Player player, Component displayName) {
-        listPlayer(viewer, player, true, displayName);
+    private void listSpectator(Player viewer, Player player) {
+        listPlayer(viewer, player, true);
     }
 
-    private void listPlayer(Player viewer, Player player, boolean spectator, Component displayName) {
+    private void listPlayer(Player viewer, Player player, boolean spectator) {
         if (viewer == null || player == null) {
             return;
         }
-        if (sendPlayerInfo(viewer, player, spectator, displayName)) {
+        if (sendPlayerInfo(viewer, player, spectator)) {
             return;
         }
         try {
@@ -107,7 +102,7 @@ public class SpectatorService {
         }
     }
 
-    private boolean sendPlayerInfo(Player viewer, Player player, boolean spectator, Component displayName) {
+    private boolean sendPlayerInfo(Player viewer, Player player, boolean spectator) {
         try {
             var api = PacketEvents.getAPI();
             if (api == null) {
@@ -118,16 +113,15 @@ public class SpectatorService {
             if (channel == null) {
                 return false;
             }
-            boolean spoofSpectator = spectator && !viewer.equals(player);
             PlayerInfo info = new PlayerInfo(
                 userProfile(player),
                 true,
                 player.getPing(),
-                spoofSpectator ? GameMode.SPECTATOR : packetGameMode(player),
-                displayName,
+                spectator ? GameMode.SPECTATOR : packetGameMode(player),
+                null,
                 null
             );
-            EnumSet<Action> actions = EnumSet.of(Action.UPDATE_LISTED, Action.UPDATE_DISPLAY_NAME, Action.UPDATE_GAME_MODE, Action.UPDATE_LATENCY);
+            EnumSet<Action> actions = EnumSet.of(Action.UPDATE_LISTED, Action.UPDATE_GAME_MODE, Action.UPDATE_LATENCY);
             if (!viewer.equals(player)) {
                 actions.add(Action.ADD_PLAYER);
             }
@@ -156,20 +150,5 @@ public class SpectatorService {
             properties.add(new TextureProperty(property.getName(), property.getValue(), property.getSignature()));
         }
         return new UserProfile(player.getUniqueId(), player.getName(), properties);
-    }
-
-    private Component spectatorDisplayName(GamePlayer spectator, Player player, boolean localViewer) {
-        Component baseName = Component.text(player.getName(), NamedTextColor.GRAY)
-            .decoration(TextDecoration.ITALIC, localViewer);
-        var team = spectator.getTeam();
-        if (team != null) {
-            baseName = team.prefix()
-                .append(Component.text(player.getName(), team.color()))
-                .append(team.suffix());
-            if (localViewer) {
-                baseName = baseName.color(NamedTextColor.GRAY).decorate(TextDecoration.ITALIC);
-            }
-        }
-        return baseName;
     }
 }
