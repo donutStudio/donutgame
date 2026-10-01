@@ -99,8 +99,10 @@ public class GamePlayerConnectionEvents implements Listener {
         if (game == null) {
             return;
         }
+        GamePlayer player = game.playerManager().getPlayer(event.getPlayer());
+        GameLocation respawnLocation = player == null ? deathLocation : player.postDeathRespawnLocation(deathLocation);
         if (game.world() != null && game.world().bukkitWorld() != null) {
-            event.setRespawnLocation(deathLocation.toBukkit(game.world().bukkitWorld()));
+            event.setRespawnLocation(respawnLocation.toBukkit(game.world().bukkitWorld()));
         }
     }
 

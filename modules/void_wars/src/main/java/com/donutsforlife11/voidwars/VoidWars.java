@@ -420,19 +420,23 @@ public class VoidWars extends GameModule {
         if (team == null) {
             return false;
         }
-        int respawnTicks = baseRespawnTicks * Math.max(0, team.getPlayers().size() - 1);
-        if (team.allSpectators()) {
-            for (GamePlayer teammate : team.getPlayers()) {
-                teammate.cancelRespawn();
-            }
-            title(team.getPlayers(), Component.text(teamSize == 1 ? "Eliminated!" : "Team Eliminated!", NamedTextColor.RED, TextDecoration.BOLD));
+        if (livingTeammate(player) == null) {
+            eliminateTeam(team);
             return false;
         }
+        int respawnTicks = baseRespawnTicks * Math.max(0, team.getPlayers().size() - 1);
         player.respawn(respawnTicks, () -> {
             GamePlayer teammate = livingTeammate(player);
             return teammate == null ? player.spawnPoint() : teammate.location();
         });
         return true;
+    }
+
+    private void eliminateTeam(GameTeam team) {
+        for (GamePlayer teammate : team.getPlayers()) {
+            teammate.cancelRespawn();
+        }
+        title(team.getPlayers(), Component.text(teamSize == 1 ? "Eliminated!" : "Team Eliminated!", NamedTextColor.RED, TextDecoration.BOLD));
     }
 
     private GamePlayer livingTeammate(GamePlayer player) {
@@ -464,13 +468,31 @@ public class VoidWars extends GameModule {
     }
 
     private void checkRoundOver() {
+        checkRoundOver(null);
+    }
+
+    private void checkRoundOver(GamePlayer dyingPlayer) {
         if (!roundStarted) {
             return;
         }
-        Collection<GameTeam> aliveTeams = teamManager().getNonSpectatorTeams();
+        Collection<GameTeam> aliveTeams = aliveTeams(dyingPlayer);
         if (aliveTeams.size() <= 1) {
             endRound(aliveTeams.isEmpty() ? List.of() : aliveTeams.iterator().next().getPlayers());
         }
+    }
+
+    private Collection<GameTeam> aliveTeams(GamePlayer dyingPlayer) {
+        if (dyingPlayer == null) {
+            return teamManager().getNonSpectatorTeams();
+        }
+        List<GameTeam> aliveTeams = new ArrayList<>();
+        for (GameTeam team : teamManager().getTeams()) {
+            boolean alive = team.getNonSpectators().stream().anyMatch(player -> player != dyingPlayer);
+            if (alive) {
+                aliveTeams.add(team);
+            }
+        }
+        return aliveTeams;
     }
 
     @GameEventHandler
@@ -501,8 +523,15 @@ public class VoidWars extends GameModule {
             ? player.location()
             : world().getRegion(BORDER).center();
         player.setSpectator(true, spectatorLocation);
-        tryRespawn(player);
-        checkRoundOver();
+        if (canRespawn) {
+            tryRespawn(player);
+        } else {
+            GameTeam team = player.getTeam();
+            if (team != null) {
+                eliminateTeam(team);
+            }
+        }
+        checkRoundOver(player);
     }
 
     @GameEventHandler

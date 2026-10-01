@@ -50,6 +50,7 @@ public class GamePlayer implements GameEntityBase {
     private Location lastLocation;
     private GameLocation spawnPoint;
     private GameTimer respawnTimer;
+    private GameLocation pendingDeathSpectatorLocation;
     private GameLocation pendingVanillaRespawnLocation;
     private int pendingPostRespawnTimerTicks;
     private Supplier<GameLocation> pendingPostRespawnTimerLocation;
@@ -105,7 +106,7 @@ public class GamePlayer implements GameEntityBase {
     }
 
     public boolean isSpectator() {
-        return spectatorSession != null;
+        return spectatorSession != null || pendingDeathSpectatorLocation != null;
     }
 
     public void respawn() {
@@ -134,9 +135,16 @@ public class GamePlayer implements GameEntityBase {
         cancelRespawn();
         Player player = bukkitPlayer();
         if (player != null && player.isDead()) {
+            if (ticks > 0) {
+                if (pendingDeathSpectatorLocation == null) {
+                    pendingDeathSpectatorLocation = locationOrSpawn();
+                }
+                pendingVanillaRespawnLocation = pendingDeathSpectatorLocation;
+            } else {
+                pendingVanillaRespawnLocation = location.get();
+            }
             pendingPostRespawnTimerTicks = ticks;
             pendingPostRespawnTimerLocation = location;
-            pendingVanillaRespawnLocation = location.get();
             return;
         }
         if (ticks == 0) {
@@ -770,15 +778,18 @@ public class GamePlayer implements GameEntityBase {
 
     void markOffline() {
         Player player = bukkitPlayer();
-        if (player != null && spectatorSession == null) {
+        if (player != null && !isSpectator()) {
             playingState.capture(player);
         }
         closeSpectatorSession(player);
+        pendingDeathSpectatorLocation = null;
         state = PlayerState.OFFLINE;
     }
 
     public void enterPostDeathSpectator(GameLocation location) {
-        enterSpectator(location);
+        GameLocation spectatorLocation = pendingDeathSpectatorLocation == null ? location : pendingDeathSpectatorLocation;
+        pendingDeathSpectatorLocation = null;
+        enterSpectator(spectatorLocation);
         if (pendingPostRespawnTimerLocation != null) {
             int ticks = pendingPostRespawnTimerTicks;
             Supplier<GameLocation> respawnLocation = pendingPostRespawnTimerLocation;
@@ -803,13 +814,25 @@ public class GamePlayer implements GameEntityBase {
         playingState.ageTimedValues();
     }
 
+    public GameLocation postDeathRespawnLocation(GameLocation fallback) {
+        if (pendingVanillaRespawnLocation != null) {
+            return pendingVanillaRespawnLocation;
+        }
+        if (pendingDeathSpectatorLocation != null) {
+            return pendingDeathSpectatorLocation;
+        }
+        return fallback;
+    }
+
     void prepareForRemoval() {
         cancelRespawn();
+        pendingDeathSpectatorLocation = null;
         forcePlayingState("removal");
     }
 
     void prepareForWorldExit() {
         cancelRespawn();
+        pendingDeathSpectatorLocation = null;
         forcePlayingState("world exit");
     }
 
@@ -819,6 +842,7 @@ public class GamePlayer implements GameEntityBase {
             pendingVanillaRespawnLocation = location == null ? spawnPoint() : location;
             return;
         }
+        pendingDeathSpectatorLocation = null;
         if (location != null) {
             setSpawnPoint(location);
         }
@@ -840,7 +864,7 @@ public class GamePlayer implements GameEntityBase {
     }
 
     private void captureVisiblePlayingState() {
-        if (spectatorSession == null) {
+        if (!isSpectator()) {
             Player player = bukkitPlayer();
             if (player != null) {
                 playingState.capture(player);
@@ -871,8 +895,10 @@ public class GamePlayer implements GameEntityBase {
     private void enterSpectator(GameLocation location) {
         Player player = bukkitPlayer();
         if (player != null && player.isDead()) {
+            pendingDeathSpectatorLocation = location == null ? locationOrSpawn() : location;
             return;
         }
+        pendingDeathSpectatorLocation = null;
         if (spectatorSession == null) {
             if (player != null) {
                 playingState.capture(player);
@@ -888,6 +914,7 @@ public class GamePlayer implements GameEntityBase {
 
     private void exitSpectator(GameLocation location) {
         Player player = bukkitPlayer();
+        pendingDeathSpectatorLocation = null;
         closeSpectatorSession(player);
         assertNoSpectatorOverlay(player);
         if (player != null && location != null) {
@@ -974,7 +1001,7 @@ public class GamePlayer implements GameEntityBase {
 
     private Player visiblePlayer() {
         Player player = bukkitPlayer();
-        return player != null && spectatorSession == null ? player : null;
+        return player != null && !isSpectator() ? player : null;
     }
 
     private void applyVisiblePlayer(Consumer<Player> action) {
