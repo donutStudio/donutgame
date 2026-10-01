@@ -32,14 +32,11 @@ public final class SpeedZone extends GameModule {
     double initialBorder;
     double borderCheckpointLoss;
     double borderLapLoss;
-    double borderDamage;
-    int borderDamageInterval;
     int borderMoveTicks;
     int borderShrinkTicks;
 
     private SpeedZonePlayers players;
-    private SpeedZoneModifiers modifiers;
-    private SpeedZoneSidebar sidebar;
+    private SpeedZoneBuildProtection buildProtection;
     private GameBorder border;
     private GameTimer timer;
 
@@ -54,14 +51,13 @@ public final class SpeedZone extends GameModule {
         loadCourse();
         configureWorld();
 
-        modifiers = new SpeedZoneModifiers(this);
-        players = new SpeedZonePlayers(this, modifiers);
+        buildProtection = new SpeedZoneBuildProtection();
+        players = new SpeedZonePlayers(this, new SpeedZoneModifiers());
         players.assignTeams();
         players.loadCheckpointModifiers();
         players.setupAllPlayers();
 
-        sidebar = new SpeedZoneSidebar(this, players);
-        sidebar.show();
+        new SpeedZoneSidebar(this, players).show();
     }
 
     @Override
@@ -94,16 +90,18 @@ public final class SpeedZone extends GameModule {
             border.setCenter(locationAtProgress(raceFront), Math.max(0, borderMoveTicks));
         }
 
-        if (border != null && elapsedTicks % Math.max(1, borderDamageInterval) == 0) {
-            players.damageOutsideBorder(border, borderDamage);
-        }
-
         players.checkGameOver();
     }
 
     private void updateFrontShrink() {
         boolean changed = false;
-        while (raceFront + 1.0e-7 >= progressAtCheckpointEvent(frontCheckpointEvents + 1)) {
+        while (true) {
+            long zeroBasedEvent = frontCheckpointEvents;
+            long lap = zeroBasedEvent / checkpoints.size();
+            int segment = (int) (zeroBasedEvent % checkpoints.size());
+            if (raceFront + 1.0e-7 < lap * lapDistance + cumulativeLengths[segment + 1]) {
+                break;
+            }
             frontCheckpointEvents++;
             if (frontCheckpointEvents % checkpoints.size() == 0) {
                 frontLapEvents++;
@@ -119,16 +117,6 @@ public final class SpeedZone extends GameModule {
         double width = Math.max(0.0,
             initialBorder - frontCheckpointEvents * checkpointLoss - frontLapEvents * lapLoss);
         border.setDimensions(new Vector(width, width, width), borderShrinkTicks);
-    }
-
-    private double progressAtCheckpointEvent(long eventNumber) {
-        if (eventNumber <= 0) {
-            return 0.0;
-        }
-        long zeroBased = eventNumber - 1;
-        long lap = zeroBased / checkpoints.size();
-        int segment = (int) (zeroBased % checkpoints.size());
-        return lap * lapDistance + cumulativeLengths[segment + 1];
     }
 
     GameLocation locationAtProgress(double progress) {
@@ -150,7 +138,7 @@ public final class SpeedZone extends GameModule {
 
         double length = segmentLengths[segment];
         double t = length <= 1.0e-9 ? 0.0 : (inLap - cumulativeLengths[segment]) / length;
-        t = Math.max(0.0, Math.min(1.0, t));
+        t = Math.clamp(t, 0.0, 1.0);
         GameLocation a = checkpoints.get(segment);
         GameLocation b = checkpoints.get((segment + 1) % checkpoints.size());
         return new GameLocation(
@@ -172,7 +160,7 @@ public final class SpeedZone extends GameModule {
         double lengthSquared = dx * dx + dy * dy + dz * dz;
         double t = lengthSquared <= 1.0e-12 ? 0.0 :
             ((position.x() - a.x()) * dx + (position.y() - a.y()) * dy + (position.z() - a.z()) * dz) / lengthSquared;
-        t = Math.max(0.0, Math.min(1.0, t));
+        t = Math.clamp(t, 0.0, 1.0);
         return completedLaps * lapDistance + cumulativeLengths[segmentIndex] + t * segmentLengths[segmentIndex];
     }
 
@@ -221,8 +209,6 @@ public final class SpeedZone extends GameModule {
         initialBorder = Math.max(0.0, config().getDouble("initial_border", 50.0));
         borderCheckpointLoss = Math.max(0.0, config().getDouble("border_checkpoint_loss", 0.05));
         borderLapLoss = Math.max(0.0, config().getDouble("border_lap_loss", 0.10));
-        borderDamage = Math.max(0.0, config().getDouble("border_damage", 2.0));
-        borderDamageInterval = Math.max(1, config().getInt("border_damage_interval", 10));
         borderMoveTicks = Math.max(1, config().getInt("border_move_ticks", 3));
         borderShrinkTicks = Math.max(0, config().getInt("border_shrink_ticks", 15));
     }
@@ -262,11 +248,7 @@ public final class SpeedZone extends GameModule {
         return checkpoints;
     }
 
-    SpeedZonePlayers players() {
-        return players;
-    }
-
-    boolean ending() {
-        return ending;
+    GameBorder border() {
+        return border;
     }
 }

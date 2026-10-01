@@ -14,10 +14,6 @@ initial_border: 50.0
 border_checkpoint_loss: 0.05
 border_lap_loss: 0.10
 
-# Players outside the moving border take this damage every interval.
-border_damage: 2.0
-border_damage_interval: 10
-
 # Smoothing, in ticks.
 border_move_ticks: 3
 border_shrink_ticks: 15

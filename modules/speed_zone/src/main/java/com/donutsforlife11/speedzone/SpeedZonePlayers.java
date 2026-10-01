@@ -20,7 +20,6 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
-import com.donutsforlife11.donutgame.api.border.GameBorder;
 import com.donutsforlife11.donutgame.api.event.GameEvent;
 import com.donutsforlife11.donutgame.api.event.GameEventHandler;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
@@ -39,7 +38,6 @@ final class SpeedZonePlayers {
     private final SpeedZoneModifiers modifiers;
     private final Map<UUID, PlayerData> data = new HashMap<>();
     private final Set<UUID> lateSpectators = new LinkedHashSet<>();
-    private final Set<UUID> borderDeaths = new LinkedHashSet<>();
     private List<List<String>> checkpointModifiers = List.of();
 
     SpeedZonePlayers(SpeedZone game, SpeedZoneModifiers modifiers) {
@@ -100,9 +98,7 @@ final class SpeedZonePlayers {
     }
 
     void setupAllPlayers() {
-        for (GamePlayer player : game.playerManager().getPlayers()) {
-            setupPlayer(player, false);
-        }
+        game.playerManager().getPlayers().forEach(player -> setupPlayer(player, false));
     }
 
     private void setupPlayer(GamePlayer player, boolean lateJoin) {
@@ -167,27 +163,7 @@ final class SpeedZonePlayers {
         return leading;
     }
 
-    void damageOutsideBorder(GameBorder border, double damage) {
-        if (damage <= 0.0) {
-            return;
-        }
-        for (GamePlayer player : game.playerManager().getNonSpectators()) {
-            GameLocation location = player.location();
-            if (location == null || border.containsLocation(location)) {
-                continue;
-            }
-            borderDeaths.add(player.uuid());
-            player.damage((float) damage);
-            if (player.health() > 0.0f) {
-                borderDeaths.remove(player.uuid());
-            }
-        }
-    }
-
     void checkGameOver() {
-        if (game.ending()) {
-            return;
-        }
         Collection<GameTeam> aliveTeams = game.teamManager().getNonSpectatorTeams();
         if (aliveTeams.size() > 1) {
             return;
@@ -251,7 +227,8 @@ final class SpeedZonePlayers {
         event.bukkitEvent().setDroppedExp(0);
         event.bukkitEvent().getDrops().clear();
 
-        if (borderDeaths.remove(player.uuid())) {
+        GameLocation location = player.location();
+        if (game.border() != null && location != null && !game.border().containsLocation(location)) {
             player.setSpectator(true, player.location());
             game.uiManager().title(player, Component.text("Eliminated!", NamedTextColor.RED, TextDecoration.BOLD));
             game.uiManager().playSound(player, GameSound.of(Sound.ENTITY_WITHER_DEATH).volume(0.65f).pitch(1.7f));
