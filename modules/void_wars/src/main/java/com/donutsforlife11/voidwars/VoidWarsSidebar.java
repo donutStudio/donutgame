@@ -37,6 +37,6 @@ final class VoidWarsSidebar {
             .addEntry(SidebarEntry.blank())
             .addEntry(SidebarEntry.integer("Kills", players::kills))
             .setRefreshInterval(10)
-            .show();
+        .show();
     }
 }

@@ -1,0 +1,23 @@
+id: speed_zone
+main_class: com.donutsforlife11.speedzone.SpeedZone
+name: Speed Zone
+maps:
+  - chromasion
+
+team_size: 1
+
+# Border width is a full cuboid dimension, in blocks.
+initial_border: 50.0
+
+# Fractions of ORIGINAL border width, not the current width.
+# border_checkpoint_loss is spread equally over all checkpoints in one lap.
+border_checkpoint_loss: 0.05
+border_lap_loss: 0.10
+
+# Players outside the moving border take this damage every interval.
+border_damage: 2.0
+border_damage_interval: 10
+
+# Smoothing, in ticks.
+border_move_ticks: 3
+border_shrink_ticks: 15

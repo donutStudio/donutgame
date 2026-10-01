@@ -147,7 +147,7 @@ public class GameKillCreditEvents implements Listener {
         if (attacker == null || attacker == target) {
             return;
         }
-        damageCredits.remove(target.getUniqueId());
+        // damageCredits.remove(target.getUniqueId());
 
         GameModule game = game(attacker);
         if (game == null || game(target) != game || !allowsKillCredit(game, target, attacker)) {
@@ -164,7 +164,10 @@ public class GameKillCreditEvents implements Listener {
             icons.addAll(credit.icons());
         }
         icons.addAll(killIcons(event.getEntity().getLastDamageCause(), credit));
-        if (icons.isEmpty()) {
+
+        boolean hasVisibleIcon = icons.stream().anyMatch(icon -> !icon.text().isEmpty());
+
+        if (!hasVisibleIcon) {
             icons.add(KillIcon.FALLBACK);
         }
 
@@ -301,12 +304,13 @@ public class GameKillCreditEvents implements Listener {
         Entity directEntity = event.getDamageSource().getDirectEntity();
         if (directEntity instanceof Projectile projectile) {
             String projectileType = projectile.getType().name();
+
             if (projectileType.contains("TRIDENT")) {
                 icons.add(KillIcon.TRIDENT);
-            } else if (projectileType.contains("ARROW")) {
-                icons.add(KillIcon.BOW);
             } else if (projectileType.contains("POTION")) {
                 icons.add(KillIcon.POTION);
+            } else if (projectile.getShooter() instanceof Player) {
+                icons.add(KillIcon.BOW);
             }
         }
         if (credit != null && !credit.blockExpired() && (damageType == DamageType.LAVA || damageType == DamageType.ON_FIRE || damageType == DamageType.IN_FIRE)) {
@@ -323,9 +327,6 @@ public class GameKillCreditEvents implements Listener {
         Material weapon = player.getInventory().getItemInMainHand().getType();
         if (weapon.name().endsWith("_AXE")) {
             return KillIcon.AXE;
-        }
-        if (weapon.name().endsWith("_PICKAXE")) {
-            return KillIcon.PICKAXE;
         }
         if (weapon == Material.TRIDENT) {
             return KillIcon.TRIDENT;

@@ -3,5 +3,6 @@
   "java.import.gradle.wrapper.enabled": true,
   "java.configuration.updateBuildConfiguration": "automatic",
   "java.server.launchMode": "Standard",
-  "java.project.sourcePaths": []
+  "java.project.sourcePaths": [],
+  "java.format.settings.url": ".vscode/java-formatter.xml"
 }
