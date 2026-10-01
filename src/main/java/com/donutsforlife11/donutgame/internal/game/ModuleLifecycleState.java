@@ -6,6 +6,7 @@ public enum ModuleLifecycleState {
     LOADED,
     COUNTDOWN,
     STARTED,
+    RELOADING,
     UNLOADING,
     UNLOADED,
     FAILED

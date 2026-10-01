@@ -215,7 +215,8 @@ public class PlayerManager {
 
     private boolean acceptsPlayerRegistration() {
         ModuleLifecycleState state = module.lifecycleState();
-        return state == ModuleLifecycleState.LOADED
+        return state == ModuleLifecycleState.LOADING
+            || state == ModuleLifecycleState.LOADED
             || state == ModuleLifecycleState.COUNTDOWN
             || state == ModuleLifecycleState.STARTED;
     }

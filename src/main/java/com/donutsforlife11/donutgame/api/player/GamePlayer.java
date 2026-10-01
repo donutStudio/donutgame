@@ -274,6 +274,35 @@ public class GamePlayer implements GameEntityBase {
         return playingState.arrowsInBody;
     }
 
+    public void clearExperience() {
+        playingState.level = 0;
+        playingState.exp = 0.0f;
+        playingState.totalExperience = 0;
+        applyVisiblePlayer(player -> {
+            player.setLevel(0);
+            player.setExp(0.0f);
+            player.setTotalExperience(0);
+        });
+    }
+
+    public void setLevel(int level) {
+        playingState.level = Math.max(0, level);
+        applyVisiblePlayer(player -> player.setLevel(playingState.level));
+    }
+
+    public int level() {
+        return playingState.level;
+    }
+
+    public void setExp(float exp) {
+        playingState.exp = Math.max(0.0f, Math.min(1.0f, exp));
+        applyVisiblePlayer(player -> player.setExp(playingState.exp));
+    }
+
+    public float exp() {
+        return playingState.exp;
+    }
+
     public void reset() {
         cancelRespawn();
         closeSpectatorSession();
@@ -916,6 +945,9 @@ public class GamePlayer implements GameEntityBase {
         playingState.saturation = 20.0f;
         playingState.fireTicks = 0;
         playingState.arrowsInBody = 0;
+        playingState.level = 0;
+        playingState.exp = 0.0f;
+        playingState.totalExperience = 0;
     }
 
     private void forcePlayingState(String transition) {

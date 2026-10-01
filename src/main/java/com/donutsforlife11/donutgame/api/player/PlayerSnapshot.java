@@ -32,6 +32,9 @@ final class PlayerSnapshot {
     float saturation = 20.0f;
     int arrowsInBody;
     int fireTicks;
+    int level;
+    float exp;
+    int totalExperience;
     GameMode gameMode = GameMode.SURVIVAL;
     boolean invulnerable;
     boolean invisible;
@@ -66,6 +69,9 @@ final class PlayerSnapshot {
         saturation = player.getSaturation();
         arrowsInBody = player.getArrowsInBody();
         fireTicks = player.getFireTicks();
+        level = player.getLevel();
+        exp = player.getExp();
+        totalExperience = player.getTotalExperience();
         gameMode = player.getGameMode() == GameMode.SPECTATOR ? GameMode.SURVIVAL : player.getGameMode();
         invulnerable = player.isInvulnerable();
         invisible = player.isInvisible();
@@ -97,6 +103,9 @@ final class PlayerSnapshot {
         player.setSaturation(saturation);
         player.setArrowsInBody(arrowsInBody);
         player.setFireTicks(fireTicks);
+        player.setLevel(level);
+        player.setExp(exp);
+        player.setTotalExperience(totalExperience);
         AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
         player.setHealth(Math.min(Math.max(1.0, health), maxHealth == null ? 20.0 : maxHealth.getValue()));
         touchTimedValues();
@@ -118,6 +127,9 @@ final class PlayerSnapshot {
         saturation = 20.0f;
         arrowsInBody = 0;
         fireTicks = 0;
+        level = 0;
+        exp = 0.0f;
+        totalExperience = 0;
         this.gameMode = gameMode == null ? GameMode.SURVIVAL : gameMode;
         invulnerable = false;
         invisible = false;

@@ -105,11 +105,7 @@ public class GameTeam {
     }
 
     public boolean allSpectators() {
-        Collection<GamePlayer> players = getPlayers();
-        if (players.isEmpty()) {
-            return false;
-        }
-        for (GamePlayer player : players) {
+        for (GamePlayer player : getPlayers()) {
             if (!player.isSpectator()) {
                 return false;
             }

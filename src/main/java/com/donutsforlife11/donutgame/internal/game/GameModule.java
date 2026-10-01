@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
@@ -29,6 +30,7 @@ import com.donutsforlife11.donutgame.api.entity.GameEntity;
 import com.donutsforlife11.donutgame.api.event.GameEventAdapterRegistry;
 import com.donutsforlife11.donutgame.api.event.GameEventRegistrar;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
+import com.donutsforlife11.donutgame.api.map.GameMap;
 import com.donutsforlife11.donutgame.api.map.GameRegion;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.map.MapManager;
@@ -123,6 +125,9 @@ public abstract class GameModule {
     public void onStart() {
     }
 
+    public void onReload() {
+    }
+
     public void onUnload() {
     }
 
@@ -138,26 +143,27 @@ public abstract class GameModule {
             beforeLoad();
             return mapManager.whenReady()
                 .thenCompose(ignored -> {
+                    CompletableFuture<?> beforeCountdownFuture = beforeCountdown == null
+                        ? CompletableFuture.completedFuture(null)
+                        : beforeCountdown.get();
+                    return beforeCountdownFuture;
+                })
+                .thenApply(ignored -> {
                     try {
                         onLoad();
                         registerGameEventHandlers(this);
                         registerFieldGameEventHandlers();
                         setLifecycleState(ModuleLifecycleState.LOADED);
-                        CompletableFuture<?> beforeCountdownFuture = beforeCountdown == null
-                            ? CompletableFuture.completedFuture(null)
-                            : beforeCountdown.get();
-                        return beforeCountdownFuture.thenApply(beforeCountdownIgnored -> {
-                            setLifecycleState(ModuleLifecycleState.COUNTDOWN);
-                            startCountdownSequence().whenComplete((startedModule, throwable) -> {
-                                if (throwable != null) {
-                                    logError("Failed while starting module after load.", throwable);
-                                }
-                            });
-                            return this;
+                        setLifecycleState(ModuleLifecycleState.COUNTDOWN);
+                        startCountdownSequence().whenComplete((startedModule, throwable) -> {
+                            if (throwable != null) {
+                                logError("Failed while starting module after load.", throwable);
+                            }
                         });
+                        return this;
                     } catch (Throwable throwable) {
                         setLifecycleState(ModuleLifecycleState.FAILED);
-                        return CompletableFuture.failedFuture(throwable);
+                        throw new CompletionException(throwable);
                     }
                 })
                 .whenComplete((ignored, throwable) -> {
@@ -196,6 +202,42 @@ public abstract class GameModule {
                 playerManager.cleanupRuntimeState();
                 setLifecycleState(ModuleLifecycleState.UNLOADED);
             });
+    }
+
+    protected final CompletableFuture<GameModule> reload() {
+        try {
+            requireOneOf(ModuleLifecycleState.COUNTDOWN, ModuleLifecycleState.STARTED);
+            setLifecycleState(ModuleLifecycleState.RELOADING);
+            started = false;
+            return resetMap()
+                .thenApply(ignored -> {
+                    try {
+                        onReload();
+                        setLifecycleState(ModuleLifecycleState.COUNTDOWN);
+                        startCountdownSequence().whenComplete((startedModule, throwable) -> {
+                            if (throwable != null) {
+                                logError("Failed while starting module after reload.", throwable);
+                            }
+                        });
+                        return this;
+                    } catch (Throwable throwable) {
+                        setLifecycleState(ModuleLifecycleState.FAILED);
+                        throw new CompletionException(throwable);
+                    }
+                })
+                .whenComplete((ignored, throwable) -> {
+                    if (throwable != null) {
+                        setLifecycleState(ModuleLifecycleState.FAILED);
+                    }
+                });
+        } catch (Throwable throwable) {
+            setLifecycleState(ModuleLifecycleState.FAILED);
+            return CompletableFuture.failedFuture(throwable);
+        }
+    }
+
+    protected final CompletableFuture<ModuleUnloadResult> unload() {
+        return plugin.moduleService().unloadModule(index);
     }
 
     public final Donutgame plugin() {
@@ -269,6 +311,10 @@ public abstract class GameModule {
         return world().summon(location, entity);
     }
 
+    protected final CompletableFuture<GameMap> resetMap() {
+        return mapManager.resetMap();
+    }
+
     public final Map<String, GameWorld> worlds() {
         return Collections.unmodifiableMap(worlds);
     }
@@ -332,6 +378,15 @@ public abstract class GameModule {
         if (lifecycleState != expected) {
             throw new IllegalStateException("Module " + id + " expected lifecycle state " + expected + " but was " + lifecycleState + ".");
         }
+    }
+
+    private void requireOneOf(ModuleLifecycleState... expectedStates) {
+        for (ModuleLifecycleState expected : expectedStates) {
+            if (lifecycleState == expected) {
+                return;
+            }
+        }
+        throw new IllegalStateException("Module " + id + " cannot perform this operation while " + lifecycleState + ".");
     }
 
     private void setLifecycleState(ModuleLifecycleState lifecycleState) {

@@ -177,12 +177,19 @@ final class ItemNotation {
 
     private record TemporaryLootTable(List<ItemStack> items) implements LootTable {
         private TemporaryLootTable {
-            items = items.stream().map(ItemStack::clone).toList();
+            items = items.stream()
+                .filter(item -> item != null && !item.getType().isAir())
+                .map(ItemStack::clone)
+                .toList();
         }
 
         @Override
         public Collection<ItemStack> populateLoot(java.util.Random random, org.bukkit.loot.LootContext context) {
-            return items.stream().map(ItemStack::clone).toList();
+            if (items.isEmpty()) {
+                return List.of();
+            }
+            java.util.Random source = random == null ? ThreadLocalRandom.current() : random;
+            return List.of(items.get(source.nextInt(items.size())).clone());
         }
 
         @Override

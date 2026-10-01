@@ -48,6 +48,14 @@ public class MapManager {
         return load(map);
     }
 
+    public CompletableFuture<GameMap> resetMap() {
+        GameMap map = currentMap;
+        if (map == null) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Cannot reset map before a map has been loaded."));
+        }
+        return load(map);
+    }
+
     public CompletableFuture<GameMap> place(String id, GameLocation location) {
         return place(id, location, MapRotation.DEG_0);
     }

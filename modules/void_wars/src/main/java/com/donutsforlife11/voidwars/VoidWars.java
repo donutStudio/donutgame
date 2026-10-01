@@ -15,6 +15,7 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
+import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -32,6 +33,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.loot.LootTable;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -89,17 +91,18 @@ public class VoidWars extends GameModule {
         validateMap();
         loadEvents();
         assignTeams();
+        loadRound();
         setupSidebar();
-
-        for (GamePlayer player : playerManager().getPlayers()) {
-            setupPlayer(player, true);
-        }
     }
 
     @Override
     public void onStart() {
-        loadRound();
         startRound();
+    }
+
+    @Override
+    public void onReload() {
+        loadRound();
     }
 
     private void readConfig() {
@@ -185,17 +188,27 @@ public class VoidWars extends GameModule {
     private void setupSidebar() {
         SidebarEntry nextEvent = SidebarEntry.time("Next Event", this::nextEventTicks)
             .setLabel(this::nextEventLabel);
-        uiManager().newSidebar()
+        var sidebar = uiManager().newSidebar()
             .addEntry(SidebarEntry.fraction("Round", () -> round, () -> maxRounds))
             .addEntry(SidebarEntry.blank())
             .addEntry(nextEvent)
-            .addEntry(SidebarEntry.fraction("Alive", () -> playerManager().getNonSpectators().size(), () -> playerManager().getPlayers().size()))
+            .addEntry(SidebarEntry.blank());
+        if (teamSize > 1) {
+            sidebar.addEntry(SidebarEntry.fraction("Alive Teams", () -> teamManager().getNonSpectatorTeams().size(), () -> teamManager().getTeams().size()));
+        }
+        sidebar
+            .addEntry(SidebarEntry.fraction("Alive Players", () -> playerManager().getNonSpectators().size(), () -> playerManager().getPlayers().size()))
+            .addEntry(SidebarEntry.blank())
             .addEntry(SidebarEntry.integer("Kills", player -> kills.getOrDefault(player.uuid(), 0)))
             .setRefreshInterval(10)
             .show();
     }
 
     private void loadRound() {
+        loadRound(false);
+    }
+
+    private void loadRound(boolean preservePlayerLocations) {
         round++;
         roundStarted = false;
         roundEnding = false;
@@ -208,7 +221,7 @@ public class VoidWars extends GameModule {
         spawnChests();
 
         for (GamePlayer player : playerManager().getPlayers()) {
-            setupPlayer(player, true);
+            setupPlayer(player, true, preservePlayerLocations);
             player.addEffect(new PotionEffect(PotionEffectType.INVISIBILITY, PotionEffect.INFINITE_DURATION, 0, false, false));
         }
     }
@@ -232,7 +245,10 @@ public class VoidWars extends GameModule {
         }
         if (elapsed == pvpTicks) {
             world().gamerules().pvp(true);
-            message("PvP is now enabled!", Sound.ENTITY_ENDER_DRAGON_HURT);
+            if (elapsed > 0) {
+                sound(Sound.ENTITY_ENDER_DRAGON_HURT, 1f, 0.75f);
+                gameMessage(Component.text("PvP is now enabled!"));
+            }
         }
         itemDrops.stream().filter(event -> event.ticks() == elapsed).forEach(event -> dropItems(event.lootTable()));
         chestFills.stream().filter(event -> event.ticks() == elapsed).forEach(event -> fillChests(event.lootTable()));
@@ -242,29 +258,40 @@ public class VoidWars extends GameModule {
     private void collapseSpawn() {
         for (GameRegion region : world().getRegions(SPAWN_PLATFORM)) {
             world().fill(region, BlockSpec.of(Material.AIR));
+            sound(Sound.ENTITY_WARDEN_DEATH, 1f, 0.5f);
         }
-        if (groundCollapseTicks > 0) {
-            message("The ground has collapsed!", Sound.ENTITY_WARDEN_DEATH);
+        if (roundTimer != null && roundTimer.elapsedTicks() > 0) {
+            gameMessage(Component.text("The ground has collapsed!"));
         }
     }
 
     private void setupPlayer(GamePlayer player, boolean clearItems) {
+        setupPlayer(player, clearItems, false);
+    }
+
+    private void setupPlayer(GamePlayer player, boolean clearItems, boolean preserveLocation) {
         GameLocation spawn = world().getPoint(SPAWN);
-        player.teleport(spawn);
-        player.setSpawnPoint(spawn);
+        GameLocation startLocation = preserveLocation && player.location() != null ? player.location() : spawn;
+        if (!preserveLocation) {
+            player.teleport(spawn);
+        }
+        player.setSpawnPoint(startLocation);
         player.setSpectatablePlayers(teamSize <= 1 ? () -> playerManager().getPlayers() : List::of);
         player.setSpectatableTeams(teamSize <= 1 ? List::of : () -> teamManager().getTeams());
         if (lateSpectators.contains(player.uuid()) || roundStarted) {
-            player.setSpectator(true, spawn);
+            player.setSpectator(true, startLocation);
             return;
         }
-        player.setSpectator(false, spawn);
+        player.setSpectator(false, startLocation);
         player.setGameMode(GameMode.SURVIVAL);
         player.heal();
         player.setHunger(20);
         player.setSaturation(20);
         player.setArrowsInBody(0);
         player.clearEffects();
+        player.clearExperience();
+        player.setLevel(99);
+        player.setExp(0.99f);
         if (clearItems) {
             player.clearItems();
         }
@@ -297,20 +324,30 @@ public class VoidWars extends GameModule {
             }
         }
         if (roundTimer != null && roundTimer.elapsedTicks() > 0) {
-            message("Chests refilled!", Sound.BLOCK_CHEST_OPEN);
+            subtitle(playerManager().getPlayers(), Component.empty()
+                .append(Component.text("! ", NamedTextColor.DARK_GREEN, TextDecoration.BOLD))
+                .append(Component.text("Chests Refilled", NamedTextColor.GREEN))
+                .append(Component.text(" !", NamedTextColor.DARK_GREEN, TextDecoration.BOLD))
+            );
+            sound(Sound.BLOCK_CHEST_OPEN, 1f, 1.25f);
         }
     }
 
     private void dropItems(LootTable lootTable) {
         Collection<ItemStack> items = GameItems.fromLootTable(lootTable);
-        for (GamePlayer player : playerManager().getNonSpectators()) {
+        for (GamePlayer player : playerManager().getPlayers()) {
             for (ItemStack item : items) {
                 player.giveItem(GameItem.from(item));
             }
         }
         if (roundTimer != null && roundTimer.elapsedTicks() > 0 && !items.isEmpty()) {
-            gameMessage(Component.text("Dropped " + items.size() + " item stack" + (items.size() == 1 ? "" : "s")));
-            sound(Sound.ENTITY_ITEM_PICKUP, 1f, 0.8f);
+            for (ItemStack item : items) {
+                gameMessage(Component.text("Gave players ")
+                    .append(displayName(item))
+                    .append(Component.text(" x" + item.getAmount()))
+                );
+            }
+            sound(Sound.ENTITY_ITEM_PICKUP, 1f, 0f);
         }
     }
 
@@ -320,9 +357,16 @@ public class VoidWars extends GameModule {
         }
         Vector dimensions = border.dimensions();
         Vector target = dimensions.clone().multiply(Math.clamp(scale, 0.0, 1.0));
-        double maxChange = Math.max(Math.abs(dimensions.getX() - target.getX()), Math.abs(dimensions.getZ() - target.getZ()));
+        double maxChange = Math.max(
+            Math.abs(dimensions.getX() - target.getX()),
+            Math.max(Math.abs(dimensions.getY() - target.getY()), Math.abs(dimensions.getZ() - target.getZ()))
+        );
         border.setDimensions(target, Math.max(1, (int) Math.ceil(maxChange / 0.015)));
-        gameMessage(Component.text("Border shrinking!", NamedTextColor.RED));
+        subtitle(playerManager().getPlayers(), Component.empty()
+            .append(Component.text("! ", NamedTextColor.DARK_RED, TextDecoration.BOLD))
+            .append(Component.text("Border Shrinking", NamedTextColor.RED))
+            .append(Component.text(" !", NamedTextColor.DARK_RED, TextDecoration.BOLD))
+        );
         sound(Sound.BLOCK_BEACON_AMBIENT, 0.9f, 0.75f);
     }
 
@@ -341,39 +385,55 @@ public class VoidWars extends GameModule {
             border = null;
         }
         timeManager().newTimer(round >= maxRounds ? 100 : 50).onFinish(timer -> {
-            title(playerManager().getSpectators(), Component.text("Round Over!", NamedTextColor.GRAY));
+            title(playerManager().getSpectators(), Component.text("Round Over!"));
+            sound(playerManager().getSpectators(), Sound.BLOCK_BEACON_DEACTIVATE, 1f, 1.5f);
             title(winners, Component.text("VICTORY", NamedTextColor.GOLD, TextDecoration.BOLD));
+            sound(winners, Sound.UI_TOAST_CHALLENGE_COMPLETE, 1f, 1.675f);
             if (!winners.isEmpty()) {
-                gameMessage(Component.text("Winners: " + winners.stream()
+                String label = winners.size() == 1 ? "Winner: " : "Winners: ";
+                subtitle(playerManager().getPlayers(), Component.text(label + winners.stream()
                     .map(player -> player.bukkitPlayer() == null ? player.uuid().toString() : player.bukkitPlayer().getName())
                     .collect(Collectors.joining(", "))));
             }
             for (GamePlayer winner : winners) {
-                winner.setSpectator(true);
+                winner.setSpectator(true, winner.location());
             }
             if (round >= maxRounds) {
-                title(playerManager().getPlayers(), Component.text("Game Over!", NamedTextColor.WHITE, TextDecoration.BOLD));
-            } else {
                 timeManager().newTimer(100).onFinish(ignored -> {
-                    loadRound();
-                    startRound();
+                    title(playerManager().getPlayers(), Component.text("Game over!", NamedTextColor.WHITE, TextDecoration.BOLD));
+                    timeManager().newTimer(40).onFinish(ignored2 -> unload()).start();
                 }).start();
+            } else {
+                timeManager().newTimer(100).onFinish(ignored -> resetForNextRound()).start();
             }
         }).start();
     }
 
-    private void tryRespawn(GamePlayer player) {
+    private void resetForNextRound() {
+        reload().exceptionally(throwable -> {
+            logError("Failed to reset Void Wars for the next round.", throwable);
+            return null;
+        });
+    }
+
+    private boolean tryRespawn(GamePlayer player) {
         GameTeam team = player.getTeam();
-        if (team == null || livingTeammate(player) == null) {
-            title(List.of(player), Component.text(teamSize == 1 ? "Eliminated!" : "Team Eliminated!", NamedTextColor.RED, TextDecoration.BOLD));
-            checkRoundOver();
-            return;
+        if (team == null) {
+            return false;
         }
-        int respawnTicks = baseRespawnTicks * Math.max(1, team.getPlayers().size() - 1);
+        int respawnTicks = baseRespawnTicks * Math.max(0, team.getPlayers().size() - 1);
+        if (team.allSpectators()) {
+            for (GamePlayer teammate : team.getPlayers()) {
+                teammate.cancelRespawn();
+            }
+            title(team.getPlayers(), Component.text(teamSize == 1 ? "Eliminated!" : "Team Eliminated!", NamedTextColor.RED, TextDecoration.BOLD));
+            return false;
+        }
         player.respawn(respawnTicks, () -> {
             GamePlayer teammate = livingTeammate(player);
             return teammate == null ? player.spawnPoint() : teammate.location();
         });
+        return true;
     }
 
     private GamePlayer livingTeammate(GamePlayer player) {
@@ -431,7 +491,8 @@ public class VoidWars extends GameModule {
             player.respawn();
             return;
         }
-        if (livingTeammate(player) != null) {
+        boolean canRespawn = livingTeammate(player) != null;
+        if (canRespawn) {
             event.bukkitEvent().setKeepInventory(true);
             event.bukkitEvent().setKeepLevel(true);
             event.bukkitEvent().setDroppedExp(0);
@@ -521,7 +582,7 @@ public class VoidWars extends GameModule {
     private String nextEventLabel() {
         int elapsed = roundTimer == null ? 0 : roundTimer.elapsedTicks();
         if (elapsed < groundCollapseTicks) return "Ground Collapse";
-        if (elapsed < pvpTicks) return "PvP";
+        if (elapsed < pvpTicks) return "PvP Enabling";
         int nextTicks = Integer.MAX_VALUE;
         String label = "Waiting";
         for (TimedLoot event : itemDrops) {
@@ -555,11 +616,6 @@ public class VoidWars extends GameModule {
         return ticks;
     }
 
-    private void message(String message, Sound sound) {
-        gameMessage(Component.text(message));
-        sound(sound, 1f, 1f);
-    }
-
     private void gameMessage(Component message) {
         for (GamePlayer player : playerManager().getPlayers()) {
             player.gameMessage(message);
@@ -572,10 +628,28 @@ public class VoidWars extends GameModule {
         }
     }
 
+    private void subtitle(Collection<GamePlayer> players, Component subtitle) {
+        for (GamePlayer player : players) {
+            player.subtitle(subtitle);
+        }
+    }
+
     private void sound(Sound sound, float volume, float pitch) {
-        for (GamePlayer player : playerManager().getPlayers()) {
+        sound(playerManager().getPlayers(), sound, volume, pitch);
+    }
+
+    private void sound(Collection<GamePlayer> players, Sound sound, float volume, float pitch) {
+        for (GamePlayer player : players) {
             player.playSound(sound, volume, pitch);
         }
+    }
+
+    private Component displayName(ItemStack item) {
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null && meta.hasItemName()) {
+            return meta.itemName();
+        }
+        return Bukkit.getItemFactory().displayName(item);
     }
 
     private record TimedLoot(int ticks, LootTable lootTable) {
