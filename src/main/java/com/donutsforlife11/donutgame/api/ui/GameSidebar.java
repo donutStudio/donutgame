@@ -25,6 +25,7 @@ public class GameSidebar {
     private final GameModule module;
     private final List<SidebarEntry> entries = new ArrayList<>();
     private final Map<UUID, FastBoard> boards = new LinkedHashMap<>();
+    private final Map<UUID, BoardSnapshot> snapshots = new LinkedHashMap<>();
 
     private Supplier<Collection<GamePlayer>> viewers;
     private Supplier<Component> title;
@@ -140,6 +141,7 @@ public class GameSidebar {
             board.delete();
         }
         boards.clear();
+        snapshots.clear();
         return this;
     }
 
@@ -170,12 +172,13 @@ public class GameSidebar {
                 return false;
             }
             entry.getValue().delete();
+            snapshots.remove(entry.getKey());
             return true;
         });
 
         for (GamePlayer viewer : currentViewers.values()) {
             FastBoard board = boards.computeIfAbsent(viewer.uuid(), ignored -> new FastBoard(viewer.bukkitPlayer()));
-            board.updateTitle(SidebarEntry.safe(title.get()));
+            Component renderedTitle = SidebarEntry.safe(title.get());
             List<Component> lines = new ArrayList<>(entries.size() + 2);
             List<Component> scores = new ArrayList<>(entries.size() + 2);
             lines.add(Component.empty());
@@ -187,7 +190,15 @@ public class GameSidebar {
             }
             lines.add(Component.empty());
             scores.add(Component.empty());
-            board.updateLines(lines, scores);
+
+            BoardSnapshot previous = snapshots.get(viewer.uuid());
+            if (previous == null || !previous.title().equals(renderedTitle)) {
+                board.updateTitle(renderedTitle);
+            }
+            if (previous == null || !previous.lines().equals(lines) || !previous.scores().equals(scores)) {
+                board.updateLines(lines, scores);
+            }
+            snapshots.put(viewer.uuid(), new BoardSnapshot(renderedTitle, List.copyOf(lines), List.copyOf(scores)));
         }
         return this;
     }
@@ -220,5 +231,8 @@ public class GameSidebar {
             }
         }
         return currentViewers;
+    }
+
+    private record BoardSnapshot(Component title, List<Component> lines, List<Component> scores) {
     }
 }

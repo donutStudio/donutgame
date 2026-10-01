@@ -1,5 +1,6 @@
 package com.donutsforlife11.donutgame.api.border;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -23,6 +24,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 
 public class BorderManager {
     private static final int PARTICLE_INTERVAL_TICKS = 10;
+    private static final DamageSource OUTSIDE_BORDER_DAMAGE = DamageSource.builder(DamageType.OUTSIDE_BORDER).build();
 
     private final GameModule module;
     private final Set<GameBorder> borders = new LinkedHashSet<>();
@@ -82,7 +84,7 @@ public class BorderManager {
     }
 
     public void clear() {
-        for (GameBorder border : Set.copyOf(borders)) {
+        for (GameBorder border : new ArrayList<>(borders)) {
             border.remove();
         }
         stopTimersIfIdle();
@@ -164,8 +166,16 @@ public class BorderManager {
     }
 
     private void drawParticles() {
-        for (GameBorder border : Set.copyOf(borders)) {
-            border.drawParticles();
+        Collection<GameBorder> currentBorders = new ArrayList<>(borders);
+        Collection<Player> onlinePlayers = new ArrayList<>();
+        for (var gamePlayer : module.playerManager().getOnlinePlayers()) {
+            Player player = gamePlayer.bukkitPlayer();
+            if (player != null) {
+                onlinePlayers.add(player);
+            }
+        }
+        for (GameBorder border : currentBorders) {
+            border.drawParticles(onlinePlayers);
         }
     }
 
@@ -184,7 +194,7 @@ public class BorderManager {
                 continue;
             }
             gamePlayer.actionbar(Component.text("You are outside the border!", NamedTextColor.RED));
-            player.damage(damage, DamageSource.builder(DamageType.OUTSIDE_BORDER).build());
+            player.damage(damage, OUTSIDE_BORDER_DAMAGE);
         }
     }
 

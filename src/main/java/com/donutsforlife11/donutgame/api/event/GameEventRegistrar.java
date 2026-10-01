@@ -16,6 +16,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.Cancellable;
 import org.bukkit.event.Event;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockEvent;
+import org.bukkit.event.entity.EntityEvent;
+import org.bukkit.event.player.PlayerEvent;
+import org.bukkit.event.world.WorldEvent;
 import org.bukkit.plugin.EventExecutor;
 
 import com.donutsforlife11.donutgame.internal.game.GameModule;
@@ -100,6 +104,11 @@ public class GameEventRegistrar {
     }
 
     private boolean isInScope(Event event) {
+        Boolean fastResult = fastScope(event);
+        if (fastResult != null) {
+            return fastResult;
+        }
+
         Player player = player(event);
         if (player != null && (module.playerManager().owns(player) || module.playerManager().ownsOffline(player.getUniqueId()))) {
             return true;
@@ -114,6 +123,27 @@ public class GameEventRegistrar {
         }
         World world = raw(event, "world", World.class);
         return world(world);
+    }
+
+    private Boolean fastScope(Event event) {
+        if (event instanceof PlayerEvent playerEvent) {
+            Player player = playerEvent.getPlayer();
+            return module.playerManager().owns(player) || module.playerManager().ownsOffline(player.getUniqueId());
+        }
+        if (event instanceof EntityEvent entityEvent) {
+            Entity entity = entityEvent.getEntity();
+            if (entity instanceof Player player) {
+                return module.playerManager().owns(player) || module.playerManager().ownsOffline(player.getUniqueId());
+            }
+            return world(entity.getWorld());
+        }
+        if (event instanceof BlockEvent blockEvent) {
+            return world(blockEvent.getBlock().getWorld());
+        }
+        if (event instanceof WorldEvent worldEvent) {
+            return world(worldEvent.getWorld());
+        }
+        return null;
     }
 
     private Player player(Event event) {

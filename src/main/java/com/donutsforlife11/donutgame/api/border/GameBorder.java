@@ -1,5 +1,7 @@
 package com.donutsforlife11.donutgame.api.border;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 
@@ -22,6 +24,9 @@ public class GameBorder {
     private Vector dimensions;
     private GameTimer centerTimer;
     private GameTimer dimensionsTimer;
+    private List<Vector> cachedParticlePoints = List.of();
+    private Vector cachedParticleDimensions;
+    private double cachedParticleSpacing = Double.NaN;
 
     GameBorder(BorderManager manager, BorderShape shape, GameLocation center, Vector dimensions) {
         this.manager = Objects.requireNonNull(manager, "manager");
@@ -67,15 +72,15 @@ public class GameBorder {
         Vector end = requireDimensions(target);
         dimensionsTimer = cancel(dimensionsTimer);
         if (ticks <= 0) {
-            dimensions = end;
+            setDimensionsNow(end);
             return this;
         }
 
         Vector start = dimensions.clone();
         dimensionsTimer = manager.timeManager().newTimer(ticks)
-            .onTick(timer -> dimensions = interpolate(start, end, timer.elapsedTicks() / (double) ticks))
+            .onTick(timer -> setDimensionsNow(interpolate(start, end, timer.elapsedTicks() / (double) ticks)))
             .onFinish(timer -> {
-                dimensions = end.clone();
+                setDimensionsNow(end);
                 dimensionsTimer = null;
             })
             .start();
@@ -121,16 +126,18 @@ public class GameBorder {
         return active(centerTimer) || active(dimensionsTimer);
     }
 
-    void drawParticles() {
+    void drawParticles(Collection<Player> onlinePlayers) {
         World world = resolveWorld();
         if (world == null) {
             return;
         }
 
-        List<Player> viewers = manager.module().playerManager().getOnlinePlayers().stream()
-            .map(gamePlayer -> gamePlayer.bukkitPlayer())
-            .filter(player -> player != null && player.getWorld().equals(world))
-            .toList();
+        List<Player> viewers = new ArrayList<>();
+        for (Player player : onlinePlayers) {
+            if (player.getWorld().equals(world)) {
+                viewers.add(player);
+            }
+        }
         if (viewers.isEmpty()) {
             return;
         }
@@ -138,28 +145,33 @@ public class GameBorder {
         Location centerLocation = center.toBukkit(world);
         Particle particle = isMoving() ? manager.movingParticle() : manager.defaultParticle();
         double viewDistanceSquared = squared(manager.particleViewDistance());
-        int maximumParticles = shape == BorderShape.CUBOID ? 360 : 420;
-        List<Vector> points = BorderParticleSampler.sample(this, manager.particleSpacing(), maximumParticles);
+        List<Vector> points = particlePoints();
 
         for (Player viewer : viewers) {
             int spawned = 0;
             Location viewerLocation = viewer.getLocation();
+            Location particleLocation = centerLocation.clone();
             for (Vector point : points) {
-                Location location = centerLocation.clone().add(point);
-                if (viewerLocation.distanceSquared(location) > viewDistanceSquared) {
+                double x = centerLocation.getX() + point.getX();
+                double y = centerLocation.getY() + point.getY();
+                double z = centerLocation.getZ() + point.getZ();
+                if (distanceSquared(viewerLocation, x, y, z) > viewDistanceSquared) {
                     continue;
                 }
-                viewer.spawnParticle(particle, location, 1, 0.0, 0.0, 0.0, 0.0, null, true);
+                particleLocation.setX(x);
+                particleLocation.setY(y);
+                particleLocation.setZ(z);
+                viewer.spawnParticle(particle, particleLocation, 1, 0.0, 0.0, 0.0, 0.0, null, true);
                 spawned++;
             }
             if (spawned == 0 && shape != BorderShape.CUBOID) {
-                drawNearbyCurvedSurface(viewer, particle, centerLocation, viewDistanceSquared);
+                drawNearbyCurvedSurface(viewer, particle, centerLocation, viewerLocation, viewDistanceSquared);
             }
         }
     }
 
-    private void drawNearbyCurvedSurface(Player viewer, Particle particle, Location centerLocation, double viewDistanceSquared) {
-        Vector relative = viewer.getLocation().toVector().subtract(centerLocation.toVector());
+    private void drawNearbyCurvedSurface(Player viewer, Particle particle, Location centerLocation, Location viewerLocation, double viewDistanceSquared) {
+        Vector relative = viewerLocation.toVector().subtract(centerLocation.toVector());
         if (relative.lengthSquared() < EPSILON) {
             relative.setX(1.0);
         }
@@ -171,7 +183,7 @@ public class GameBorder {
         }
 
         Location base = centerLocation.clone().add(surface);
-        if (viewer.getLocation().distanceSquared(base) > viewDistanceSquared) {
+        if (viewerLocation.distanceSquared(base) > viewDistanceSquared) {
             return;
         }
 
@@ -196,7 +208,7 @@ public class GameBorder {
                     continue;
                 }
                 Location location = centerLocation.clone().add(sample);
-                if (viewer.getLocation().distanceSquared(location) <= viewDistanceSquared) {
+                if (viewerLocation.distanceSquared(location) <= viewDistanceSquared) {
                     viewer.spawnParticle(particle, location, 1, 0.0, 0.0, 0.0, 0.0, null, true);
                 }
             }
@@ -204,7 +216,7 @@ public class GameBorder {
     }
 
     private Vector findSurfacePoint(Vector direction) {
-        double maximumDistance = dimensions().multiply(0.5).length() * 1.1;
+        double maximumDistance = dimensions.clone().multiply(0.5).length() * 1.1;
         if (maximumDistance <= EPSILON) {
             return null;
         }
@@ -250,6 +262,11 @@ public class GameBorder {
         return dimensions.clone();
     }
 
+    private void setDimensionsNow(Vector dimensions) {
+        this.dimensions = dimensions.clone();
+        invalidateParticleCache();
+    }
+
     private boolean active(GameTimer timer) {
         return timer != null && !timer.isFinished() && !timer.isCancelled();
     }
@@ -259,6 +276,25 @@ public class GameBorder {
             timer.cancel();
         }
         return null;
+    }
+
+    private List<Vector> particlePoints() {
+        double spacing = manager.particleSpacing();
+        if (cachedParticleDimensions != null && cachedParticleDimensions.equals(dimensions) && cachedParticleSpacing == spacing) {
+            return cachedParticlePoints;
+        }
+
+        int maximumParticles = shape == BorderShape.CUBOID ? 360 : 420;
+        cachedParticlePoints = BorderParticleSampler.sample(this, spacing, maximumParticles);
+        cachedParticleDimensions = dimensions.clone();
+        cachedParticleSpacing = spacing;
+        return cachedParticlePoints;
+    }
+
+    private void invalidateParticleCache() {
+        cachedParticleDimensions = null;
+        cachedParticlePoints = List.of();
+        cachedParticleSpacing = Double.NaN;
     }
 
     private GameLocation interpolate(GameLocation start, GameLocation end, double progress) {
@@ -287,5 +323,9 @@ public class GameBorder {
 
     private static double squared(double value) {
         return value * value;
+    }
+
+    private static double distanceSquared(Location location, double x, double y, double z) {
+        return squared(location.getX() - x) + squared(location.getY() - y) + squared(location.getZ() - z);
     }
 }

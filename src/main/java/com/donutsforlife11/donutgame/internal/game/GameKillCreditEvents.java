@@ -1,13 +1,19 @@
 package com.donutsforlife11.donutgame.internal.game;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.damage.DamageType;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -27,14 +33,19 @@ import com.donutsforlife11.donutgame.api.team.GameTeam;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.object.ObjectContents;
 
 public class GameKillCreditEvents implements Listener {
     private static final long KILL_CREDIT_MILLIS = 60_000L;
     private static final long BLOCK_CREDIT_MILLIS = 90_000L;
+    private static final long MULTI_KILL_MILLIS = 10_000L;
+    private static final int KILL_SUBTITLE_SPACING_TICKS = 7;
     private final ModuleService moduleService;
     private final Map<UUID, DamageCredit> damageCredits = new HashMap<>();
     private final Map<BlockKey, DamageCredit> blockCredits = new HashMap<>();
+    private final Map<UUID, KillStreak> killStreaks = new HashMap<>();
+    private final Map<UUID, Deque<KillSubtitle>> killSubtitles = new HashMap<>();
 
     public GameKillCreditEvents(ModuleService moduleService) {
         this.moduleService = moduleService;
@@ -49,7 +60,7 @@ public class GameKillCreditEvents implements Listener {
         if (attacker == null || attacker == target) {
             return;
         }
-        rememberDamageCredit(target, attacker);
+        rememberDamageCredit(target, attacker, killIcons(event, null));
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -104,7 +115,7 @@ public class GameKillCreditEvents implements Listener {
     public void propagateFlowingBlockCredit(BlockFromToEvent event) {
         DamageCredit credit = blockCredits.get(BlockKey.of(event.getBlock()));
         if (credit != null && !credit.blockExpired()) {
-            blockCredits.put(BlockKey.of(event.getToBlock()), new DamageCredit(credit.attackerId(), System.currentTimeMillis()));
+            blockCredits.put(BlockKey.of(event.getToBlock()), credit.refreshed());
         }
     }
 
@@ -121,7 +132,7 @@ public class GameKillCreditEvents implements Listener {
         }
         DamageCredit credit = blockCredits.get(BlockKey.of(ignitingBlock));
         if (credit != null && !credit.blockExpired()) {
-            blockCredits.put(BlockKey.of(event.getBlock()), new DamageCredit(credit.attackerId(), System.currentTimeMillis()));
+            blockCredits.put(BlockKey.of(event.getBlock()), credit.refreshed(KillIcon.FIRE));
         }
     }
 
@@ -146,13 +157,20 @@ public class GameKillCreditEvents implements Listener {
             return;
         }
 
-        var team = target.getScoreboard().getPlayerTeam(target);
+        DamageCredit credit = damageCredits.remove(target.getUniqueId());
+        Set<KillIcon> icons = EnumSet.noneOf(KillIcon.class);
+        if (credit != null && !credit.expired() && credit.attackerId().equals(attacker.getUniqueId())) {
+            icons.addAll(credit.icons());
+        }
+        icons.addAll(killIcons(event.getEntity().getLastDamageCause(), credit));
+        if (icons.isEmpty()) {
+            icons.add(KillIcon.FALLBACK);
+        }
+
+        int streak = rememberKillStreak(attacker);
         attackerPlayer.playSound(Sound.ITEM_TRIDENT_RETURN, 1.3f, 0.35f);
         attackerPlayer.playSound(Sound.ITEM_TRIDENT_RETURN, 1.3f, 1.15f);
-        attackerPlayer.subtitle(Component.empty()
-            .append(Component.text("\uD83D\uDDE1 "))
-            .append(Component.text(target.getName() + " ", team == null ? NamedTextColor.WHITE : team.color()))
-            .append(Component.object(ObjectContents.playerHead(target))));
+        enqueueKillSubtitle(attackerPlayer, target, icons, streak);
     }
 
     private void applyEnvironmentalKillCredit(Player target) {
@@ -169,15 +187,20 @@ public class GameKillCreditEvents implements Listener {
             return;
         }
         target.setKiller(attacker);
-        damageCredits.put(target.getUniqueId(), credit);
+        damageCredits.put(target.getUniqueId(), credit.refreshed(killIcons(target.getLastDamageCause(), credit)));
     }
 
-    private void rememberDamageCredit(Player target, Player attacker) {
+    private void rememberDamageCredit(Player target, Player attacker, Set<KillIcon> icons) {
         GameModule game = game(target);
         if (game == null || game(attacker) != game || !allowsKillCredit(game, target, attacker)) {
             return;
         }
-        damageCredits.put(target.getUniqueId(), new DamageCredit(attacker.getUniqueId(), System.currentTimeMillis()));
+        DamageCredit previous = damageCredits.get(target.getUniqueId());
+        if (previous != null && previous.attackerId().equals(attacker.getUniqueId()) && !previous.expired()) {
+            damageCredits.put(target.getUniqueId(), previous.refreshed(icons));
+            return;
+        }
+        damageCredits.put(target.getUniqueId(), new DamageCredit(attacker.getUniqueId(), System.currentTimeMillis(), icons));
     }
 
     private boolean allowsKillCredit(GameModule game, Player target, Player attacker) {
@@ -193,7 +216,7 @@ public class GameKillCreditEvents implements Listener {
             return;
         }
         pruneBlockCredits();
-        blockCredits.put(BlockKey.of(block), new DamageCredit(attacker.getUniqueId(), System.currentTimeMillis()));
+        blockCredits.put(BlockKey.of(block), new DamageCredit(attacker.getUniqueId(), System.currentTimeMillis(), Set.of(KillIcon.BLOCK)));
     }
 
     private void rememberNearbyBlockInteraction(Block block, Player attacker) {
@@ -212,7 +235,7 @@ public class GameKillCreditEvents implements Listener {
             double dz = Math.abs(location.getZ() - center.getZ());
             double dy = location.getY() - block.getY();
             if (dx <= 1.25 && dz <= 1.25 && dy >= 0.0 && dy <= 3.0) {
-                rememberDamageCredit(target, attacker);
+                rememberDamageCredit(target, attacker, Set.of(KillIcon.BLOCK));
             }
         }
     }
@@ -247,6 +270,107 @@ public class GameKillCreditEvents implements Listener {
         blockCredits.entrySet().removeIf(entry -> entry.getValue().blockExpired());
     }
 
+    private Set<KillIcon> killIcons(EntityDamageEvent event, DamageCredit credit) {
+        Set<KillIcon> icons = EnumSet.noneOf(KillIcon.class);
+        if (event == null) {
+            return icons;
+        }
+        DamageType damageType = event.getDamageSource().getDamageType();
+        if (damageType == DamageType.ARROW || damageType == DamageType.MOB_PROJECTILE) {
+            icons.add(KillIcon.BOW);
+        } else if (damageType == DamageType.TRIDENT) {
+            icons.add(KillIcon.TRIDENT);
+        } else if (damageType == DamageType.PLAYER_ATTACK || damageType == DamageType.MOB_ATTACK) {
+            icons.add(meleeIcon(event));
+        } else if (damageType == DamageType.EXPLOSION || damageType == DamageType.PLAYER_EXPLOSION) {
+            icons.add(KillIcon.EXPLOSION);
+        } else if (damageType == DamageType.ON_FIRE || damageType == DamageType.IN_FIRE || damageType == DamageType.LAVA || damageType == DamageType.HOT_FLOOR) {
+            icons.add(KillIcon.FIRE);
+        } else if (damageType == DamageType.MAGIC || damageType == DamageType.INDIRECT_MAGIC) {
+            icons.add(KillIcon.POTION);
+        } else if (damageType == DamageType.FALL || damageType == DamageType.OUT_OF_WORLD) {
+            icons.add(KillIcon.SPLEEF);
+        } else if (damageType == DamageType.FREEZE) {
+            icons.add(KillIcon.FREEZE);
+        } else if (damageType == DamageType.LIGHTNING_BOLT) {
+            icons.add(KillIcon.LIGHTNING);
+        }
+        Entity directEntity = event.getDamageSource().getDirectEntity();
+        if (directEntity instanceof Projectile projectile) {
+            String projectileType = projectile.getType().name();
+            if (projectileType.contains("TRIDENT")) {
+                icons.add(KillIcon.TRIDENT);
+            } else if (projectileType.contains("ARROW")) {
+                icons.add(KillIcon.BOW);
+            } else if (projectileType.contains("POTION")) {
+                icons.add(KillIcon.POTION);
+            }
+        }
+        if (credit != null && !credit.blockExpired() && (damageType == DamageType.LAVA || damageType == DamageType.ON_FIRE || damageType == DamageType.IN_FIRE)) {
+            icons.add(KillIcon.FIRE);
+        }
+        return icons;
+    }
+
+    private KillIcon meleeIcon(EntityDamageEvent event) {
+        Entity causingEntity = event.getDamageSource().getCausingEntity();
+        if (!(causingEntity instanceof Player player)) {
+            return KillIcon.SWORD;
+        }
+        Material weapon = player.getInventory().getItemInMainHand().getType();
+        if (weapon.name().endsWith("_AXE")) {
+            return KillIcon.AXE;
+        }
+        if (weapon.name().endsWith("_PICKAXE")) {
+            return KillIcon.PICKAXE;
+        }
+        if (weapon == Material.TRIDENT) {
+            return KillIcon.TRIDENT;
+        }
+        return KillIcon.SWORD;
+    }
+
+    private int rememberKillStreak(Player attacker) {
+        long now = System.currentTimeMillis();
+        KillStreak streak = killStreaks.get(attacker.getUniqueId());
+        int count = streak == null || now - streak.lastKillMillis() > MULTI_KILL_MILLIS ? 1 : streak.count() + 1;
+        killStreaks.put(attacker.getUniqueId(), new KillStreak(count, now));
+        killStreaks.entrySet().removeIf(entry -> now - entry.getValue().lastKillMillis() > MULTI_KILL_MILLIS);
+        return count;
+    }
+
+    private void enqueueKillSubtitle(GamePlayer attackerPlayer, Player target, Set<KillIcon> icons, int streak) {
+        Player attacker = attackerPlayer.bukkitPlayer();
+        if (attacker == null) {
+            return;
+        }
+        UUID attackerId = attacker.getUniqueId();
+        Deque<KillSubtitle> queue = killSubtitles.computeIfAbsent(attackerId, ignored -> new ArrayDeque<>());
+        var team = target.getScoreboard().getPlayerTeam(target);
+        queue.addLast(new KillSubtitle(killSubtitle(target.getName(), team == null ? NamedTextColor.WHITE : team.color(), target, icons, streak)));
+        if (queue.size() == 1) {
+            showNextKillSubtitle(attackerPlayer, attackerId);
+        }
+    }
+
+    private void showNextKillSubtitle(GamePlayer attackerPlayer, UUID attackerId) {
+        Deque<KillSubtitle> queue = killSubtitles.get(attackerId);
+        if (queue == null || queue.isEmpty()) {
+            killSubtitles.remove(attackerId);
+            return;
+        }
+        KillSubtitle subtitle = queue.peekFirst();
+        attackerPlayer.subtitle(subtitle.component());
+        moduleService.plugin().getServer().getScheduler().runTaskLater(moduleService.plugin(), () -> {
+            Deque<KillSubtitle> current = killSubtitles.get(attackerId);
+            if (current == null) {
+                return;
+            }
+            current.pollFirst();
+            showNextKillSubtitle(attackerPlayer, attackerId);
+        }, KILL_SUBTITLE_SPACING_TICKS);
+    }
+
     private Player attackingPlayer(EntityDamageEvent event) {
         Entity causingEntity = event.getDamageSource().getCausingEntity();
         if (causingEntity instanceof Player player) {
@@ -270,13 +394,74 @@ public class GameKillCreditEvents implements Listener {
         return game != null && game.world() != null && world != null && world.equals(game.world().bukkitWorld());
     }
 
-    private record DamageCredit(UUID attackerId, long timeMillis) {
+    private record DamageCredit(UUID attackerId, long timeMillis, Set<KillIcon> icons) {
         boolean expired() {
             return System.currentTimeMillis() - timeMillis > KILL_CREDIT_MILLIS;
         }
 
         boolean blockExpired() {
             return System.currentTimeMillis() - timeMillis > BLOCK_CREDIT_MILLIS;
+        }
+
+        DamageCredit refreshed() {
+            return refreshed(Set.of());
+        }
+
+        DamageCredit refreshed(KillIcon icon) {
+            return refreshed(Set.of(icon));
+        }
+
+        DamageCredit refreshed(Set<KillIcon> newIcons) {
+            Set<KillIcon> mergedIcons = icons.isEmpty() ? EnumSet.noneOf(KillIcon.class) : EnumSet.copyOf(icons);
+            mergedIcons.addAll(newIcons);
+            return new DamageCredit(attackerId, System.currentTimeMillis(), mergedIcons);
+        }
+    }
+
+    private record KillStreak(int count, long lastKillMillis) {
+    }
+
+    private Component killSubtitle(String targetName, TextColor targetColor, Player target, Set<KillIcon> icons, int streak) {
+        Component component = Component.empty();
+        for (KillIcon icon : icons) {
+            component = component.append(Component.text(icon.text()));
+        }
+        component = component
+            .append(Component.text(" "))
+            .append(Component.text(targetName + " ", targetColor))
+            .append(Component.object(ObjectContents.playerHead(target)));
+        if (streak >= 2) {
+            component = component.append(Component.text(" x" + streak, NamedTextColor.GOLD));
+        }
+        return component;
+    }
+
+    private record KillSubtitle(Component component) {
+    }
+
+    private enum KillIcon {
+        TRIDENT("🔱"),
+        SWORD("🗡"),
+        BOW("🏹"),
+        PICKAXE("⛏"),
+        SPLEEF("☒"),
+        BLOCK("☒"),
+        FIRE("🔥"),
+        FREEZE("❄"),
+        EXPLOSION("☄"),
+        POTION("🧪"),
+        LIGHTNING("☀"),
+        AXE("🪓"),
+        FALLBACK("☠");
+
+        private final String text;
+
+        KillIcon(String text) {
+            this.text = text;
+        }
+
+        String text() {
+            return text;
         }
     }
 

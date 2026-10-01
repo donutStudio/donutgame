@@ -1,6 +1,7 @@
 package com.donutsforlife11.donutgame.internal.ui;
 
 import java.util.Collection;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -18,8 +19,13 @@ import org.bukkit.entity.Player;
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.event.PacketListenerAbstract;
+import com.github.retrooper.packetevents.event.PacketListenerCommon;
+import com.github.retrooper.packetevents.event.PacketListenerPriority;
+import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.github.retrooper.packetevents.protocol.entity.data.EntityData;
 import com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes;
+import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
 
 import fr.skytasul.glowingentities.GlowingEntities;
@@ -37,7 +43,9 @@ public class GlowService {
 
     private final Donutgame plugin;
     private final Map<UUID, GlowState> glowStates = new HashMap<>();
+    private final Map<Integer, GlowState> teamGlowStatesByEntityId = new HashMap<>();
     private GlowingEntities glowingEntities;
+    private PacketListenerCommon metadataListener;
     private boolean packetGlowAvailable;
 
     public GlowService(Donutgame plugin) {
@@ -51,12 +59,15 @@ public class GlowService {
         } catch (Throwable ignored) {
             glowingEntities = null;
         }
+        registerMetadataListener();
     }
 
     public void disable() {
+        unregisterMetadataListener();
         for (GlowState state : glowStates.values()) {
             Entity entity = Bukkit.getEntity(state.entityId());
             if (entity != null) {
+                clearTeamGlow(entity, state);
                 entity.setGlowing(false);
             }
         }
@@ -68,6 +79,7 @@ public class GlowService {
         }
         glowingEntities = null;
         packetGlowAvailable = false;
+        teamGlowStatesByEntityId.clear();
         glowStates.clear();
     }
 
@@ -112,11 +124,8 @@ public class GlowService {
             return false;
         }
         GlowState state = glowStates.computeIfAbsent(entity.getUniqueId(), GlowState::new);
-        state.color(null);
-        state.packetOnly(true);
-        state.global(false);
-        state.viewerSupplier(glowing ? viewers : null);
-        return apply(state, entity, false);
+        state.teamViewerSupplier(glowing ? viewers : null);
+        return applyTeamGlow(state, entity);
     }
 
     public void setGlowColor(Entity entity, NamedTextColor color) {
@@ -164,6 +173,171 @@ public class GlowService {
             }
         }
         return applyPacketGlow(entity, bukkitViewers, state, fallbackToVanilla);
+    }
+
+    private boolean applyTeamGlow(GlowState state, Entity entity) {
+        if (state.teamViewerSupplier() == null && state.appliedTeamViewers().isEmpty()) {
+            untrackTeamGlowEntity(state);
+            return true;
+        }
+        if (!packetGlowAvailable()) {
+            return false;
+        }
+        trackTeamGlowEntity(state, entity);
+
+        Set<Player> desiredViewers = teamGlowViewers(state);
+        Set<UUID> desiredViewerIds = new HashSet<>();
+        for (Player viewer : desiredViewers) {
+            desiredViewerIds.add(viewer.getUniqueId());
+        }
+
+        boolean appliedAll = true;
+        for (UUID viewerId : Set.copyOf(state.appliedTeamViewers())) {
+            if (desiredViewerIds.contains(viewerId)) {
+                continue;
+            }
+            Player viewer = Bukkit.getPlayer(viewerId);
+            if (viewer != null) {
+                try {
+                    sendMetadataGlow(entity, viewer, otherGlowVisible(state, entity, viewer));
+                } catch (Throwable ignored) {
+                    appliedAll = false;
+                }
+            }
+            state.appliedTeamViewers().remove(viewerId);
+        }
+
+        for (Player viewer : desiredViewers) {
+            try {
+                sendMetadataGlow(entity, viewer, true);
+                state.appliedTeamViewers().add(viewer.getUniqueId());
+            } catch (Throwable ignored) {
+                appliedAll = false;
+            }
+        }
+        return appliedAll;
+    }
+
+    private void clearTeamGlow(Entity entity, GlowState state) {
+        for (UUID viewerId : Set.copyOf(state.appliedTeamViewers())) {
+            Player viewer = Bukkit.getPlayer(viewerId);
+            if (viewer != null) {
+                try {
+                    sendMetadataGlow(entity, viewer, otherGlowVisible(state, entity, viewer));
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+        state.appliedTeamViewers().clear();
+        untrackTeamGlowEntity(state);
+    }
+
+    private Set<Player> teamGlowViewers(GlowState state) {
+        Set<Player> bukkitViewers = new HashSet<>();
+        Collection<GamePlayer> viewers = state.teamViewers();
+        if (viewers == null || viewers.isEmpty()) {
+            return bukkitViewers;
+        }
+        for (GamePlayer viewer : viewers) {
+            Player player = viewer == null ? null : viewer.bukkitPlayer();
+            if (player != null && player.isOnline()) {
+                bukkitViewers.add(player);
+            }
+        }
+        return bukkitViewers;
+    }
+
+    private boolean otherGlowVisible(GlowState state, Entity entity, Player viewer) {
+        return entity.isGlowing() || state.appliedViewers().contains(viewer.getUniqueId());
+    }
+
+    private void registerMetadataListener() {
+        try {
+            var api = PacketEvents.getAPI();
+            if (api == null) {
+                return;
+            }
+            metadataListener = api.getEventManager().registerListener(new PacketListenerAbstract(PacketListenerPriority.HIGHEST) {
+                @Override
+                public void onPacketSend(PacketSendEvent event) {
+                    rewriteTeamGlowMetadata(event);
+                }
+            });
+        } catch (NoClassDefFoundError | RuntimeException ignored) {
+            metadataListener = null;
+        }
+    }
+
+    private void unregisterMetadataListener() {
+        if (metadataListener == null) {
+            return;
+        }
+        try {
+            var api = PacketEvents.getAPI();
+            if (api != null) {
+                api.getEventManager().unregisterListener(metadataListener);
+            }
+        } catch (NoClassDefFoundError | RuntimeException ignored) {
+        }
+        metadataListener = null;
+    }
+
+    private void rewriteTeamGlowMetadata(PacketSendEvent event) {
+        if (event.getPacketType() != PacketType.Play.Server.ENTITY_METADATA || teamGlowStatesByEntityId.isEmpty()) {
+            return;
+        }
+        Player viewer = event.getPlayer();
+        if (viewer == null) {
+            return;
+        }
+        WrapperPlayServerEntityMetadata packet = new WrapperPlayServerEntityMetadata(event);
+        GlowState state = teamGlowStatesByEntityId.get(packet.getEntityId());
+        if (state == null || !state.appliedTeamViewers().contains(viewer.getUniqueId())) {
+            return;
+        }
+        List<EntityData<?>> metadata = packet.getEntityMetadata();
+        if (metadata == null || metadata.isEmpty()) {
+            packet.setEntityMetadata(List.of(new EntityData<>(0, EntityDataTypes.BYTE, GLOWING_FLAG)));
+            event.markForReEncode(true);
+            return;
+        }
+        List<EntityData<?>> updated = null;
+        for (int index = 0; index < metadata.size(); index++) {
+            EntityData<?> data = metadata.get(index);
+            if (data.getIndex() != 0 || data.getType() != EntityDataTypes.BYTE || !(data.getValue() instanceof Byte flags)) {
+                continue;
+            }
+            byte glowingFlags = (byte) (flags | GLOWING_FLAG);
+            if (glowingFlags == flags) {
+                return;
+            }
+            updated = new ArrayList<>(metadata);
+            updated.set(index, new EntityData<>(0, EntityDataTypes.BYTE, glowingFlags));
+            break;
+        }
+        if (updated == null) {
+            updated = new ArrayList<>(metadata);
+            updated.add(new EntityData<>(0, EntityDataTypes.BYTE, GLOWING_FLAG));
+        }
+        packet.setEntityMetadata(updated);
+        event.markForReEncode(true);
+    }
+
+    private void trackTeamGlowEntity(GlowState state, Entity entity) {
+        if (state.appliedTeamEntityId() == entity.getEntityId()) {
+            return;
+        }
+        untrackTeamGlowEntity(state);
+        state.appliedTeamEntityId(entity.getEntityId());
+        teamGlowStatesByEntityId.put(entity.getEntityId(), state);
+    }
+
+    private void untrackTeamGlowEntity(GlowState state) {
+        if (state.appliedTeamEntityId() == -1) {
+            return;
+        }
+        teamGlowStatesByEntityId.remove(state.appliedTeamEntityId());
+        state.appliedTeamEntityId(-1);
     }
 
     private boolean applyPacketGlow(Entity entity, Collection<? extends Player> viewers, GlowState state, boolean fallbackToVanilla) {
@@ -292,11 +466,14 @@ public class GlowService {
     private static final class GlowState {
         private final UUID entityId;
         private final Set<UUID> appliedViewers = new HashSet<>();
+        private final Set<UUID> appliedTeamViewers = new HashSet<>();
         private Supplier<Collection<GamePlayer>> viewerSupplier;
+        private Supplier<Collection<GamePlayer>> teamViewerSupplier;
         private NamedTextColor color;
         private boolean global;
         private boolean packetOnly;
         private boolean appliedPacketOnly;
+        private int appliedTeamEntityId = -1;
 
         private GlowState(UUID entityId) {
             this.entityId = entityId;
@@ -322,6 +499,18 @@ public class GlowService {
             this.viewerSupplier = viewerSupplier;
         }
 
+        private Collection<GamePlayer> teamViewers() {
+            return teamViewerSupplier == null ? null : teamViewerSupplier.get();
+        }
+
+        private Supplier<Collection<GamePlayer>> teamViewerSupplier() {
+            return teamViewerSupplier;
+        }
+
+        private void teamViewerSupplier(Supplier<Collection<GamePlayer>> teamViewerSupplier) {
+            this.teamViewerSupplier = teamViewerSupplier;
+        }
+
         private NamedTextColor color() {
             return color;
         }
@@ -332,6 +521,10 @@ public class GlowService {
 
         private Set<UUID> appliedViewers() {
             return appliedViewers;
+        }
+
+        private Set<UUID> appliedTeamViewers() {
+            return appliedTeamViewers;
         }
 
         private boolean packetOnly() {
@@ -348,6 +541,14 @@ public class GlowService {
 
         private void appliedPacketOnly(boolean appliedPacketOnly) {
             this.appliedPacketOnly = appliedPacketOnly;
+        }
+
+        private int appliedTeamEntityId() {
+            return appliedTeamEntityId;
+        }
+
+        private void appliedTeamEntityId(int appliedTeamEntityId) {
+            this.appliedTeamEntityId = appliedTeamEntityId;
         }
     }
 }

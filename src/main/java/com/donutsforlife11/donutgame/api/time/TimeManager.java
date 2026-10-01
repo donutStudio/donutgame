@@ -1,9 +1,13 @@
 package com.donutsforlife11.donutgame.api.time;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
+import org.bukkit.Bukkit;
 import org.bukkit.scheduler.BukkitTask;
 
 import com.donutsforlife11.donutgame.internal.game.GameModule;
@@ -11,8 +15,10 @@ import com.donutsforlife11.donutgame.internal.game.GameModule;
 public class TimeManager {
     private final GameModule module;
     private final Set<GameTimer> timers = ConcurrentHashMap.newKeySet();
+    private final PriorityQueue<ScheduledTimer> scheduledTimers = new PriorityQueue<>();
     private final Object tickerLock = new Object();
     private BukkitTask tickerTask;
+    private long tickerWakeTick = Long.MAX_VALUE;
 
     public TimeManager(GameModule module) {
         this.module = module;
@@ -31,25 +37,42 @@ public class TimeManager {
             timer.cancel();
         }
         timers.clear();
+        synchronized (tickerLock) {
+            scheduledTimers.clear();
+        }
         stopTicker();
     }
 
-    void startTicking() {
+    long currentTick() {
+        return Bukkit.getCurrentTick();
+    }
+
+    void schedule(GameTimer timer) {
+        long now = currentTick();
+        long wakeTick = timer.nextWakeTick(now);
         synchronized (tickerLock) {
-            if (tickerTask != null) {
+            if (!timers.contains(timer)) {
                 return;
             }
-            tickerTask = module.plugin().getServer().getScheduler().runTaskTimer(module.plugin(), this::tickTimers, 1L, 1L);
+            long version = timer.assignSchedule(wakeTick);
+            if (wakeTick != Long.MAX_VALUE) {
+                scheduledTimers.add(new ScheduledTimer(timer, wakeTick, version));
+            }
+            scheduleNextTicker(now);
         }
     }
 
     void register(GameTimer timer) {
         timers.add(timer);
+        schedule(timer);
     }
 
     void remove(GameTimer timer) {
         timers.remove(timer);
-        stopTickingIfIdle();
+        timer.clearSchedule();
+        synchronized (tickerLock) {
+            scheduleNextTicker(currentTick());
+        }
     }
 
     void logTimerException(Throwable throwable) {
@@ -57,18 +80,28 @@ public class TimeManager {
     }
 
     private void tickTimers() {
-        for (GameTimer timer : Set.copyOf(timers)) {
-            timer.tick();
-        }
-        stopTickingIfIdle();
-    }
-
-    private void stopTickingIfIdle() {
+        long now = currentTick();
+        List<GameTimer> dueTimers = new ArrayList<>();
         synchronized (tickerLock) {
-            if (tickerTask == null || hasTickingTimer()) {
-                return;
+            tickerTask = null;
+            tickerWakeTick = Long.MAX_VALUE;
+            while (!scheduledTimers.isEmpty()) {
+                ScheduledTimer scheduled = scheduledTimers.peek();
+                if (!scheduled.valid()) {
+                    scheduledTimers.poll();
+                    continue;
+                }
+                if (scheduled.wakeTick() > now) {
+                    break;
+                }
+                scheduledTimers.poll();
+                dueTimers.add(scheduled.timer());
             }
-            stopTicker();
+            scheduleNextTicker(now);
+        }
+
+        for (GameTimer timer : dueTimers) {
+            timer.tick(now);
         }
     }
 
@@ -78,15 +111,44 @@ public class TimeManager {
                 tickerTask.cancel();
                 tickerTask = null;
             }
+            tickerWakeTick = Long.MAX_VALUE;
         }
     }
 
-    private boolean hasTickingTimer() {
-        for (GameTimer timer : timers) {
-            if (timer.needsTicks()) {
-                return true;
-            }
+    private void scheduleNextTicker(long now) {
+        while (!scheduledTimers.isEmpty() && !scheduledTimers.peek().valid()) {
+            scheduledTimers.poll();
         }
-        return false;
+        if (scheduledTimers.isEmpty()) {
+            stopTicker();
+            return;
+        }
+
+        long wakeTick = scheduledTimers.peek().wakeTick();
+        if (tickerTask != null && tickerWakeTick <= wakeTick) {
+            return;
+        }
+        if (tickerTask != null) {
+            tickerTask.cancel();
+        }
+
+        tickerWakeTick = wakeTick;
+        long delay = Math.max(1L, wakeTick - now);
+        tickerTask = module.plugin().getServer().getScheduler().runTaskLater(module.plugin(), this::tickTimers, delay);
+    }
+
+    private record ScheduledTimer(GameTimer timer, long wakeTick, long version) implements Comparable<ScheduledTimer> {
+        private boolean valid() {
+            return timer.isScheduled(wakeTick, version);
+        }
+
+        @Override
+        public int compareTo(ScheduledTimer other) {
+            int wakeComparison = Long.compare(wakeTick, other.wakeTick);
+            if (wakeComparison != 0) {
+                return wakeComparison;
+            }
+            return Long.compare(version, other.version);
+        }
     }
 }
