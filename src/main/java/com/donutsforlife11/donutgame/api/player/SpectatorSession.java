@@ -3,6 +3,7 @@ package com.donutsforlife11.donutgame.api.player;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 
 import com.donutsforlife11.donutgame.api.item.GameItemComponents;
 
@@ -72,7 +73,12 @@ final class SpectatorSession implements AutoCloseable {
         player.setAllowFlight(true);
         player.setFlying(true);
         player.setFallDistance(0.0f);
-        player.getInventory().setItem(MENU_SLOT, menuItem());
+        PlayerInventory inventory = player.getInventory();
+        inventory.setStorageContents(new ItemStack[36]);
+        inventory.setArmorContents(new ItemStack[4]);
+        inventory.setExtraContents(new ItemStack[1]);
+        inventory.setHeldItemSlot(MENU_SLOT);
+        inventory.setItem(MENU_SLOT, menuItem());
         player.updateInventory();
         owner.module().plugin().spectatorService().showSpectator(owner);
         owner.module().log(
