@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 import org.bukkit.Difficulty;
 import org.bukkit.Location;
@@ -19,9 +20,11 @@ public class GameWorld {
     private final String id;
     private final Map<String, List<GameLocation>> points = new LinkedHashMap<>();
     private final Map<String, List<GameRegion>> regions = new LinkedHashMap<>();
+    private final List<Consumer<Boolean>> playerCollisionListeners = new ArrayList<>();
     private final GameWorldGamerules gamerules = new GameWorldGamerules(this);
     private World bukkitWorld;
     private boolean hungerEnabled = true;
+    private boolean playerCollisionsEnabled;
 
     public GameWorld(String id) {
         if (id == null || id.isBlank()) {
@@ -253,6 +256,29 @@ public class GameWorld {
 
     public boolean hungerEnabled() {
         return hungerEnabled;
+    }
+
+    public void setPlayerCollisionsEnabled(boolean enabled) {
+        playerCollisionsEnabled = enabled;
+        World world = bukkitWorld;
+        if (world != null) {
+            for (org.bukkit.entity.Player player : world.getPlayers()) {
+                player.setCollidable(enabled);
+            }
+        }
+        for (Consumer<Boolean> listener : List.copyOf(playerCollisionListeners)) {
+            listener.accept(enabled);
+        }
+    }
+
+    public boolean playerCollisionsEnabled() {
+        return playerCollisionsEnabled;
+    }
+
+    public void onPlayerCollisionsChanged(Consumer<Boolean> listener) {
+        if (listener != null) {
+            playerCollisionListeners.add(listener);
+        }
     }
 
     public void clearMapData() {

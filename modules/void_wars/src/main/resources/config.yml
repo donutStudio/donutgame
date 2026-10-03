@@ -4,6 +4,7 @@ name: Void Wars
 maps:
   - classic_enhanced
 team_size: 1
+team_new_players: true
 ground_collapse_time: 15
 pvp_enablement_time: 20
 base_respawn_time: 20

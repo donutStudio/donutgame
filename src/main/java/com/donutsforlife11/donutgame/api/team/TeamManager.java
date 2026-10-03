@@ -57,6 +57,7 @@ public class TeamManager {
 
     public TeamManager(PlayerManager playerManager) {
         this.playerManager = Objects.requireNonNull(playerManager, "playerManager");
+        this.playerManager.module().world().onPlayerCollisionsChanged(ignored -> refreshCollisionRules());
     }
 
     public void initialize() {
@@ -162,6 +163,12 @@ public class TeamManager {
             EventPriority.HIGHEST,
             true
         );
+    }
+
+    private void refreshCollisionRules() {
+        for (GameTeam team : teams) {
+            team.setCollisionRule(team.collisionRule());
+        }
     }
 
     private void handleFriendlyFire(EntityDamageEvent event) {

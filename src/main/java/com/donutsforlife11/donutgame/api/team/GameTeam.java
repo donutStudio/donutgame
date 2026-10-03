@@ -97,16 +97,16 @@ public class GameTeam {
     }
 
     public Collection<GamePlayer> getSpectators() {
-        return filteredPlayers(GamePlayer::isSpectator);
+        return filteredPlayers(player -> player.isSpectator() || !player.isOnline());
     }
 
     public Collection<GamePlayer> getNonSpectators() {
-        return filteredPlayers(player -> !player.isSpectator());
+        return filteredPlayers(player -> !player.isSpectator() && player.isOnline());
     }
 
     public boolean allSpectators() {
         for (GamePlayer player : getPlayers()) {
-            if (!player.isSpectator()) {
+            if (!player.isSpectator() && player.isOnline()) {
                 return false;
             }
         }
@@ -239,7 +239,7 @@ public class GameTeam {
 
     public GameTeam setCollisionRule(Team.OptionStatus collisionRule) {
         this.collisionRule = collisionRule == null ? Team.OptionStatus.FOR_OWN_TEAM : collisionRule;
-        team.setOption(Team.Option.COLLISION_RULE, this.collisionRule);
+        team.setOption(Team.Option.COLLISION_RULE, effectiveCollisionRule());
         return this;
     }
 
@@ -268,7 +268,7 @@ public class GameTeam {
         team.setAllowFriendlyFire(friendlyFire);
         team.setCanSeeFriendlyInvisibles(seeFriendlyInvisibles);
         team.setOption(Team.Option.NAME_TAG_VISIBILITY, nametagVisibility);
-        team.setOption(Team.Option.COLLISION_RULE, collisionRule);
+        team.setOption(Team.Option.COLLISION_RULE, effectiveCollisionRule());
         for (GamePlayer player : getPlayers()) {
             syncPlayer(player);
         }
@@ -329,5 +329,11 @@ public class GameTeam {
 
     private Component defaultDisplayName() {
         return Component.text("Team " + (index + 1), color);
+    }
+
+    private Team.OptionStatus effectiveCollisionRule() {
+        return manager.playerManager().module().world().playerCollisionsEnabled()
+            ? collisionRule
+            : Team.OptionStatus.NEVER;
     }
 }

@@ -7,10 +7,12 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import org.bukkit.GameMode;
+import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.event.entity.PlayerDeathEvent;
@@ -22,6 +24,10 @@ import org.bukkit.potion.PotionEffectType;
 
 import com.donutsforlife11.donutgame.api.event.GameEvent;
 import com.donutsforlife11.donutgame.api.event.GameEventHandler;
+import com.donutsforlife11.donutgame.api.event.GamePlayerLateJoinEvent;
+import com.donutsforlife11.donutgame.api.item.GameItem;
+import com.donutsforlife11.donutgame.api.item.GameItemComponents;
+import com.donutsforlife11.donutgame.api.item.GameItemComponents.PlayerVisibilityMode;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
@@ -33,12 +39,15 @@ import net.kyori.adventure.text.format.TextDecoration;
 
 final class SpeedZonePlayers {
     private static final int SPEED_AMPLIFIER = 1; // Speed II
+    private static final int PLAYER_VISIBILITY_SLOT = 8;
 
     private final SpeedZone game;
     private final SpeedZoneModifiers modifiers;
     private final Map<UUID, PlayerData> data = new HashMap<>();
     private final Set<UUID> lateSpectators = new LinkedHashSet<>();
+    private final Set<UUID> gateReachedPlayers = new LinkedHashSet<>();
     private List<List<String>> checkpointModifiers = List.of();
+    private ProgressGate progressGate;
 
     SpeedZonePlayers(SpeedZone game, SpeedZoneModifiers modifiers) {
         this.game = game;
@@ -137,7 +146,11 @@ final class SpeedZonePlayers {
                 continue;
             }
             PlayerData state = data.computeIfAbsent(player.uuid(), ignored -> new PlayerData(0, 0, 0.0));
+            if (holdAtGateIfNeeded(player, state, location)) {
+                continue;
+            }
             int crossed = 0;
+            boolean heldAtGate = false;
             while (crossed < game.checkpoints().size() && game.passedNextCheckpoint(state.segmentIndex(), location)) {
                 int nextSegment = (state.segmentIndex() + 1) % game.checkpoints().size();
                 int completedLaps = state.completedLaps() + (nextSegment == 0 ? 1 : 0);
@@ -145,11 +158,23 @@ final class SpeedZonePlayers {
                 data.put(player.uuid(), state);
                 applyCheckpointLoadout(player, nextSegment, true);
                 player.setSpawnPoint(game.checkpoints().get(nextSegment));
+                if (shouldStopAt(nextSegment)) {
+                    progressGate = new ProgressGate(completedLaps, nextSegment, gateProgress(completedLaps, nextSegment));
+                    gateReachedPlayers.clear();
+                    gateReachedPlayers.add(player.uuid());
+                    holdAtGate(player, progressGate);
+                    heldAtGate = true;
+                    break;
+                }
                 crossed++;
+            }
+            if (heldAtGate) {
+                continue;
             }
             double progress = game.progress(state.completedLaps(), state.segmentIndex(), location);
             data.put(player.uuid(), new PlayerData(state.completedLaps(), state.segmentIndex(), progress));
         }
+        releaseGateIfReady();
     }
 
     double leadingProgress() {
@@ -161,6 +186,20 @@ final class SpeedZonePlayers {
             }
         }
         return leading;
+    }
+
+    Optional<GameLocation> leadingLocation() {
+        GamePlayer leadingPlayer = null;
+        double leading = -1.0;
+        for (GamePlayer player : game.playerManager().getNonSpectators()) {
+            PlayerData state = data.get(player.uuid());
+            GameLocation location = player.location();
+            if (state != null && location != null && state.progress() > leading) {
+                leading = state.progress();
+                leadingPlayer = player;
+            }
+        }
+        return leadingPlayer == null ? Optional.empty() : Optional.ofNullable(leadingPlayer.location());
     }
 
     void checkGameOver() {
@@ -196,6 +235,15 @@ final class SpeedZonePlayers {
 
     private void applySpeed(GamePlayer player) {
         player.addEffect(new PotionEffect(PotionEffectType.SPEED, PotionEffect.INFINITE_DURATION, SPEED_AMPLIFIER, false, false, false));
+        applyPlayerVisibilityItem(player);
+    }
+
+    private void applyPlayerVisibilityItem(GamePlayer player) {
+        GameItem item = GameItem.of(Material.ENDER_EYE);
+        item.setData(GameItemComponents.PLAYER_VISIBILITY_TOGGLE, (byte) 1);
+        item.setData(GameItemComponents.UNDROPPABLE, (byte) 1);
+        item.setData(GameItemComponents.PLAYER_VISIBILITY_MODE, PlayerVisibilityMode.EVERYONE.key());
+        player.setHotbarItem(PLAYER_VISIBILITY_SLOT, item);
     }
 
     private List<String> parseModifierList(Object value) {
@@ -236,6 +284,7 @@ final class SpeedZonePlayers {
             if (game.teamSize > 1 && team != null && team.allSpectators()) {
                 game.uiManager().title(team.getPlayers(), Component.text("Team Eliminated!", NamedTextColor.RED, TextDecoration.BOLD));
             }
+            releaseGateIfReady();
             checkGameOver();
             return;
         }
@@ -267,14 +316,74 @@ final class SpeedZonePlayers {
     }
 
     @GameEventHandler
+    public void onLateJoin(GameEvent<GamePlayerLateJoinEvent> event) {
+        GamePlayer player = event.get("player", GamePlayer.class);
+        if (player == null || game.teamManager().playerHasTeam(player)) {
+            return;
+        }
+        lateSpectators.add(player.uuid());
+        data.put(player.uuid(), new PlayerData(0, 0, 0.0));
+        player.setSpawnPoint(game.checkpoints().get(0));
+        event.bukkitEvent().setSpectatorLocation(game.checkpoints().get(0));
+    }
+
+    @GameEventHandler
     public void onQuit(GameEvent<PlayerQuitEvent> event) {
         GamePlayer player = event.get("player", GamePlayer.class);
         if (player != null) {
             player.setSpectator(true);
+            releaseGateIfReady();
             checkGameOver();
         }
     }
 
+    private boolean holdAtGateIfNeeded(GamePlayer player, PlayerData state, GameLocation location) {
+        ProgressGate gate = progressGate;
+        if (gate == null) {
+            return false;
+        }
+        double currentProgress = game.progress(state.completedLaps(), state.segmentIndex(), location);
+        if (currentProgress + 0.5 < gate.progress()) {
+            return false;
+        }
+        gateReachedPlayers.add(player.uuid());
+        holdAtGate(player, gate);
+        releaseGateIfReady();
+        return true;
+    }
+
+    private void holdAtGate(GamePlayer player, ProgressGate gate) {
+        GameLocation checkpoint = game.checkpoints().get(gate.segmentIndex());
+        player.teleport(checkpoint);
+        data.put(player.uuid(), new PlayerData(gate.completedLaps(), gate.segmentIndex(), gate.progress()));
+    }
+
+    private void releaseGateIfReady() {
+        ProgressGate gate = progressGate;
+        if (gate == null) {
+            return;
+        }
+        for (GamePlayer player : game.playerManager().getNonSpectators()) {
+            PlayerData state = data.get(player.uuid());
+            if (!gateReachedPlayers.contains(player.uuid()) && (state == null || state.progress() + 0.5 < gate.progress())) {
+                return;
+            }
+        }
+        progressGate = null;
+        gateReachedPlayers.clear();
+    }
+
+    private boolean shouldStopAt(int nextSegment) {
+        return nextSegment == 0 ? game.stopOnLaps : game.stopOnCheckpoints;
+    }
+
+    private double gateProgress(int completedLaps, int segmentIndex) {
+        return game.progress(completedLaps, segmentIndex, game.checkpoints().get(segmentIndex));
+    }
+
     record PlayerData(int completedLaps, int segmentIndex, double progress) {
+    }
+
+    private record ProgressGate(int completedLaps, int segmentIndex, double progress) {
     }
 }

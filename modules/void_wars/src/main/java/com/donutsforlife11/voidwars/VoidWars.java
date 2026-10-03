@@ -32,6 +32,7 @@ public class VoidWars extends GameModule {
     int minChests;
     int maxChests;
     boolean protectRegions;
+    boolean teamNewPlayers;
 
     private int round;
     private boolean roundStarted;
@@ -40,7 +41,8 @@ public class VoidWars extends GameModule {
     private GameBorder border;
     private VoidWarsEvents events;
     private VoidWarsPlayers players;
-    // private VoidWarsRegionProtection regionProtection;
+    @SuppressWarnings("unused")
+    private VoidWarsRegionProtection regionProtection;
     private VoidWarsSidebar sidebar;
 
     @Override
@@ -49,7 +51,7 @@ public class VoidWars extends GameModule {
         validateMap();
         events = new VoidWarsEvents(this);
         players = new VoidWarsPlayers(this);
-        new VoidWarsRegionProtection(this);
+        regionProtection = new VoidWarsRegionProtection(this);
         events.load();
         players.assignTeams();
         loadRound();
@@ -82,6 +84,9 @@ public class VoidWars extends GameModule {
         world().setWorldSpawn(world().getPoint(SPAWN));
         border = borderManager().newBorder(world().getRegion(BORDER));
         events.prepareRound();
+        if (teamNewPlayers) {
+            players.assignNewPlayersToTeams();
+        }
 
         for (GamePlayer player : playerManager().getPlayers()) {
             players.setupPlayer(player, true, preservePlayerLocations);
@@ -183,6 +188,7 @@ public class VoidWars extends GameModule {
         minChests = Math.max(0, config().getInt("min_chests", 0));
         maxChests = Math.max(minChests, config().getInt("max_chests", minChests));
         protectRegions = config().getBoolean("protect_regions", true);
+        teamNewPlayers = config().getBoolean("team_new_players", true);
     }
 
     private void validateMap() {

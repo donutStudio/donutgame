@@ -384,6 +384,25 @@ public class GamePlayer implements GameEntityBase {
         return Collections.unmodifiableList(items);
     }
 
+    public void setHotbarItem(int slot, GameItem item) {
+        if (slot < 0 || slot >= 9) {
+            throw new IllegalArgumentException("hotbar slot must be between 0 and 8");
+        }
+        ItemStack stack = item == null ? null : GameItemComponents.normalize(this, item.copyBukkitItem());
+        playingState.inventory[slot] = stack == null ? null : stack.clone();
+        applyVisiblePlayer(player -> {
+            player.getInventory().setItem(slot, stack == null ? null : stack.clone());
+            player.updateInventory();
+        });
+    }
+
+    public GameItem getHotbarItem(int slot) {
+        if (slot < 0 || slot >= 9) {
+            throw new IllegalArgumentException("hotbar slot must be between 0 and 8");
+        }
+        return GameItem.from(playingState.inventory[slot]);
+    }
+
     @Override
     public void setHealth(float health) {
         playingState.health = Math.max(0.0, Math.min(health, maxHealth()));
@@ -678,6 +697,7 @@ public class GamePlayer implements GameEntityBase {
             return;
         }
         PlayerAttributeDefaults.repairInvalidCameraDistance(player);
+        player.setCollidable(world().playerCollisionsEnabled());
         state = PlayerState.ONLINE;
         World world = player.getWorld();
         lastWorldName = world == null ? null : world.getName();
@@ -715,6 +735,7 @@ public class GamePlayer implements GameEntityBase {
         closeSpectatorSession(player);
         resetPlayingStateForGame();
         clearSpectatorProjectionFromPlayingState();
+        player.setCollidable(world().playerCollisionsEnabled());
         state = PlayerState.ONLINE;
         World world = player.getWorld();
         lastWorldName = world == null ? null : world.getName();

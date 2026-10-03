@@ -26,6 +26,8 @@ permissions:
       donutgame.command.minigame.join: true
       donutgame.command.minigame.leave: true
       donutgame.command.minigame.unload: true
+      donutgame.command.minigame.lock: true
+      donutgame.command.minigame.unlock: true
       donutgame.command.worldtp: true
   donutgame.command.reload:
     description: Allows reloading Donutgame configuration, modules, and maps.
@@ -41,6 +43,12 @@ permissions:
     default: op
   donutgame.command.minigame.unload:
     description: Allows unloading active minigame modules.
+    default: op
+  donutgame.command.minigame.lock:
+    description: Allows locking the server to an active minigame module.
+    default: op
+  donutgame.command.minigame.unlock:
+    description: Allows releasing the active minigame server lock.
     default: op
   donutgame.command.worldtp:
     description: Allows teleporting to loaded worlds.

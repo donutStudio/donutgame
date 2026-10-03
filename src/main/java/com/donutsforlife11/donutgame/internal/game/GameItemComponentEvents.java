@@ -10,8 +10,8 @@ import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.attribute.Attribute;
-import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.damage.DamageSource;
+import org.bukkit.damage.DamageType;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Creeper;
@@ -39,8 +39,10 @@ import org.bukkit.event.inventory.InventoryCreativeEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
@@ -48,17 +50,18 @@ import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.api.item.GameItemComponents;
+import com.donutsforlife11.donutgame.api.item.GameItemComponents.PlayerVisibilityMode;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.team.GameTeam;
 
 public class GameItemComponentEvents implements Listener {
     private static final String VANILLA_PROJECTILE_KEY = "vanilla_projectile";
     private static final double SNOWBALL_DAMAGE = 0.33;
     private static final double EGG_KNOCKBACK_DAMAGE = 0.0001;
-    private static final double SNOWBALL_KNOCKBACK = 0.42;
-    private static final double EGG_KNOCKBACK = 0.24;
 
     private final ModuleService moduleService;
     private final Map<UUID, PendingAutoIgnite> pendingAutoIgnites = new LinkedHashMap<>();
+    private final Map<UUID, PlayerVisibilityMode> visibilityModes = new LinkedHashMap<>();
     private final Set<BlockKey> infinitePlacedBlocks = new HashSet<>();
 
     public GameItemComponentEvents(ModuleService moduleService) {
@@ -99,7 +102,7 @@ public class GameItemComponentEvents implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onPlayerInteract(PlayerInteractEvent event) {
-        if (event.getHand() != EquipmentSlot.HAND || !isUseAction(event.getAction())) {
+        if (event.getHand() == null || !isUseAction(event.getAction())) {
             return;
         }
         GamePlayer player = gamePlayer(event.getPlayer());
@@ -108,6 +111,16 @@ public class GameItemComponentEvents implements Listener {
             return;
         }
         GameItemComponents.normalize(player, item);
+        if (GameItemComponents.hasPlayerVisibilityToggle(item)) {
+            event.setCancelled(true);
+            event.setUseItemInHand(org.bukkit.event.Event.Result.DENY);
+            togglePlayerVisibility(player, event.getPlayer(), item, event.getHand());
+            syncInventory(event.getPlayer());
+            return;
+        }
+        if (GameItemComponents.hasInfiniteUse(item)) {
+            scheduleInfiniteUseReplenish(event.getPlayer(), event.getHand(), item.clone());
+        }
         int fuse = GameItemComponents.autoIgniteFuse(item);
         EntityType entityType = spawnType(item.getType());
         if (fuse <= 0 || entityType == null || !canAutoIgnite(entityType)) {
@@ -140,19 +153,21 @@ public class GameItemComponentEvents implements Listener {
         if (isVanillaProjectile(projectile)) {
             return;
         }
-        if (!(projectile.getShooter() instanceof Player player) || gamePlayer(player) == null) {
+        if (!(projectile.getShooter() instanceof Player player)) {
             return;
         }
         if (!(event.getHitEntity() instanceof LivingEntity target)) {
             return;
         }
+        if (gamePlayer(player) == null) {
+            return;
+        }
 
+        DamageSource damageSource = projectileDamageSource(projectile, player);
         if (projectile instanceof Snowball) {
-            target.damage(SNOWBALL_DAMAGE, projectile);
-            knockbackFromProjectile(target, projectile, SNOWBALL_KNOCKBACK);
+            target.damage(SNOWBALL_DAMAGE, damageSource);
         } else {
-            damageWithoutHealthLoss(target, projectile);
-            knockbackFromProjectile(target, projectile, EGG_KNOCKBACK);
+            target.damage(EGG_KNOCKBACK_DAMAGE, damageSource);
         }
     }
 
@@ -187,9 +202,26 @@ public class GameItemComponentEvents implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onDrop(PlayerDropItemEvent event) {
+        if (GameItemComponents.hasUndroppable(event.getItemDrop().getItemStack())) {
+            event.setCancelled(true);
+            Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(event.getPlayer()));
+            return;
+        }
         if (GameItemComponents.hasInfiniteBuild(event.getItemDrop().getItemStack())) {
             Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(event.getPlayer()));
         }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onConsume(PlayerItemConsumeEvent event) {
+        GamePlayer player = gamePlayer(event.getPlayer());
+        ItemStack item = event.getItem();
+        if (player == null || item == null || !GameItemComponents.hasInfiniteUse(item)) {
+            return;
+        }
+        ItemStack replacement = GameItemComponents.normalize(player, item.clone());
+        event.setReplacement(replacement);
+        Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(event.getPlayer()));
     }
 
     @EventHandler
@@ -225,7 +257,16 @@ public class GameItemComponentEvents implements Listener {
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
-        Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(event.getPlayer()));
+        Bukkit.getScheduler().runTask(moduleService.plugin(), () -> {
+            syncInventory(event.getPlayer());
+            refreshPlayerVisibilityForAll();
+        });
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        visibilityModes.remove(event.getPlayer().getUniqueId());
+        Bukkit.getScheduler().runTask(moduleService.plugin(), this::refreshPlayerVisibilityForAll);
     }
 
     private void spawnBlockTnt(Block block, Player player, Material material, int fuse) {
@@ -262,6 +303,123 @@ public class GameItemComponentEvents implements Listener {
             }
         }
         player.updateInventory();
+    }
+
+    private void scheduleInfiniteUseReplenish(Player player, EquipmentSlot hand, ItemStack usedItem) {
+        int originalAmount = usedItem.getAmount();
+        Bukkit.getScheduler().runTask(moduleService.plugin(), () -> replenishUsedItem(player, hand, usedItem, originalAmount));
+        Bukkit.getScheduler().runTaskLater(moduleService.plugin(), () -> replenishUsedItem(player, hand, usedItem, originalAmount), 5L);
+    }
+
+    private void replenishUsedItem(Player player, EquipmentSlot hand, ItemStack usedItem, int originalAmount) {
+        if (player == null || !player.isOnline() || hand == null || usedItem == null || originalAmount <= 0) {
+            return;
+        }
+        ItemStack current = itemInHand(player, hand);
+        if (!wasDepleted(usedItem, originalAmount, current)) {
+            return;
+        }
+        ItemStack replacement = usedItem.clone();
+        replacement.setAmount(originalAmount);
+        setItemInHand(player, hand, replacement);
+        syncInventory(player);
+    }
+
+    private boolean wasDepleted(ItemStack usedItem, int originalAmount, ItemStack current) {
+        if (current == null || current.getType().isAir()) {
+            return true;
+        }
+        if (!current.isSimilar(usedItem)) {
+            return originalAmount == 1;
+        }
+        return current.getAmount() < originalAmount;
+    }
+
+    private ItemStack itemInHand(Player player, EquipmentSlot hand) {
+        return hand == EquipmentSlot.OFF_HAND
+            ? player.getInventory().getItemInOffHand()
+            : player.getInventory().getItemInMainHand();
+    }
+
+    private void setItemInHand(Player player, EquipmentSlot hand, ItemStack item) {
+        if (hand == EquipmentSlot.OFF_HAND) {
+            player.getInventory().setItemInOffHand(item);
+        } else {
+            player.getInventory().setItemInMainHand(item);
+        }
+        player.updateInventory();
+    }
+
+    private void togglePlayerVisibility(GamePlayer gamePlayer, Player bukkitPlayer, ItemStack item, EquipmentSlot hand) {
+        PlayerVisibilityMode current = GameItemComponents.playerVisibilityMode(item);
+        PlayerVisibilityMode next = nextVisibilityMode(gamePlayer, current);
+        GameItemComponents.setPlayerVisibilityMode(item, next);
+        setItemInHand(bukkitPlayer, hand, item);
+        visibilityModes.put(gamePlayer.uuid(), next);
+        applyPlayerVisibility(gamePlayer, bukkitPlayer, next);
+    }
+
+    private PlayerVisibilityMode nextVisibilityMode(GamePlayer gamePlayer, PlayerVisibilityMode current) {
+        boolean teamModeAvailable = teamModeAvailable(gamePlayer);
+        if (teamModeAvailable) {
+            return switch (current) {
+                case EVERYONE -> PlayerVisibilityMode.TEAM_ONLY;
+                case TEAM_ONLY -> PlayerVisibilityMode.SELF_ONLY;
+                case SELF_ONLY -> PlayerVisibilityMode.EVERYONE;
+            };
+        }
+        return current == PlayerVisibilityMode.EVERYONE ? PlayerVisibilityMode.SELF_ONLY : PlayerVisibilityMode.EVERYONE;
+    }
+
+    private boolean teamModeAvailable(GamePlayer gamePlayer) {
+        if (gamePlayer == null) {
+            return false;
+        }
+        for (GameTeam team : gamePlayer.module().teamManager().getTeams()) {
+            if (team.getPlayers().size() > 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void refreshPlayerVisibilityForAll() {
+        for (GameModule game : moduleService.activeGames().values()) {
+            for (GamePlayer viewer : game.playerManager().getOnlinePlayers()) {
+                Player bukkitViewer = viewer.bukkitPlayer();
+                if (bukkitViewer == null) {
+                    continue;
+                }
+                PlayerVisibilityMode mode = visibilityModes.getOrDefault(viewer.uuid(), PlayerVisibilityMode.EVERYONE);
+                applyPlayerVisibility(viewer, bukkitViewer, mode);
+            }
+        }
+    }
+
+    private void applyPlayerVisibility(GamePlayer viewer, Player bukkitViewer, PlayerVisibilityMode mode) {
+        GameModule game = viewer.module();
+        GameTeam viewerTeam = viewer.getTeam();
+        for (GamePlayer target : game.playerManager().getOnlinePlayers()) {
+            Player bukkitTarget = target.bukkitPlayer();
+            if (bukkitTarget == null) {
+                continue;
+            }
+            if (target == viewer) {
+                bukkitViewer.showEntity(moduleService.plugin(), bukkitTarget);
+                continue;
+            }
+            boolean visible = switch (mode) {
+                case EVERYONE -> !target.isSpectator();
+                case TEAM_ONLY -> !target.isSpectator() && viewerTeam != null && viewerTeam == target.getTeam();
+                case SELF_ONLY -> false;
+            };
+            if (visible) {
+                bukkitViewer.showEntity(moduleService.plugin(), bukkitTarget);
+            } else {
+                bukkitViewer.hideEntity(moduleService.plugin(), bukkitTarget);
+            }
+            moduleService.plugin().spectatorService().refreshPlayerList(bukkitViewer, bukkitTarget);
+        }
     }
 
     private boolean hasInfiniteBuildItem(Player player, Material material) {
@@ -347,25 +505,13 @@ public class GameItemComponentEvents implements Listener {
         return new org.bukkit.NamespacedKey(moduleService.plugin(), VANILLA_PROJECTILE_KEY);
     }
 
-    private void damageWithoutHealthLoss(LivingEntity target, Projectile projectile) {
-        double health = target.getHealth();
-        target.damage(EGG_KNOCKBACK_DAMAGE, projectile);
-        if (target.isDead() || !target.isValid()) {
-            return;
+    private DamageSource projectileDamageSource(Projectile projectile, Player shooter) {
+        DamageSource.Builder builder = DamageSource.builder(DamageType.ARROW)
+            .withDirectEntity(projectile);
+        if (shooter != null) {
+            builder.withCausingEntity(shooter);
         }
-        AttributeInstance maxHealth = target.getAttribute(Attribute.MAX_HEALTH);
-        target.setHealth(Math.min(health, maxHealth == null ? health : maxHealth.getValue()));
-    }
-
-    private void knockbackFromProjectile(LivingEntity target, Projectile projectile, double strength) {
-        Vector velocity = projectile.getVelocity();
-        if (velocity.lengthSquared() < 1.0e-6) {
-            velocity = target.getLocation().toVector().subtract(projectile.getLocation().toVector());
-        }
-        if (velocity.lengthSquared() < 1.0e-6) {
-            return;
-        }
-        target.knockback(strength, -velocity.getX(), -velocity.getZ());
+        return builder.build();
     }
 
     private GamePlayer gamePlayer(Player player) {

@@ -1,6 +1,7 @@
 package com.donutsforlife11.donutgame.internal.game;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -27,6 +28,7 @@ public class ModuleService {
     private final Map<Integer, GameModule> activeGames = new HashMap<>();
     private final Queue<Integer> freeIndexes = new PriorityQueue<>();
     private int nextIndex;
+    private Integer lockedGameIndex;
 
     public ModuleService(Donutgame plugin) {
         this.plugin = plugin;
@@ -41,9 +43,9 @@ public class ModuleService {
     }
 
     public CompletableFuture<GameModule> loadModule(GameModuleDescriptor descriptor, YamlConfiguration config, java.util.Collection<Player> initialPlayers) throws ReflectiveOperationException {
-        int maxActiveGames = Math.max(1, plugin.getConfig().getInt("max-active-games", 1));
+        int maxActiveGames = Math.max(1, plugin.getConfig().getInt("max_active_games", plugin.getConfig().getInt("max-active-games", 1)));
         if (activeGames.size() >= maxActiveGames) {
-            throw new IllegalStateException("Cannot load another game; max-active-games is " + maxActiveGames + ".");
+            throw new IllegalStateException("Cannot load another game; max_active_games is " + maxActiveGames + ".");
         }
 
         GameModule module = descriptor.createModule();
@@ -67,7 +69,7 @@ public class ModuleService {
             );
             teamManager.initialize();
             plugin.getLogger().info("Loading module " + descriptor.id() + " as active game " + index + ".");
-            return module.startLoadSequence(() -> playerManager.join(initialPlayers))
+            return module.startLoadSequence(() -> playerManager.joinInitial(initialPlayers))
                 .thenApply(ignored -> {
                     plugin.getLogger().info("Loaded module " + descriptor.id() + " as active game " + index + ".");
                     return module;
@@ -113,6 +115,9 @@ public class ModuleService {
                     plugin.getLogger().log(Level.SEVERE, "Module " + module.id() + " had errors during shutdown. Removing it from active games anyway.", throwable);
                 }
                 activeGames.remove(index, module);
+                if (lockedGameIndex != null && lockedGameIndex == index) {
+                    lockedGameIndex = null;
+                }
                 freeIndexes.offer(index);
                 return ModuleUnloadResult.unloaded(hadErrors[0]);
             });
@@ -128,6 +133,28 @@ public class ModuleService {
 
     public GameModule activeGame(int index) {
         return activeGames.get(index);
+    }
+
+    public Integer lockedGameIndex() {
+        return lockedGameIndex;
+    }
+
+    public GameModule lockedGame() {
+        return lockedGameIndex == null ? null : activeGames.get(lockedGameIndex);
+    }
+
+    public CompletableFuture<Integer> lockGame(int index) {
+        GameModule game = activeGames.get(index);
+        if (game == null) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException("No active game exists at index " + index + "."));
+        }
+        lockedGameIndex = index;
+        List<Player> players = List.copyOf(Bukkit.getOnlinePlayers());
+        return joinLockedGame(players);
+    }
+
+    public void unlockGame() {
+        lockedGameIndex = null;
     }
 
     public GameModule getGameOfPlayer(Player player) {
@@ -166,6 +193,35 @@ public class ModuleService {
         return total;
     }
 
+    public CompletableFuture<Boolean> joinLockedGame(Player player) {
+        GameModule lockedGame = lockedGame();
+        if (lockedGame == null) {
+            return CompletableFuture.completedFuture(false);
+        }
+        CompletableFuture<Boolean> leavePrevious = CompletableFuture.completedFuture(false);
+        GameModule currentGame = getGameOfPlayer(player);
+        if (currentGame == lockedGame) {
+            return CompletableFuture.completedFuture(false);
+        }
+        if (currentGame != null && currentGame != lockedGame) {
+            leavePrevious = currentGame.playerManager().leave(player);
+        }
+        GameModule offlineGame = getOfflineGameOfPlayer(player.getUniqueId());
+        if (offlineGame != null && offlineGame != lockedGame) {
+            leavePrevious = leavePrevious.thenCompose(ignored -> offlineGame.playerManager().leave(player));
+        }
+        boolean reconnectingToLockedGame = lockedGame.playerManager().ownsOffline(player.getUniqueId());
+        return leavePrevious.thenCompose(ignored -> lockedGame.playerManager().join(player, !reconnectingToLockedGame));
+    }
+
+    public CompletableFuture<Integer> joinLockedGame(java.util.Collection<Player> players) {
+        CompletableFuture<Integer> total = CompletableFuture.completedFuture(0);
+        for (Player player : players) {
+            total = total.thenCompose(count -> joinLockedGame(player).thenApply(joined -> count + (joined ? 1 : 0)));
+        }
+        return total;
+    }
+
     public void unloadAll() {
         for (int index : Set.copyOf(activeGames.keySet())) {
             try {
@@ -187,6 +243,9 @@ public class ModuleService {
     private CompletableFuture<Void> cleanupFailedLoad(GameModule module, int index) {
         return module.shutdown().whenComplete((ignored, throwable) -> {
             activeGames.remove(index, module);
+            if (lockedGameIndex != null && lockedGameIndex == index) {
+                lockedGameIndex = null;
+            }
             if (!freeIndexes.contains(index)) {
                 freeIndexes.offer(index);
             }

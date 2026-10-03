@@ -12,13 +12,20 @@ import com.donutsforlife11.donutgame.api.team.GameTeam;
 
 import io.papermc.paper.datacomponent.DataComponentTypes;
 import io.papermc.paper.datacomponent.item.DyedItemColor;
+import io.papermc.paper.datacomponent.item.UseCooldown;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 
 public final class GameItemComponents {
     public static final GameItemComponent<Byte> INFINITE_BUILD = bool("infinite_build");
+    public static final GameItemComponent<Byte> INFINITE_USE = bool("infinite_use");
     public static final GameItemComponent<Byte> TEAM_SYNC = bool("team_sync");
     public static final GameItemComponent<Byte> VANILLA_PROJECTILE = bool("vanilla_projectile");
+    public static final GameItemComponent<Byte> UNDROPPABLE = bool("undroppable");
+    public static final GameItemComponent<Byte> PLAYER_VISIBILITY_TOGGLE = bool("player_visibility_toggle");
+    public static final GameItemComponent<String> PLAYER_VISIBILITY_MODE = string("player_visibility_mode");
+    public static final GameItemComponent<Byte> PLAYER_VISIBILITY_DEFAULT_NAME = bool("player_visibility_default_name");
     public static final GameItemComponent<Integer> AUTO_IGNITE = integer("auto_ignite");
     public static final GameItemComponent<String> SPECTATOR_MENU = string("spectator_menu");
 
@@ -52,6 +59,10 @@ public final class GameItemComponents {
         return booleanValue(item, INFINITE_BUILD);
     }
 
+    public static boolean hasInfiniteUse(ItemStack item) {
+        return booleanValue(item, INFINITE_USE);
+    }
+
     public static boolean hasTeamSync(ItemStack item) {
         return booleanValue(item, TEAM_SYNC);
     }
@@ -60,12 +71,40 @@ public final class GameItemComponents {
         return booleanValue(item, VANILLA_PROJECTILE);
     }
 
+    public static boolean hasUndroppable(ItemStack item) {
+        return booleanValue(item, UNDROPPABLE);
+    }
+
+    public static boolean hasPlayerVisibilityToggle(ItemStack item) {
+        return booleanValue(item, PLAYER_VISIBILITY_TOGGLE);
+    }
+
     public static int autoIgniteFuse(ItemStack item) {
         if (item == null) {
             return 0;
         }
         Integer value = item.getPersistentDataContainer().get(AUTO_IGNITE.key(), AUTO_IGNITE.type());
         return value == null ? 0 : Math.max(0, value);
+    }
+
+    public static PlayerVisibilityMode playerVisibilityMode(ItemStack item) {
+        if (item == null) {
+            return PlayerVisibilityMode.EVERYONE;
+        }
+        String value = item.getPersistentDataContainer().get(PLAYER_VISIBILITY_MODE.key(), PLAYER_VISIBILITY_MODE.type());
+        return PlayerVisibilityMode.fromKey(value);
+    }
+
+    public static void setPlayerVisibilityMode(ItemStack item, PlayerVisibilityMode mode) {
+        if (item == null || item.getType().isAir()) {
+            return;
+        }
+        PlayerVisibilityMode nextMode = mode == null ? PlayerVisibilityMode.EVERYONE : mode;
+        item.editPersistentDataContainer(pdc -> pdc.set(PLAYER_VISIBILITY_MODE.key(), PLAYER_VISIBILITY_MODE.type(), nextMode.key()));
+        if (hasPlayerVisibilityToggle(item)) {
+            item.setData(DataComponentTypes.ITEM_NAME, playerVisibilityName(nextMode));
+            item.editPersistentDataContainer(pdc -> pdc.set(PLAYER_VISIBILITY_DEFAULT_NAME.key(), PLAYER_VISIBILITY_DEFAULT_NAME.type(), (byte) 1));
+        }
     }
 
     public static boolean isSpectatorMenu(ItemStack item) {
@@ -86,7 +125,7 @@ public final class GameItemComponents {
         if (player != null && hasTeamSync(item)) {
             item = applyTeamSync(player.getTeam(), item);
         }
-        if (hasInfiniteBuild(item) && !item.isDataOverridden(DataComponentTypes.MAX_STACK_SIZE)) {
+        if ((hasInfiniteBuild(item) || hasInfiniteUse(item)) && !item.isDataOverridden(DataComponentTypes.MAX_STACK_SIZE)) {
             item.unsetData(DataComponentTypes.DAMAGE);
             item.unsetData(DataComponentTypes.MAX_DAMAGE);
             item.setData(DataComponentTypes.MAX_STACK_SIZE, 65);
@@ -94,6 +133,16 @@ public final class GameItemComponents {
         if (autoIgniteFuse(item) > 0 && !hasExplicitItemName(item)) {
             Component name = item.getData(DataComponentTypes.ITEM_NAME);
             item.setData(DataComponentTypes.ITEM_NAME, Component.text("Auto Ignite ").append(name == null ? Component.empty() : name));
+        }
+        if (hasPlayerVisibilityToggle(item)) {
+            PlayerVisibilityMode mode = playerVisibilityMode(item);
+            if (!item.isDataOverridden(DataComponentTypes.USE_COOLDOWN)) {
+                item.setData(DataComponentTypes.USE_COOLDOWN, UseCooldown.useCooldown(0.5f));
+            }
+            if (usesDefaultPlayerVisibilityName(item)) {
+                item.setData(DataComponentTypes.ITEM_NAME, playerVisibilityName(mode));
+                item.editPersistentDataContainer(pdc -> pdc.set(PLAYER_VISIBILITY_DEFAULT_NAME.key(), PLAYER_VISIBILITY_DEFAULT_NAME.type(), (byte) 1));
+            }
         }
         return item;
     }
@@ -167,5 +216,48 @@ public final class GameItemComponents {
 
     private static boolean hasExplicitItemName(ItemStack item) {
         return item.isDataOverridden(DataComponentTypes.ITEM_NAME) || item.isDataOverridden(DataComponentTypes.CUSTOM_NAME);
+    }
+
+    private static boolean usesDefaultPlayerVisibilityName(ItemStack item) {
+        return !hasExplicitItemName(item) || booleanValue(item, PLAYER_VISIBILITY_DEFAULT_NAME);
+    }
+
+    private static Component playerVisibilityName(PlayerVisibilityMode mode) {
+        return Component.text("Player Visibility")
+            .append(Component.space())
+            .append(Component.text("(" + mode.displayName() + ")").decorate(TextDecoration.ITALIC));
+    }
+
+    public enum PlayerVisibilityMode {
+        EVERYONE("everyone", "Everyone"),
+        TEAM_ONLY("team_only", "Team Only"),
+        SELF_ONLY("self_only", "Self Only");
+
+        private final String key;
+        private final String displayName;
+
+        PlayerVisibilityMode(String key, String displayName) {
+            this.key = key;
+            this.displayName = displayName;
+        }
+
+        public String key() {
+            return key;
+        }
+
+        public String displayName() {
+            return displayName;
+        }
+
+        public static PlayerVisibilityMode fromKey(String key) {
+            if (key != null) {
+                for (PlayerVisibilityMode mode : values()) {
+                    if (mode.key.equalsIgnoreCase(key)) {
+                        return mode;
+                    }
+                }
+            }
+            return EVERYONE;
+        }
     }
 }

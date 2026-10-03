@@ -14,6 +14,7 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
+import com.donutsforlife11.donutgame.api.event.GamePlayerLateJoinEvent;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 import com.donutsforlife11.donutgame.internal.game.ModuleLifecycleState;
@@ -31,19 +32,36 @@ public class PlayerManager {
     }
 
     public CompletableFuture<Integer> join(Collection<Player> players) {
+        return join(players, true);
+    }
+
+    public CompletableFuture<Integer> joinInitial(Collection<Player> players) {
+        return join(players, false);
+    }
+
+    public CompletableFuture<Integer> join(Collection<Player> players, boolean lateJoin) {
         if (players == null || players.isEmpty()) {
             return CompletableFuture.completedFuture(0);
         }
-        List<CompletableFuture<Boolean>> joins = players.stream().map(this::join).toList();
+        List<CompletableFuture<Boolean>> joins = players.stream().map(player -> join(player, lateJoin)).toList();
         return CompletableFuture.allOf(joins.toArray(CompletableFuture[]::new))
             .thenApply(ignored -> (int) joins.stream().filter(future -> Boolean.TRUE.equals(future.getNow(false))).count());
     }
 
     public CompletableFuture<Boolean> join(Player player) {
+        return join(player, true);
+    }
+
+    public CompletableFuture<Boolean> joinInitial(Player player) {
+        return join(player, false);
+    }
+
+    public CompletableFuture<Boolean> join(Player player, boolean lateJoin) {
         Objects.requireNonNull(player, "player");
         if (!acceptsPlayerRegistration()) {
             return CompletableFuture.completedFuture(false);
         }
+        boolean freshSession = !registry.contains(player.getUniqueId());
         World world = teleporter.defaultWorld();
         Location destination = world.getSpawnLocation();
         return teleporter.teleport(player, destination).thenApply(teleported -> {
@@ -52,7 +70,12 @@ public class PlayerManager {
             }
             leavingPlayers.remove(player.getUniqueId());
             registry.register(player);
-            module.teamManager().syncPlayer(registry.get(player.getUniqueId()));
+            player.setCollidable(module.world().playerCollisionsEnabled());
+            GamePlayer gamePlayer = registry.get(player.getUniqueId());
+            module.teamManager().syncPlayer(gamePlayer);
+            if (lateJoin && freshSession) {
+                applyLateJoinDefaults(player, gamePlayer);
+            }
             module.log("Joined player " + player.getName() + " to game world " + world.getName() + ".");
             return true;
         });
@@ -195,11 +218,23 @@ public class PlayerManager {
     private Collection<GamePlayer> filteredBySpectatorState(boolean spectator) {
         Set<GamePlayer> players = new LinkedHashSet<>();
         for (GamePlayer player : registry.players()) {
-            if (player.isSpectator() == spectator) {
+            boolean effectiveSpectator = player.isSpectator() || !player.isOnline();
+            if (effectiveSpectator == spectator) {
                 players.add(player);
             }
         }
         return Collections.unmodifiableSet(players);
+    }
+
+    private void applyLateJoinDefaults(Player player, GamePlayer gamePlayer) {
+        if (gamePlayer == null) {
+            return;
+        }
+        GamePlayerLateJoinEvent event = new GamePlayerLateJoinEvent(player, module, gamePlayer, gamePlayer.spawnPoint());
+        module.plugin().getServer().getPluginManager().callEvent(event);
+        if (event.joinAsSpectator()) {
+            gamePlayer.setSpectator(true, event.spectatorLocation() == null ? gamePlayer.spawnPoint() : event.spectatorLocation());
+        }
     }
 
     private void finishExit(Player player, GamePlayer gamePlayer, boolean cleanupPhysicalState) {

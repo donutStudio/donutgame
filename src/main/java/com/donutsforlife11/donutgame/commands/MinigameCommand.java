@@ -41,6 +41,8 @@ public class MinigameCommand implements PluginCommand {
     public static final String JOIN_PERMISSION = "donutgame.command.minigame.join";
     public static final String LEAVE_PERMISSION = "donutgame.command.minigame.leave";
     public static final String UNLOAD_PERMISSION = "donutgame.command.minigame.unload";
+    public static final String LOCK_PERMISSION = "donutgame.command.minigame.lock";
+    public static final String UNLOCK_PERMISSION = "donutgame.command.minigame.unlock";
 
     private static final String GAME_ID_ARGUMENT = "game_id";
     private static final String CONFIG_ARGUMENT = "config";
@@ -62,6 +64,8 @@ public class MinigameCommand implements PluginCommand {
             .then(joinCommand())
             .then(leaveCommand())
             .then(unloadCommand())
+            .then(lockCommand())
+            .then(unlockCommand())
             .build();
     }
 
@@ -73,15 +77,27 @@ public class MinigameCommand implements PluginCommand {
                     fileService.gameModules().keySet().forEach(builder::suggest);
                     return builder.buildFuture();
                 })
-                .executes(context -> loadModule(context, selectedPlayersOrSelf(context, false), null))
+                .executes(context -> loadModule(context, selectedPlayersOrSelf(context, false), null, false))
+                .then(Commands.literal("lock")
+                    .executes(context -> loadModule(context, selectedPlayersOrSelf(context, false), null, true))
+                )
                 .then(Commands.argument(TARGETS_ARGUMENT, playerSelector())
-                    .executes(context -> loadModule(context, selectedPlayersOrSelf(context, true), null))
+                    .executes(context -> loadModule(context, selectedPlayersOrSelf(context, true), null, false))
+                    .then(Commands.literal("lock")
+                        .executes(context -> loadModule(context, selectedPlayersOrSelf(context, true), null, true))
+                    )
                     .then(Commands.argument(CONFIG_ARGUMENT, new InlineConfigArgument(this::suggestInlineConfig))
-                        .executes(context -> loadModule(context, selectedPlayersOrSelf(context, true), configOverride(context)))
+                        .executes(context -> loadModule(context, selectedPlayersOrSelf(context, true), configOverride(context), false))
+                        .then(Commands.literal("lock")
+                            .executes(context -> loadModule(context, selectedPlayersOrSelf(context, true), configOverride(context), true))
+                        )
                     )
                 )
                 .then(Commands.argument(CONFIG_ARGUMENT, new InlineConfigArgument(this::suggestInlineConfig))
-                    .executes(context -> loadModule(context, selectedPlayersOrSelf(context, false), configOverride(context)))
+                    .executes(context -> loadModule(context, selectedPlayersOrSelf(context, false), configOverride(context), false))
+                    .then(Commands.literal("lock")
+                        .executes(context -> loadModule(context, selectedPlayersOrSelf(context, false), configOverride(context), true))
+                    )
                 )
             );
     }
@@ -126,7 +142,27 @@ public class MinigameCommand implements PluginCommand {
             );
     }
 
-    private int loadModule(CommandContext<CommandSourceStack> context, List<Player> players, String configOverrideText) {
+    private LiteralArgumentBuilder<CommandSourceStack> lockCommand() {
+        return Commands.literal("lock")
+            .requires(source -> source.getSender().hasPermission(LOCK_PERMISSION))
+            .then(Commands.argument("index", IntegerArgumentType.integer(0))
+                .suggests((context, builder) -> {
+                    for (int index : moduleService.activeGames().keySet()) {
+                        builder.suggest(index);
+                    }
+                    return builder.buildFuture();
+                })
+                .executes(context -> lockGame(context.getSource().getSender(), IntegerArgumentType.getInteger(context, "index")))
+            );
+    }
+
+    private LiteralArgumentBuilder<CommandSourceStack> unlockCommand() {
+        return Commands.literal("unlock")
+            .requires(source -> source.getSender().hasPermission(UNLOCK_PERMISSION))
+            .executes(context -> unlockGame(context.getSource().getSender()));
+    }
+
+    private int loadModule(CommandContext<CommandSourceStack> context, List<Player> players, String configOverrideText, boolean lockAfterLoad) {
         CommandSender sender = context.getSource().getSender();
         String gameId = StringArgumentType.getString(context, GAME_ID_ARGUMENT);
         GameModuleDescriptor descriptor = fileService.gameModules().get(gameId);
@@ -137,11 +173,21 @@ public class MinigameCommand implements PluginCommand {
 
         try {
             moduleService.loadModule(descriptor, mergedConfig(descriptor, configOverrideText), players)
-                .thenAccept(module -> sendSuccess(
-                    sender,
-                    "Loaded " + descriptor.id() + " as active game " + module.index()
-                        + (players.isEmpty() ? "." : " with " + module.playerManager().getOnlinePlayers().size() + " player(s).")
-                ))
+                .thenCompose(module -> {
+                    if (!lockAfterLoad) {
+                        return CompletableFuture.completedFuture(new LoadResult(module, null));
+                    }
+                    return moduleService.lockGame(module.index()).thenApply(joined -> new LoadResult(module, joined));
+                })
+                .thenAccept(result -> {
+                    GameModule module = result.module();
+                    Integer lockedPlayers = result.lockedPlayers();
+                    String suffix = players.isEmpty() ? "." : " with " + module.playerManager().getOnlinePlayers().size() + " player(s).";
+                    if (lockedPlayers != null) {
+                        suffix = " and locked the server to it with " + lockedPlayers + " online player(s).";
+                    }
+                    sendSuccess(sender, "Loaded " + descriptor.id() + " as active game " + module.index() + suffix);
+                })
                 .exceptionally(error -> {
                     sendError(sender, "Failed to load game module. See console for details.");
                     error.printStackTrace();
@@ -201,6 +247,27 @@ public class MinigameCommand implements PluginCommand {
                 error.printStackTrace();
                 return null;
             });
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int lockGame(CommandSender sender, int index) {
+        moduleService.lockGame(index)
+            .thenAccept(joined -> sendSuccess(sender, "Locked the server to active game " + index + " and joined " + joined + " online player(s)."))
+            .exceptionally(error -> {
+                sendError(sender, error.getCause() == null ? error.getMessage() : error.getCause().getMessage());
+                return null;
+            });
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int unlockGame(CommandSender sender) {
+        Integer lockedIndex = moduleService.lockedGameIndex();
+        if (lockedIndex == null) {
+            sendError(sender, "The server is not locked to a game.");
+            return Command.SINGLE_SUCCESS;
+        }
+        moduleService.unlockGame();
+        sendSuccess(sender, "Unlocked the server from active game " + lockedIndex + ".");
         return Command.SINGLE_SUCCESS;
     }
 
@@ -356,6 +423,9 @@ public class MinigameCommand implements PluginCommand {
     @Override
     public String description() {
         return "Loads and unloads minigame modules";
+    }
+
+    private record LoadResult(GameModule module, Integer lockedPlayers) {
     }
 
 }

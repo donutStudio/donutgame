@@ -22,6 +22,7 @@ import net.kyori.adventure.text.format.TextDecoration;
 
 public final class SpeedZone extends GameModule {
     static final String CHECKPOINT = "checkpoint";
+    static final String SPAWN_AREA = "spawn_area";
 
     private final List<GameLocation> checkpoints = new ArrayList<>();
     private double[] segmentLengths;
@@ -30,12 +31,16 @@ public final class SpeedZone extends GameModule {
 
     int teamSize;
     double initialBorder;
+    double borderHeight;
     double borderCheckpointLoss;
     double borderLapLoss;
     int borderMoveTicks;
     int borderShrinkTicks;
+    boolean stopOnCheckpoints;
+    boolean stopOnLaps;
 
     private SpeedZonePlayers players;
+    @SuppressWarnings("unused")
     private SpeedZoneBuildProtection buildProtection;
     private GameBorder border;
     private GameTimer timer;
@@ -51,7 +56,7 @@ public final class SpeedZone extends GameModule {
         loadCourse();
         configureWorld();
 
-        buildProtection = new SpeedZoneBuildProtection();
+        buildProtection = new SpeedZoneBuildProtection(this);
         players = new SpeedZonePlayers(this, new SpeedZoneModifiers());
         players.assignTeams();
         players.loadCheckpointModifiers();
@@ -65,7 +70,7 @@ public final class SpeedZone extends GameModule {
         border = borderManager().newBorder(
             BorderShape.CUBOID,
             checkpoints.get(0),
-            new Vector(initialBorder, initialBorder, initialBorder)
+            new Vector(initialBorder, borderHeight, initialBorder)
         );
 
         timer = timeManager().newTimer()
@@ -87,7 +92,7 @@ public final class SpeedZone extends GameModule {
         }
 
         if (border != null && (elapsedTicks % Math.max(1, borderMoveTicks) == 0)) {
-            border.setCenter(locationAtProgress(raceFront), Math.max(0, borderMoveTicks));
+            border.setCenter(players.leadingLocation().orElseGet(() -> locationAtProgress(raceFront)), Math.max(0, borderMoveTicks));
         }
 
         players.checkGameOver();
@@ -116,7 +121,7 @@ public final class SpeedZone extends GameModule {
         double lapLoss = initialBorder * borderLapLoss;
         double width = Math.max(0.0,
             initialBorder - frontCheckpointEvents * checkpointLoss - frontLapEvents * lapLoss);
-        border.setDimensions(new Vector(width, width, width), borderShrinkTicks);
+        border.setDimensions(new Vector(width, borderHeight, width), borderShrinkTicks);
     }
 
     GameLocation locationAtProgress(double progress) {
@@ -207,10 +212,13 @@ public final class SpeedZone extends GameModule {
     private void readConfig() {
         teamSize = Math.max(1, config().getInt("team_size", 1));
         initialBorder = Math.max(0.0, config().getDouble("initial_border", 50.0));
+        borderHeight = Math.max(0.0, config().getDouble("border_height", 50.0));
         borderCheckpointLoss = Math.max(0.0, config().getDouble("border_checkpoint_loss", 0.05));
         borderLapLoss = Math.max(0.0, config().getDouble("border_lap_loss", 0.10));
         borderMoveTicks = Math.max(1, config().getInt("border_move_ticks", 3));
         borderShrinkTicks = Math.max(0, config().getInt("border_shrink_ticks", 15));
+        stopOnCheckpoints = config().getBoolean("stop_on_checkpoints", false);
+        stopOnLaps = config().getBoolean("stop_on_laps", true);
     }
 
     private void loadCourse() {
@@ -241,6 +249,7 @@ public final class SpeedZone extends GameModule {
         world().setWorldSpawn(checkpoints.get(0));
         world().setHungerEnabled(false);
         world().gamerules().fallDamage(false);
+        world().gamerules().keepInventory(true);
         world().gamerules().pvp(false);
     }
 

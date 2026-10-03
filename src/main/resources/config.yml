@@ -1,3 +1,4 @@
 modules_directory: modules
 maps_directory: maps
 runtime_directory: .runtime
+max_active_games: 1

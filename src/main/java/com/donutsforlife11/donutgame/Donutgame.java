@@ -32,7 +32,7 @@ public final class Donutgame extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        saveDefaultConfig();
+        updateConfig();
 
         fileService = new FileService(this);
         fileService.reload();
@@ -114,5 +114,12 @@ public final class Donutgame extends JavaPlugin {
 
     public SpectatorService spectatorService() {
         return spectatorService;
+    }
+
+    private void updateConfig() {
+        saveDefaultConfig();
+        getConfig().options().copyDefaults(true);
+        saveConfig();
+        reloadConfig();
     }
 }

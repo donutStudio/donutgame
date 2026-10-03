@@ -18,6 +18,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 
 import com.donutsforlife11.donutgame.api.event.GameEvent;
 import com.donutsforlife11.donutgame.api.event.GameEventHandler;
+import com.donutsforlife11.donutgame.api.event.GamePlayerLateJoinEvent;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
@@ -45,6 +46,21 @@ final class VoidWarsPlayers {
         List<GameTeam> teams = new ArrayList<>(game.teamManager().getTeams());
         for (int i = 0; i < players.size(); i++) {
             teams.get(i % teams.size()).addPlayer(players.get(i));
+        }
+    }
+
+    void assignNewPlayersToTeams() {
+        List<GamePlayer> unteamed = new ArrayList<>(game.playerManager().getPlayers().stream()
+            .filter(player -> !game.teamManager().playerHasTeam(player))
+            .toList());
+        if (unteamed.isEmpty()) {
+            return;
+        }
+        Collections.shuffle(unteamed);
+        for (GamePlayer player : unteamed) {
+            GameTeam team = fairestTeamFor(player);
+            team.addPlayer(player);
+            lateSpectators.remove(player.uuid());
         }
     }
 
@@ -210,6 +226,16 @@ final class VoidWarsPlayers {
     }
 
     @GameEventHandler
+    public void onLateJoin(GameEvent<GamePlayerLateJoinEvent> event) {
+        GamePlayer player = event.get("player", GamePlayer.class);
+        if (player != null && !game.teamManager().playerHasTeam(player)) {
+            lateSpectators.add(player.uuid());
+            event.bukkitEvent().setSpectatorLocation(game.world().getPoint(VoidWars.SPAWN));
+        }
+        checkRoundOver();
+    }
+
+    @GameEventHandler
     public void onQuit(GameEvent<PlayerQuitEvent> event) {
         GamePlayer player = event.get("player", GamePlayer.class);
         if (player != null) {
@@ -224,5 +250,30 @@ final class VoidWarsPlayers {
             killer = causingPlayer;
         }
         return killer == null ? null : game.playerManager().getPlayer(killer);
+    }
+
+    private GameTeam fairestTeamFor(GamePlayer player) {
+        List<GameTeam> teams = new ArrayList<>(game.teamManager().getTeams());
+        if (teams.isEmpty()) {
+            return game.teamManager().newColoredTeam();
+        }
+        int minimumSize = teams.stream()
+            .mapToInt(team -> team.getPlayers().size())
+            .min()
+            .orElse(0);
+        GameTeam candidate = teams.stream()
+            .filter(team -> team.getPlayers().size() == minimumSize && team.getPlayers().size() < game.teamSize)
+            .findFirst()
+            .orElse(null);
+        if (candidate != null) {
+            return candidate;
+        }
+        if (minimumSize >= game.teamSize) {
+            return game.teamManager().newColoredTeam();
+        }
+        return teams.stream()
+            .filter(team -> team.getPlayers().size() == minimumSize)
+            .findFirst()
+            .orElseGet(() -> game.teamManager().newColoredTeam());
     }
 }

@@ -8,6 +8,9 @@ team_size: 1
 
 # Border width is a full cuboid dimension, in blocks.
 initial_border: 50.0
+border_height: 50.0
+stop_on_checkpoints: false
+stop_on_laps: true
 
 # Fractions of ORIGINAL border width, not the current width.
 # border_checkpoint_loss is spread equally over all checkpoints in one lap.

@@ -45,16 +45,29 @@ public class GamePlayerConnectionEvents implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
+        GameModule lockedGame = moduleService.lockedGame();
+        if (lockedGame != null) {
+            moduleService.joinLockedGame(event.getPlayer()).exceptionally(throwable -> {
+                lockedGame.logError("Failed to join player " + event.getPlayer().getName() + " to locked game " + lockedGame.index() + ".", throwable);
+                return false;
+            });
+            scheduleSpectatorRefresh(event.getPlayer());
+            return;
+        }
         GameModule game = moduleService.getOfflineGameOfPlayer(event.getPlayer().getUniqueId());
         if (game != null) {
-            game.playerManager().join(event.getPlayer()).exceptionally(throwable -> {
+            game.playerManager().joinInitial(event.getPlayer()).exceptionally(throwable -> {
                 game.logError("Failed to reattach player " + event.getPlayer().getName() + " after reconnect.", throwable);
                 return false;
             });
         }
+        scheduleSpectatorRefresh(event.getPlayer());
+    }
+
+    private void scheduleSpectatorRefresh(Player player) {
         moduleService.plugin().getServer().getScheduler().runTask(
             moduleService.plugin(),
-            () -> moduleService.plugin().spectatorService().refreshForViewer(event.getPlayer())
+            () -> moduleService.plugin().spectatorService().refreshForViewer(player)
         );
     }
 
