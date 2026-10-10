@@ -27,6 +27,7 @@ import com.infernalsuite.asp.api.AdvancedSlimePaperAPI;
 import com.infernalsuite.asp.api.loaders.SlimeLoader;
 import com.infernalsuite.asp.api.world.SlimeWorld;
 import com.infernalsuite.asp.api.world.SlimeWorldInstance;
+import com.infernalsuite.asp.api.world.properties.SlimeProperties;
 import com.infernalsuite.asp.api.world.properties.SlimePropertyMap;
 import com.infernalsuite.asp.loaders.file.FileLoader;
 public class WorldService {
@@ -50,22 +51,35 @@ public class WorldService {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 SlimeLoader loader = new FileLoader(slimeFile.getParent().toFile());
-                SlimeWorld template = asp.readWorld(loader, stripExtension(slimeFile.getFileName().toString()), true, new SlimePropertyMap());
+                SlimePropertyMap properties = new SlimePropertyMap();
+                properties.setValue(SlimeProperties.WORLD_TYPE, "FLAT");
+                properties.setValue(SlimeProperties.ENVIRONMENT, "normal");
+                SlimeWorld template = asp.readWorld(
+                    loader,
+                    stripExtension(slimeFile.getFileName().toString()),
+                    true,
+                    properties
+                );
                 runSync(() -> {
                     if (Bukkit.getWorld(worldName) != null) {
-                        throw new IllegalStateException("World " + worldName + " is already loaded.");
+                        throw new IllegalStateException(
+                            "World " + worldName + " is already loaded."
+                        );
                     }
-                    SlimeWorldInstance instance = asp.loadWorld(template.clone(worldName), true);
+                    SlimeWorldInstance instance =
+                        asp.loadWorld(template.clone(worldName), true);
                     World world = instance.getBukkitWorld();
                     configureWorld(world);
                     ownedWorldNames.add(world.getName());
                     playerWorldStateService.markIsolatedWorld(world);
                     future.complete(world);
                 }, future);
+
             } catch (Throwable throwable) {
                 future.completeExceptionally(throwable);
             }
         });
+
         return future;
     }
 

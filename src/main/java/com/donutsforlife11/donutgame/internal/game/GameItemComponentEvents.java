@@ -56,8 +56,10 @@ import com.donutsforlife11.donutgame.api.team.GameTeam;
 
 public class GameItemComponentEvents implements Listener {
     private static final String VANILLA_PROJECTILE_KEY = "vanilla_projectile";
-    private static final double SNOWBALL_DAMAGE = 0.33;
-    private static final double EGG_KNOCKBACK_DAMAGE = 0.0001;
+    private static final Map<Class<? extends Projectile>, SpecialProjectile> SPECIAL_PROJECTILES = Map.of(
+        Snowball.class, new SpecialProjectile(0.33, DamageType.ARROW),
+        Egg.class, new SpecialProjectile(0.0001, DamageType.ARROW)
+    );
 
     private final ModuleService moduleService;
     private final Map<UUID, PendingAutoIgnite> pendingAutoIgnites = new LinkedHashMap<>();
@@ -147,7 +149,8 @@ public class GameItemComponentEvents implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onProjectileHit(ProjectileHitEvent event) {
         Projectile projectile = event.getEntity();
-        if (!(projectile instanceof Snowball) && !(projectile instanceof Egg)) {
+        SpecialProjectile special = specialProjectile(projectile);
+        if (special == null) {
             return;
         }
         if (isVanillaProjectile(projectile)) {
@@ -163,12 +166,7 @@ public class GameItemComponentEvents implements Listener {
             return;
         }
 
-        DamageSource damageSource = projectileDamageSource(projectile, player);
-        if (projectile instanceof Snowball) {
-            target.damage(SNOWBALL_DAMAGE, damageSource);
-        } else {
-            target.damage(EGG_KNOCKBACK_DAMAGE, damageSource);
-        }
+        target.damage(special.damage(), projectileDamageSource(projectile, player, special.damageType()));
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -505,8 +503,17 @@ public class GameItemComponentEvents implements Listener {
         return new org.bukkit.NamespacedKey(moduleService.plugin(), VANILLA_PROJECTILE_KEY);
     }
 
-    private DamageSource projectileDamageSource(Projectile projectile, Player shooter) {
-        DamageSource.Builder builder = DamageSource.builder(DamageType.ARROW)
+    private SpecialProjectile specialProjectile(Projectile projectile) {
+        for (Map.Entry<Class<? extends Projectile>, SpecialProjectile> entry : SPECIAL_PROJECTILES.entrySet()) {
+            if (entry.getKey().isInstance(projectile)) {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
+    private DamageSource projectileDamageSource(Projectile projectile, Player shooter, DamageType damageType) {
+        DamageSource.Builder builder = DamageSource.builder(damageType)
             .withDirectEntity(projectile);
         if (shooter != null) {
             builder.withCausingEntity(shooter);
@@ -520,6 +527,9 @@ public class GameItemComponentEvents implements Listener {
     }
 
     private record PendingAutoIgnite(UUID playerId, EntityType entityType, int fuse) {
+    }
+
+    private record SpecialProjectile(double damage, DamageType damageType) {
     }
 
     private record BlockKey(UUID worldId, int x, int y, int z) {

@@ -20,7 +20,6 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPl
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate.PlayerInfo;
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
-import com.donutsforlife11.donutgame.api.team.GameTeam;
 
 import net.kyori.adventure.text.Component;
 
@@ -95,7 +94,7 @@ public class SpectatorService {
     }
 
     public void refreshPlayerList(Player viewer, Player player) {
-        listPlayer(viewer, player, false);
+        listPlayer(viewer, player, isSpectator(player));
     }
 
     private void listSpectator(Player viewer, Player player) {
@@ -127,6 +126,9 @@ public class SpectatorService {
             if (channel == null) {
                 return false;
             }
+            if (viewer.equals(player)) {
+                removeSelfSpectatorProfile(protocolManager, channel, player);
+            }
             PlayerInfo info = new PlayerInfo(
                 userProfile(player),
                 !spectator || !viewer.equals(player),
@@ -135,11 +137,8 @@ public class SpectatorService {
                 spectatorDisplayName(viewer, player, spectator),
                 null
             );
-            if (viewer.equals(player)) {
-                removeSelfSpectatorProfile(protocolManager, channel, player);
-                if (spectator) {
-                    sendSelfSpectatorProfile(protocolManager, channel, player);
-                }
+            if (viewer.equals(player) && spectator) {
+                sendSelfSpectatorProfile(protocolManager, channel, player);
             }
             EnumSet<Action> actions = EnumSet.of(Action.UPDATE_LISTED, Action.UPDATE_GAME_MODE, Action.UPDATE_LATENCY, Action.UPDATE_DISPLAY_NAME);
             if (!viewer.equals(player) || !spectator) {
@@ -206,17 +205,7 @@ public class SpectatorService {
     }
 
     private Component playerListDisplayName(Player player) {
-        Component name = player.playerListName();
-        GameModule game = plugin.moduleService().getGameOfPlayer(player);
-        GamePlayer gamePlayer = game == null ? null : game.playerManager().getPlayer(player);
-        GameTeam team = gamePlayer == null ? null : gamePlayer.getTeam();
-        if (team == null) {
-            return name;
-        }
-        return Component.empty()
-            .append(team.prefix())
-            .append(name)
-            .append(team.suffix());
+        return player.playerListName();
     }
 
     private UserProfile userProfile(Player player) {

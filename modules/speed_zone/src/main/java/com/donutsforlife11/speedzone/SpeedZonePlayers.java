@@ -300,6 +300,7 @@ final class SpeedZonePlayers {
         if (player == null || player.isSpectator()) {
             return;
         }
+        player.setSprinting(true);
         PlayerData state = data.getOrDefault(player.uuid(), new PlayerData(0, 0, 0.0));
         resetPlayerState(player);
         applyCheckpointLoadout(player, state.segmentIndex(), false);

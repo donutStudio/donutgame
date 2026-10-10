@@ -277,6 +277,13 @@ public class GamePlayer implements GameEntityBase {
         applyVisiblePlayer(player -> player.setFoodLevel(playingState.foodLevel));
     }
 
+    public void setSprinting(boolean sprinting) {
+        applyVisiblePlayer(player -> player.setSprinting(sprinting));
+    }
+    boolean isSprinting() {
+        return bukkitPlayer().isSprinting();
+    }
+
     public int hunger() {
         return playingState.foodLevel;
     }

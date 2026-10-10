@@ -1,0 +1,5 @@
+id: doppelganger
+main_class: com.donutsforlife11.doppelganger.Doppelganger
+name: Doppelganger
+maps:
+  - town

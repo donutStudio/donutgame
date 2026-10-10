@@ -2,7 +2,9 @@ package com.donutsforlife11.donutgame.internal.game;
 
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -149,7 +151,8 @@ public class SpectatorGuardEvents implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void preventAttacks(EntityDamageByEntityEvent event) {
-        if (event.getDamager() instanceof Player player && isSpectator(player)) {
+        Player attacker = attackingPlayer(event);
+        if (attacker != null && isSpectator(attacker)) {
             event.setCancelled(true);
         }
     }
@@ -184,5 +187,16 @@ public class SpectatorGuardEvents implements Listener {
         GameModule game = moduleService.getGameOfPlayer(player);
         GamePlayer gamePlayer = game == null ? null : game.playerManager().getPlayer(player);
         return gamePlayer != null && gamePlayer.isSpectator() ? gamePlayer : null;
+    }
+
+    private Player attackingPlayer(EntityDamageByEntityEvent event) {
+        Entity damager = event.getDamager();
+        if (damager instanceof Player player) {
+            return player;
+        }
+        if (damager instanceof Projectile projectile && projectile.getShooter() instanceof Player player) {
+            return player;
+        }
+        return null;
     }
 }
