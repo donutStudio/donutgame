@@ -116,27 +116,37 @@ final class PlayerSnapshot {
     }
 
     void reset(GameMode gameMode) {
-        inventory = new ItemStack[36];
-        armor = new ItemStack[4];
-        extra = new ItemStack[1];
+        clearInventory();
         effects.clear();
         attributeBases.clear();
         attributeModifiers.clear();
-        health = 20.0;
-        foodLevel = 20;
-        saturation = 20.0f;
-        arrowsInBody = 0;
-        fireTicks = 0;
         level = 0;
         exp = 0.0f;
         totalExperience = 0;
         this.gameMode = gameMode == null ? GameMode.SURVIVAL : gameMode;
+        restoreAliveDefaults(20.0);
+        touchTimedValues();
+    }
+
+    void clearInventory() {
+        inventory = new ItemStack[36];
+        armor = new ItemStack[4];
+        extra = new ItemStack[1];
+    }
+
+    void restoreAliveDefaults(double maxHealth) {
+        health = maxHealth;
+        foodLevel = 20;
+        saturation = 20.0f;
+        effects.clear();
+        arrowsInBody = 0;
+        fireTicks = 0;
         invulnerable = false;
         invisible = false;
         canPickupItems = true;
-        allowFlight = this.gameMode == GameMode.CREATIVE;
+        gameMode = gameMode == GameMode.SPECTATOR ? GameMode.SURVIVAL : gameMode;
+        allowFlight = gameMode == GameMode.CREATIVE;
         flying = false;
-        touchTimedValues();
     }
 
     void clearSpectatorProjection() {

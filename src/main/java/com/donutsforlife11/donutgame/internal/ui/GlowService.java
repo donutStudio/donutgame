@@ -66,7 +66,7 @@ public class GlowService {
     public void disable() {
         unregisterMetadataListener();
         for (GlowState state : glowStates.values()) {
-            Entity entity = Bukkit.getEntity(state.entityId());
+            Entity entity = Bukkit.getEntity(state.entityId);
             if (entity != null) {
                 clearTeamGlow(entity, state);
                 entity.setGlowing(false);
@@ -89,10 +89,10 @@ public class GlowService {
             return false;
         }
         GlowState state = glowStates.computeIfAbsent(entity.getUniqueId(), GlowState::new);
-        state.color(color);
-        state.packetOnly(false);
-        state.global(glowing);
-        state.viewerSupplier(null);
+        state.color = color;
+        state.packetOnly = false;
+        state.global = glowing;
+        state.viewerSupplier = null;
         return apply(state, entity, true);
     }
 
@@ -101,10 +101,10 @@ public class GlowService {
             return false;
         }
         GlowState state = glowStates.computeIfAbsent(entity.getUniqueId(), GlowState::new);
-        state.color(color);
-        state.packetOnly(false);
-        state.global(false);
-        state.viewerSupplier(glowing ? () -> viewers : null);
+        state.color = color;
+        state.packetOnly = false;
+        state.global = false;
+        state.viewerSupplier = glowing ? () -> viewers : null;
         return apply(state, entity, true);
     }
 
@@ -113,10 +113,10 @@ public class GlowService {
             return false;
         }
         GlowState state = glowStates.computeIfAbsent(entity.getUniqueId(), GlowState::new);
-        state.color(color);
-        state.packetOnly(false);
-        state.global(false);
-        state.viewerSupplier(glowing ? viewers : null);
+        state.color = color;
+        state.packetOnly = false;
+        state.global = false;
+        state.viewerSupplier = glowing ? viewers : null;
         return apply(state, entity, true);
     }
 
@@ -125,7 +125,7 @@ public class GlowService {
             return false;
         }
         GlowState state = glowStates.computeIfAbsent(entity.getUniqueId(), GlowState::new);
-        state.teamViewerSupplier(glowing ? viewers : null);
+        state.teamViewerSupplier = glowing ? viewers : null;
         return applyTeamGlow(state, entity);
     }
 
@@ -134,8 +134,8 @@ public class GlowService {
             return;
         }
         GlowState state = glowStates.computeIfAbsent(entity.getUniqueId(), GlowState::new);
-        state.color(color);
-        state.packetOnly(false);
+        state.color = color;
+        state.packetOnly = false;
         apply(state, entity, true);
     }
 
@@ -148,17 +148,17 @@ public class GlowService {
     }
 
     private boolean apply(GlowState state, Entity entity, boolean fallbackToVanilla) {
-        clearPacketGlow(entity, state.appliedViewers(), state.appliedPacketOnly());
-        state.appliedViewers().clear();
-        state.appliedPacketOnly(state.packetOnly());
+        clearPacketGlow(entity, state.appliedViewers, state.appliedPacketOnly);
+        state.appliedViewers.clear();
+        state.appliedPacketOnly = state.packetOnly;
 
-        if (state.global()) {
+        if (state.global) {
             entity.setGlowing(true);
             return applyPacketGlow(entity, Bukkit.getOnlinePlayers(), state, fallbackToVanilla);
         }
 
         entity.setGlowing(false);
-        Collection<GamePlayer> viewers = state.viewers();
+        Collection<GamePlayer> viewers = state.viewerSupplier == null ? null : state.viewerSupplier.get();
         if (viewers == null || viewers.isEmpty()) {
             return true;
         }
@@ -177,7 +177,7 @@ public class GlowService {
     }
 
     private boolean applyTeamGlow(GlowState state, Entity entity) {
-        if (state.teamViewerSupplier() == null && state.appliedTeamViewers().isEmpty()) {
+        if (state.teamViewerSupplier == null && state.appliedTeamViewers.isEmpty()) {
             untrackTeamGlowEntity(state);
             return true;
         }
@@ -193,7 +193,7 @@ public class GlowService {
         }
 
         boolean appliedAll = true;
-        for (UUID viewerId : Set.copyOf(state.appliedTeamViewers())) {
+        for (UUID viewerId : Set.copyOf(state.appliedTeamViewers)) {
             if (desiredViewerIds.contains(viewerId)) {
                 continue;
             }
@@ -205,13 +205,13 @@ public class GlowService {
                     appliedAll = false;
                 }
             }
-            state.appliedTeamViewers().remove(viewerId);
+            state.appliedTeamViewers.remove(viewerId);
         }
 
         for (Player viewer : desiredViewers) {
             try {
                 sendMetadataGlow(entity, viewer, true);
-                state.appliedTeamViewers().add(viewer.getUniqueId());
+                state.appliedTeamViewers.add(viewer.getUniqueId());
             } catch (Throwable ignored) {
                 appliedAll = false;
             }
@@ -220,7 +220,7 @@ public class GlowService {
     }
 
     private void clearTeamGlow(Entity entity, GlowState state) {
-        for (UUID viewerId : Set.copyOf(state.appliedTeamViewers())) {
+        for (UUID viewerId : Set.copyOf(state.appliedTeamViewers)) {
             Player viewer = Bukkit.getPlayer(viewerId);
             if (viewer != null) {
                 try {
@@ -229,13 +229,13 @@ public class GlowService {
                 }
             }
         }
-        state.appliedTeamViewers().clear();
+        state.appliedTeamViewers.clear();
         untrackTeamGlowEntity(state);
     }
 
     private Set<Player> teamGlowViewers(GlowState state) {
         Set<Player> bukkitViewers = new HashSet<>();
-        Collection<GamePlayer> viewers = state.teamViewers();
+        Collection<GamePlayer> viewers = state.teamViewerSupplier == null ? null : state.teamViewerSupplier.get();
         if (viewers == null || viewers.isEmpty()) {
             return bukkitViewers;
         }
@@ -249,7 +249,7 @@ public class GlowService {
     }
 
     private boolean otherGlowVisible(GlowState state, Entity entity, Player viewer) {
-        return entity.isGlowing() || state.appliedViewers().contains(viewer.getUniqueId());
+        return entity.isGlowing() || state.appliedViewers.contains(viewer.getUniqueId());
     }
 
     private void registerMetadataListener() {
@@ -293,7 +293,7 @@ public class GlowService {
         }
         WrapperPlayServerEntityMetadata packet = new WrapperPlayServerEntityMetadata(event);
         GlowState state = teamGlowStatesByEntityId.get(packet.getEntityId());
-        if (state == null || !state.appliedTeamViewers().contains(viewer.getUniqueId())) {
+        if (state == null || !state.appliedTeamViewers.contains(viewer.getUniqueId())) {
             return;
         }
         List<EntityData<?>> metadata = packet.getEntityMetadata();
@@ -325,45 +325,45 @@ public class GlowService {
     }
 
     private void trackTeamGlowEntity(GlowState state, Entity entity) {
-        if (state.appliedTeamEntityId() == entity.getEntityId()) {
+        if (state.appliedTeamEntityId == entity.getEntityId()) {
             return;
         }
         untrackTeamGlowEntity(state);
-        state.appliedTeamEntityId(entity.getEntityId());
+        state.appliedTeamEntityId = entity.getEntityId();
         teamGlowStatesByEntityId.put(entity.getEntityId(), state);
     }
 
     private void untrackTeamGlowEntity(GlowState state) {
-        if (state.appliedTeamEntityId() == -1) {
+        if (state.appliedTeamEntityId == -1) {
             return;
         }
-        teamGlowStatesByEntityId.remove(state.appliedTeamEntityId());
-        state.appliedTeamEntityId(-1);
+        teamGlowStatesByEntityId.remove(state.appliedTeamEntityId);
+        state.appliedTeamEntityId = -1;
     }
 
     private boolean applyPacketGlow(Entity entity, Collection<? extends Player> viewers, GlowState state, boolean fallbackToVanilla) {
-        if (state.packetOnly() && !packetGlowAvailable()) {
+        if (state.packetOnly && !packetGlowAvailable()) {
             return fallbackToVanilla;
         }
-        if (!state.packetOnly() && glowingEntities == null) {
+        if (!state.packetOnly && glowingEntities == null) {
             return fallbackToVanilla;
         }
-        ChatColor chatColor = chatColor(state.color());
+        ChatColor chatColor = chatColor(state.color);
         for (Player viewer : viewers) {
             try {
-                if (state.packetOnly()) {
+                if (state.packetOnly) {
                     sendMetadataGlow(entity, viewer, true);
                 } else if (chatColor == null) {
                     glowingEntities.setGlowing(entity, viewer);
                 } else {
                     glowingEntities.setGlowing(entity, viewer, chatColor);
                 }
-                state.appliedViewers().add(viewer.getUniqueId());
+                state.appliedViewers.add(viewer.getUniqueId());
             } catch (Throwable ignored) {
                 packetGlowAvailable = false;
-                clearPacketGlow(entity, state.appliedViewers(), state.appliedPacketOnly());
-                state.appliedViewers().clear();
-                if (state.global() || fallbackToVanilla) {
+                clearPacketGlow(entity, state.appliedViewers, state.appliedPacketOnly);
+                state.appliedViewers.clear();
+                if (state.global || fallbackToVanilla) {
                     entity.setGlowing(true);
                 } else {
                     entity.setGlowing(false);
@@ -478,78 +478,6 @@ public class GlowService {
 
         private GlowState(UUID entityId) {
             this.entityId = entityId;
-        }
-
-        private UUID entityId() {
-            return entityId;
-        }
-
-        private boolean global() {
-            return global;
-        }
-
-        private void global(boolean global) {
-            this.global = global;
-        }
-
-        private Collection<GamePlayer> viewers() {
-            return viewerSupplier == null ? null : viewerSupplier.get();
-        }
-
-        private void viewerSupplier(Supplier<Collection<GamePlayer>> viewerSupplier) {
-            this.viewerSupplier = viewerSupplier;
-        }
-
-        private Collection<GamePlayer> teamViewers() {
-            return teamViewerSupplier == null ? null : teamViewerSupplier.get();
-        }
-
-        private Supplier<Collection<GamePlayer>> teamViewerSupplier() {
-            return teamViewerSupplier;
-        }
-
-        private void teamViewerSupplier(Supplier<Collection<GamePlayer>> teamViewerSupplier) {
-            this.teamViewerSupplier = teamViewerSupplier;
-        }
-
-        private NamedTextColor color() {
-            return color;
-        }
-
-        private void color(NamedTextColor color) {
-            this.color = color;
-        }
-
-        private Set<UUID> appliedViewers() {
-            return appliedViewers;
-        }
-
-        private Set<UUID> appliedTeamViewers() {
-            return appliedTeamViewers;
-        }
-
-        private boolean packetOnly() {
-            return packetOnly;
-        }
-
-        private void packetOnly(boolean packetOnly) {
-            this.packetOnly = packetOnly;
-        }
-
-        private boolean appliedPacketOnly() {
-            return appliedPacketOnly;
-        }
-
-        private void appliedPacketOnly(boolean appliedPacketOnly) {
-            this.appliedPacketOnly = appliedPacketOnly;
-        }
-
-        private int appliedTeamEntityId() {
-            return appliedTeamEntityId;
-        }
-
-        private void appliedTeamEntityId(int appliedTeamEntityId) {
-            this.appliedTeamEntityId = appliedTeamEntityId;
         }
     }
 }

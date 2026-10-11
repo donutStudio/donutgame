@@ -509,7 +509,7 @@ public abstract class GameEventApiGenerateTask extends DefaultTask {
             source.append(method.parameters().get(i).javaType()).append(" arg").append(i);
         }
         source.append(") {\n");
-        source.append("        GameEventAccess<E> access = (GameEventAccess<E>) this;\n");
+        source.append("        GameEvent<E> access = (GameEvent<E>) this;\n");
         if (method.accessKind() == AccessKind.SETTER) {
             source.append("        access.set(\"").append(method.property()).append("\", arg0);\n");
             source.append("    }\n");

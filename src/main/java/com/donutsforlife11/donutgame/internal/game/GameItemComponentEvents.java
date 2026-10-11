@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.damage.DamageSource;
 import org.bukkit.damage.DamageType;
 import org.bukkit.World;
@@ -47,6 +48,7 @@ import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.api.item.GameItemComponents;
@@ -67,9 +69,11 @@ public class GameItemComponentEvents implements Listener {
     private final Map<UUID, PendingAutoIgnite> pendingAutoIgnites = new LinkedHashMap<>();
     private final Map<UUID, PlayerVisibilityMode> visibilityModes = new LinkedHashMap<>();
     private final Set<BlockKey> infinitePlacedBlocks = new HashSet<>();
+    private final NamespacedKey vanillaProjectileKey;
 
     public GameItemComponentEvents(ModuleService moduleService) {
         this.moduleService = moduleService;
+        this.vanillaProjectileKey = new NamespacedKey(moduleService.plugin(), VANILLA_PROJECTILE_KEY);
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -90,7 +94,7 @@ public class GameItemComponentEvents implements Listener {
             if (!autoIgniteBlock) {
                 infinitePlacedBlocks.add(BlockKey.of(event.getBlockPlaced()));
             }
-            Bukkit.getScheduler().runTask(moduleService.plugin(), () -> {
+            runNextTick(() -> {
                 replenishPlacedBlock(event.getPlayer(), replacement, event.getHand());
                 syncInventory(event.getPlayer());
             });
@@ -144,7 +148,7 @@ public class GameItemComponentEvents implements Listener {
         }
         ItemStack item = launchedProjectileItem(player, event.getEntity());
         if (GameItemComponents.hasVanillaProjectile(item)) {
-            event.getEntity().getPersistentDataContainer().set(vanillaProjectileKey(), org.bukkit.persistence.PersistentDataType.BYTE, (byte) 1);
+            event.getEntity().getPersistentDataContainer().set(vanillaProjectileKey, PersistentDataType.BYTE, (byte) 1);
         }
     }
 
@@ -197,18 +201,18 @@ public class GameItemComponentEvents implements Listener {
         if (!(event.getEntity() instanceof Player player)) {
             return;
         }
-        Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(player));
+        syncInventoryNextTick(player);
     }
 
     @EventHandler(ignoreCancelled = true)
     public void onDrop(PlayerDropItemEvent event) {
         if (GameItemComponents.hasUndroppable(event.getItemDrop().getItemStack())) {
             event.setCancelled(true);
-            Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(event.getPlayer()));
+            syncInventoryNextTick(event.getPlayer());
             return;
         }
         if (GameItemComponents.hasInfiniteBuild(event.getItemDrop().getItemStack())) {
-            Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(event.getPlayer()));
+            syncInventoryNextTick(event.getPlayer());
         }
     }
 
@@ -221,43 +225,43 @@ public class GameItemComponentEvents implements Listener {
         }
         ItemStack replacement = GameItemComponents.normalize(player, item.clone());
         event.setReplacement(replacement);
-        Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(event.getPlayer()));
+        syncInventoryNextTick(event.getPlayer());
     }
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (event.getWhoClicked() instanceof Player player) {
-            Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(player));
+            syncInventoryNextTick(player);
         }
     }
 
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
         if (event.getWhoClicked() instanceof Player player) {
-            Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(player));
+            syncInventoryNextTick(player);
         }
     }
 
     @EventHandler
     public void onCreativeInventory(InventoryCreativeEvent event) {
         if (event.getWhoClicked() instanceof Player player) {
-            Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(player));
+            syncInventoryNextTick(player);
         }
     }
 
     @EventHandler
     public void onSwapHands(PlayerSwapHandItemsEvent event) {
-        Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(event.getPlayer()));
+        syncInventoryNextTick(event.getPlayer());
     }
 
     @EventHandler
     public void onHeldSlotChange(PlayerItemHeldEvent event) {
-        Bukkit.getScheduler().runTask(moduleService.plugin(), () -> syncInventory(event.getPlayer()));
+        syncInventoryNextTick(event.getPlayer());
     }
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
-        Bukkit.getScheduler().runTask(moduleService.plugin(), () -> {
+        runNextTick(() -> {
             syncInventory(event.getPlayer());
             refreshPlayerVisibilityForAll();
         });
@@ -266,7 +270,7 @@ public class GameItemComponentEvents implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         visibilityModes.remove(event.getPlayer().getUniqueId());
-        Bukkit.getScheduler().runTask(moduleService.plugin(), this::refreshPlayerVisibilityForAll);
+        runNextTick(this::refreshPlayerVisibilityForAll);
     }
 
     private void spawnBlockTnt(Block block, Player player, Material material, int fuse) {
@@ -307,7 +311,7 @@ public class GameItemComponentEvents implements Listener {
 
     private void scheduleInfiniteUseReplenish(Player player, EquipmentSlot hand, ItemStack usedItem) {
         int originalAmount = usedItem.getAmount();
-        Bukkit.getScheduler().runTask(moduleService.plugin(), () -> replenishUsedItem(player, hand, usedItem, originalAmount));
+        runNextTick(() -> replenishUsedItem(player, hand, usedItem, originalAmount));
         Bukkit.getScheduler().runTaskLater(moduleService.plugin(), () -> replenishUsedItem(player, hand, usedItem, originalAmount), 5L);
     }
 
@@ -498,11 +502,7 @@ public class GameItemComponentEvents implements Listener {
     }
 
     private boolean isVanillaProjectile(Projectile projectile) {
-        return projectile.getPersistentDataContainer().has(vanillaProjectileKey(), org.bukkit.persistence.PersistentDataType.BYTE);
-    }
-
-    private org.bukkit.NamespacedKey vanillaProjectileKey() {
-        return new org.bukkit.NamespacedKey(moduleService.plugin(), VANILLA_PROJECTILE_KEY);
+        return projectile.getPersistentDataContainer().has(vanillaProjectileKey, PersistentDataType.BYTE);
     }
 
     private SpecialProjectile specialProjectile(Projectile projectile) {
@@ -526,6 +526,14 @@ public class GameItemComponentEvents implements Listener {
     private GamePlayer gamePlayer(Player player) {
         GameModule game = moduleService.getGameOfPlayer(player);
         return game == null ? null : PlayerManagerHandle.getPlayer(game.playerManager(), player);
+    }
+
+    private void syncInventoryNextTick(Player player) {
+        runNextTick(() -> syncInventory(player));
+    }
+
+    private void runNextTick(Runnable action) {
+        Bukkit.getScheduler().runTask(moduleService.plugin(), action);
     }
 
     private record PendingAutoIgnite(UUID playerId, EntityType entityType, int fuse) {

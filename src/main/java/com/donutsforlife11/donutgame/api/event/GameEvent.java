@@ -19,7 +19,7 @@ import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
-public class GameEvent<E extends Event> extends GameEventAccess<E> implements GameEventProperties<E> {
+public class GameEvent<E extends Event> implements GameEventProperties<E> {
     private final E event;
     private final GameModule module;
     private final GameEventAdapterRegistry adapterRegistry;
@@ -86,17 +86,14 @@ public class GameEvent<E extends Event> extends GameEventAccess<E> implements Ga
         return adapterRegistry;
     }
 
-    @Override
     Object getRaw(String property) {
         return GameEventReflection.get(event, property);
     }
 
-    @Override
     <T> T get(String property, Class<T> type) {
         return adapterRegistry.adapt(getRaw(property), type, module);
     }
 
-    @Override
     <T> List<T> getList(String property, Class<T> type) {
         Object raw = getRaw(property);
         if (!(raw instanceof List<?> list) || type == null) {
@@ -108,7 +105,6 @@ public class GameEvent<E extends Event> extends GameEventAccess<E> implements Ga
             .toList();
     }
 
-    @Override
     void set(String property, Object value) {
         GameEventReflection.set(event, property, unwrap(value));
     }

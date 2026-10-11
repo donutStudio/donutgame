@@ -142,21 +142,11 @@ public abstract class GameModule {
                     return beforeCountdownFuture;
                 })
                 .thenApply(ignored -> {
-                    try {
+                    return enterCountdown(() -> {
                         onLoad();
                         registerGameEventHandlers(this);
                         setLifecycleState(ModuleLifecycleState.LOADED);
-                        setLifecycleState(ModuleLifecycleState.COUNTDOWN);
-                        startCountdownSequence().whenComplete((startedModule, throwable) -> {
-                            if (throwable != null) {
-                                logError("Failed while starting module after load.", throwable);
-                            }
-                        });
-                        return this;
-                    } catch (Throwable throwable) {
-                        setLifecycleState(ModuleLifecycleState.FAILED);
-                        throw new CompletionException(throwable);
-                    }
+                    }, "load");
                 })
                 .whenComplete((ignored, throwable) -> {
                     if (throwable != null) {
@@ -203,19 +193,7 @@ public abstract class GameModule {
             started = false;
             return resetMap()
                 .thenApply(ignored -> {
-                    try {
-                        onReload();
-                        setLifecycleState(ModuleLifecycleState.COUNTDOWN);
-                        startCountdownSequence().whenComplete((startedModule, throwable) -> {
-                            if (throwable != null) {
-                                logError("Failed while starting module after reload.", throwable);
-                            }
-                        });
-                        return this;
-                    } catch (Throwable throwable) {
-                        setLifecycleState(ModuleLifecycleState.FAILED);
-                        throw new CompletionException(throwable);
-                    }
+                    return enterCountdown(this::onReload, "reload");
                 })
                 .whenComplete((ignored, throwable) -> {
                     if (throwable != null) {
@@ -374,6 +352,22 @@ public abstract class GameModule {
         this.lifecycleState = lifecycleState;
     }
 
+    private GameModule enterCountdown(ThrowingRunnable beforeCountdown, String transition) {
+        try {
+            beforeCountdown.run();
+            setLifecycleState(ModuleLifecycleState.COUNTDOWN);
+            startCountdownSequence().whenComplete((startedModule, throwable) -> {
+                if (throwable != null) {
+                    logError("Failed while starting module after " + transition + ".", throwable);
+                }
+            });
+            return this;
+        } catch (Throwable throwable) {
+            setLifecycleState(ModuleLifecycleState.FAILED);
+            throw new CompletionException(throwable);
+        }
+    }
+
     private CompletableFuture<GameModule> startCountdownSequence() {
         CompletableFuture<GameModule> future = new CompletableFuture<>();
         AtomicBoolean completed = new AtomicBoolean();
@@ -440,5 +434,10 @@ public abstract class GameModule {
             HandlerList.unregisterAll(listener);
         }
         registeredListeners.clear();
+    }
+
+    @FunctionalInterface
+    private interface ThrowingRunnable {
+        void run() throws Throwable;
     }
 }

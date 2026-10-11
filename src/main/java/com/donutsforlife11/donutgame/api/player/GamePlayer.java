@@ -682,9 +682,7 @@ public class GamePlayer implements GameEntityBase {
 
     @Override
     public void clearItems() {
-        playingState.inventory = new ItemStack[36];
-        playingState.armor = new ItemStack[4];
-        playingState.extra = new ItemStack[1];
+        playingState.clearInventory();
         applyVisiblePlayer(player -> {
             player.getInventory().clear();
             player.getInventory().setArmorContents(new ItemStack[4]);
@@ -1006,18 +1004,7 @@ public class GamePlayer implements GameEntityBase {
     }
 
     private void revivePlayingState(double maxHealth) {
-        playingState.health = maxHealth;
-        playingState.foodLevel = 20;
-        playingState.saturation = 20;
-        playingState.effects.clear();
-        playingState.arrowsInBody = 0;
-        playingState.fireTicks = 0;
-        playingState.invulnerable = false;
-        playingState.invisible = false;
-        playingState.canPickupItems = true;
-        playingState.gameMode = playingState.gameMode == GameMode.SPECTATOR ? GameMode.SURVIVAL : playingState.gameMode;
-        playingState.allowFlight = playingState.gameMode == GameMode.CREATIVE;
-        playingState.flying = false;
+        playingState.restoreAliveDefaults(maxHealth);
     }
 
     private void resetPlayingStateForGame() {
@@ -1025,17 +1012,7 @@ public class GamePlayer implements GameEntityBase {
         playingState.gameMode = GameMode.ADVENTURE;
         playingState.allowFlight = false;
         playingState.flying = false;
-        playingState.invulnerable = false;
-        playingState.invisible = false;
-        playingState.canPickupItems = true;
-        playingState.health = maxHealth();
-        playingState.foodLevel = 20;
-        playingState.saturation = 20.0f;
-        playingState.fireTicks = 0;
-        playingState.arrowsInBody = 0;
-        playingState.level = 0;
-        playingState.exp = 0.0f;
-        playingState.totalExperience = 0;
+        playingState.restoreAliveDefaults(maxHealth());
     }
 
     private void forcePlayingState(String transition) {
