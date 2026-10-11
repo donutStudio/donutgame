@@ -28,7 +28,10 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 
+import com.donutsforlife11.donutgame.api.map.GameWorldHandle;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
+import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
 import com.donutsforlife11.donutgame.api.ui.GameSound;
 
@@ -153,7 +156,7 @@ public class GameKillCreditEvents implements Listener {
         if (game == null || game(target) != game || !allowsKillCredit(game, target, attacker)) {
             return;
         }
-        GamePlayer attackerPlayer = game.playerManager().getPlayer(attacker);
+        GamePlayer attackerPlayer = PlayerManagerHandle.getPlayer(game.playerManager(), attacker);
         if (attackerPlayer == null) {
             return;
         }
@@ -208,8 +211,8 @@ public class GameKillCreditEvents implements Listener {
     }
 
     private boolean allowsKillCredit(GameModule game, Player target, Player attacker) {
-        GamePlayer targetPlayer = game.playerManager().getPlayer(target);
-        GamePlayer attackerPlayer = game.playerManager().getPlayer(attacker);
+        GamePlayer targetPlayer = PlayerManagerHandle.getPlayer(game.playerManager(), target);
+        GamePlayer attackerPlayer = PlayerManagerHandle.getPlayer(game.playerManager(), attacker);
         GameTeam team = game.teamManager().getPlayerTeam(targetPlayer);
         return team == null || team != game.teamManager().getPlayerTeam(attackerPlayer) || team.friendlyFireKillCredit();
     }
@@ -230,7 +233,7 @@ public class GameKillCreditEvents implements Listener {
         }
         Location center = block.getLocation().add(0.5, 0.5, 0.5);
         for (GamePlayer candidate : game.playerManager().getOnlinePlayers()) {
-            Player target = candidate.bukkitPlayer();
+            Player target = GamePlayerHandle.bukkitPlayer(candidate);
             if (target == null || target == attacker || target.getWorld() != block.getWorld()) {
                 continue;
             }
@@ -344,7 +347,7 @@ public class GameKillCreditEvents implements Listener {
     }
 
     private void enqueueKillSubtitle(GamePlayer attackerPlayer, Player target, Set<KillIcon> icons, int streak) {
-        Player attacker = attackerPlayer.bukkitPlayer();
+        Player attacker = GamePlayerHandle.bukkitPlayer(attackerPlayer);
         if (attacker == null) {
             return;
         }
@@ -395,7 +398,7 @@ public class GameKillCreditEvents implements Listener {
     }
 
     private boolean inGameWorld(GameModule game, World world) {
-        return game != null && game.world() != null && world != null && world.equals(game.world().bukkitWorld());
+        return game != null && game.world() != null && world != null && world.equals(GameWorldHandle.bukkitWorld(game.world()));
     }
 
     private record DamageCredit(UUID attackerId, long timeMillis, Set<KillIcon> icons) {

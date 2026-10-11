@@ -6,15 +6,21 @@ import java.util.Objects;
 
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 import com.donutsforlife11.donutgame.api.entity.GameEntity;
+import com.donutsforlife11.donutgame.api.entity.GameEntityHandle;
+import com.donutsforlife11.donutgame.api.map.GameBlock;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
+import com.donutsforlife11.donutgame.api.map.GameLocationHandle;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
+import com.donutsforlife11.donutgame.api.map.GameWorldHandle;
 import com.donutsforlife11.donutgame.api.item.GameItem;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
 public class GameEventAdapterRegistry {
@@ -22,14 +28,18 @@ public class GameEventAdapterRegistry {
 
     public static GameEventAdapterRegistry defaults() {
         GameEventAdapterRegistry registry = new GameEventAdapterRegistry();
-        registry.register(Player.class, GamePlayer.class, (player, module) -> module.playerManager().getPlayer(player));
+        registry.register(Player.class, GamePlayer.class, (player, module) -> PlayerManagerHandle.getPlayer(module.playerManager(), player));
         registry.register(Entity.class, GameEntity.class, (entity, module) -> {
             GameWorld world = gameWorld(module, entity.getWorld());
-            return world == null ? null : new GameEntity(world, entity);
+            return world == null ? null : GameEntityHandle.create(world, entity);
         });
         registry.register(Location.class, GameLocation.class, (location, module) -> {
             GameWorld world = gameWorld(module, location.getWorld());
-            return world == null ? null : new GameLocation(world, location);
+            return world == null ? null : GameLocationHandle.create(world, location);
+        });
+        registry.register(Block.class, GameBlock.class, (block, module) -> {
+            GameWorld world = gameWorld(module, block.getWorld());
+            return world == null ? null : world.blockAt(GameLocationHandle.create(world, block.getLocation()));
         });
         registry.register(World.class, GameWorld.class, (world, module) -> gameWorld(module, world));
         registry.register(ItemStack.class, GameItem.class, (item, module) -> GameItem.from(item));
@@ -41,6 +51,7 @@ public class GameEventAdapterRegistry {
             new TypeMapping(Player.class.getName(), GamePlayer.class.getName()),
             new TypeMapping(Entity.class.getName(), GameEntity.class.getName()),
             new TypeMapping(Location.class.getName(), GameLocation.class.getName()),
+            new TypeMapping(Block.class.getName(), GameBlock.class.getName()),
             new TypeMapping(World.class.getName(), GameWorld.class.getName()),
             new TypeMapping(ItemStack.class.getName(), GameItem.class.getName())
         );
@@ -75,7 +86,7 @@ public class GameEventAdapterRegistry {
             return null;
         }
         for (GameWorld gameWorld : module.worlds().values()) {
-            if (world.equals(gameWorld.bukkitWorld())) {
+            if (world.equals(GameWorldHandle.bukkitWorld(gameWorld))) {
                 return gameWorld;
             }
         }

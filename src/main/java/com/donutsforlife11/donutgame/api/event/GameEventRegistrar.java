@@ -22,6 +22,7 @@ import org.bukkit.event.player.PlayerEvent;
 import org.bukkit.event.world.WorldEvent;
 import org.bukkit.plugin.EventExecutor;
 
+import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
 public class GameEventRegistrar {
@@ -110,7 +111,7 @@ public class GameEventRegistrar {
         }
 
         Player player = player(event);
-        if (player != null && (module.playerManager().owns(player) || module.playerManager().ownsOffline(player.getUniqueId()))) {
+        if (player != null && (PlayerManagerHandle.owns(module.playerManager(), player) || module.playerManager().ownsOffline(player.getUniqueId()))) {
             return true;
         }
         Entity entity = entity(event);
@@ -128,12 +129,12 @@ public class GameEventRegistrar {
     private Boolean fastScope(Event event) {
         if (event instanceof PlayerEvent playerEvent) {
             Player player = playerEvent.getPlayer();
-            return module.playerManager().owns(player) || module.playerManager().ownsOffline(player.getUniqueId());
+            return PlayerManagerHandle.owns(module.playerManager(), player) || module.playerManager().ownsOffline(player.getUniqueId());
         }
         if (event instanceof EntityEvent entityEvent) {
             Entity entity = entityEvent.getEntity();
             if (entity instanceof Player player) {
-                return module.playerManager().owns(player) || module.playerManager().ownsOffline(player.getUniqueId());
+                return PlayerManagerHandle.owns(module.playerManager(), player) || module.playerManager().ownsOffline(player.getUniqueId());
             }
             return world(entity.getWorld());
         }

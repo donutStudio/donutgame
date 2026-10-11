@@ -16,6 +16,7 @@ import org.bukkit.entity.Player;
 
 import com.donutsforlife11.donutgame.api.event.GamePlayerLateJoinEvent;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
+import com.donutsforlife11.donutgame.api.map.GameWorldHandle;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 import com.donutsforlife11.donutgame.internal.game.ModuleLifecycleState;
 
@@ -23,23 +24,24 @@ public class PlayerManager {
     private final GameModule module;
     private final PlayerRegistry registry;
     private final PlayerTeleporter teleporter;
+    private final GamePlayerLifecycleService lifecycle = new GamePlayerLifecycleService();
     private final Set<UUID> leavingPlayers = new LinkedHashSet<>();
 
     public PlayerManager(GameModule module) {
         this.module = module;
-        this.registry = new PlayerRegistry(module);
+        this.registry = new PlayerRegistry(module, lifecycle);
         this.teleporter = new PlayerTeleporter(module);
     }
 
-    public CompletableFuture<Integer> join(Collection<Player> players) {
+    CompletableFuture<Integer> join(Collection<Player> players) {
         return join(players, true);
     }
 
-    public CompletableFuture<Integer> joinInitial(Collection<Player> players) {
+    CompletableFuture<Integer> joinInitial(Collection<Player> players) {
         return join(players, false);
     }
 
-    public CompletableFuture<Integer> join(Collection<Player> players, boolean lateJoin) {
+    CompletableFuture<Integer> join(Collection<Player> players, boolean lateJoin) {
         if (players == null || players.isEmpty()) {
             return CompletableFuture.completedFuture(0);
         }
@@ -48,15 +50,15 @@ public class PlayerManager {
             .thenApply(ignored -> (int) joins.stream().filter(future -> Boolean.TRUE.equals(future.getNow(false))).count());
     }
 
-    public CompletableFuture<Boolean> join(Player player) {
+    CompletableFuture<Boolean> join(Player player) {
         return join(player, true);
     }
 
-    public CompletableFuture<Boolean> joinInitial(Player player) {
+    CompletableFuture<Boolean> joinInitial(Player player) {
         return join(player, false);
     }
 
-    public CompletableFuture<Boolean> join(Player player, boolean lateJoin) {
+    CompletableFuture<Boolean> join(Player player, boolean lateJoin) {
         Objects.requireNonNull(player, "player");
         if (!acceptsPlayerRegistration()) {
             return CompletableFuture.completedFuture(false);
@@ -81,7 +83,7 @@ public class PlayerManager {
         });
     }
 
-    public CompletableFuture<Boolean> leave(Player player) {
+    CompletableFuture<Boolean> leave(Player player) {
         Objects.requireNonNull(player, "player");
         GamePlayer gamePlayer = registry.get(player.getUniqueId());
         if (gamePlayer == null && !ownsWorld(player.getWorld())) {
@@ -89,7 +91,7 @@ public class PlayerManager {
         }
         leavingPlayers.add(player.getUniqueId());
         if (gamePlayer != null) {
-            gamePlayer.prepareForWorldExit();
+            lifecycle.prepareForWorldExit(gamePlayer);
             module.uiManager().clear(gamePlayer);
         }
         Location destination = teleporter.fallbackLocation(player.getWorld());
@@ -103,7 +105,7 @@ public class PlayerManager {
             // snapshot again here: PlayerWorldStateService has just restored the
             // destination world's state during PlayerChangedWorldEvent.
             if (gamePlayer != null) {
-                gamePlayer.clearSpectatorStateAfterWorldExit(player);
+                lifecycle.clearSpectatorStateAfterWorldExit(gamePlayer, player);
             }
             finishExit(player, gamePlayer, false);
             module.log("Removed player " + player.getName() + " from game " + module.index() + ".");
@@ -124,10 +126,10 @@ public class PlayerManager {
 
     public void cleanupRuntimeState() {
         for (GamePlayer player : List.copyOf(registry.players())) {
-            Player bukkitPlayer = player.bukkitPlayer();
+            Player bukkitPlayer = GamePlayerHandle.bukkitPlayer(player);
             if (bukkitPlayer != null) {
                 try {
-                    player.prepareForRemoval();
+                    lifecycle.prepareForRemoval(player);
                 } catch (RuntimeException exception) {
                     module.logError("Failed to fully clean up player " + bukkitPlayer.getName() + " while unloading.", exception);
                 }
@@ -136,7 +138,7 @@ public class PlayerManager {
         }
     }
 
-    public boolean owns(Player player) {
+    boolean owns(Player player) {
         if (player == null) {
             return false;
         }
@@ -148,16 +150,16 @@ public class PlayerManager {
         return registry.contains(uuid);
     }
 
-    public boolean owns(World world) {
+    boolean owns(World world) {
         return ownsWorld(world);
     }
 
-    public boolean ownsWorld(World world) {
+    boolean ownsWorld(World world) {
         if (world == null) {
             return false;
         }
         for (GameWorld gameWorld : module.worlds().values()) {
-            World ownedWorld = gameWorld.bukkitWorld();
+            World ownedWorld = GameWorldHandle.bukkitWorld(gameWorld);
             if (ownedWorld != null && ownedWorld.equals(world)) {
                 return true;
             }
@@ -169,7 +171,7 @@ public class PlayerManager {
         return registry.get(uuid);
     }
 
-    public GamePlayer getPlayer(Player player) {
+    GamePlayer getPlayer(Player player) {
         if (player == null) {
             return null;
         }
@@ -192,11 +194,11 @@ public class PlayerManager {
         return filteredBySpectatorState(false);
     }
 
-    public void markOffline(Player player) {
+    void markOffline(Player player) {
         registry.markOffline(player, this::ownsWorld);
     }
 
-    public void detachAfterExternalWorldChange(Player player) {
+    void detachAfterExternalWorldChange(Player player) {
         if (player == null || ownsWorld(player.getWorld())) {
             return;
         }
@@ -247,7 +249,7 @@ public class PlayerManager {
         }
         if (cleanupPhysicalState) {
             try {
-                gamePlayer.prepareForRemoval();
+                lifecycle.prepareForRemoval(gamePlayer);
             } catch (RuntimeException exception) {
                 module.plugin().getLogger().log(Level.SEVERE, "Failed to fully clean up player " + player.getName() + " while removing them from game " + module.index() + ".", exception);
             }

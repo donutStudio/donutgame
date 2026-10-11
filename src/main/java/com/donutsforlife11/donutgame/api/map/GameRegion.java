@@ -72,6 +72,10 @@ public class GameRegion {
         return sizeX() * sizeY() * sizeZ();
     }
 
+    public long blockVolume() {
+        return (long) sizeX() * (long) sizeY() * (long) sizeZ();
+    }
+
     private static GameWorld regionWorld(GameLocation first, GameLocation second) {
         GameWorld firstWorld = first.world();
         GameWorld secondWorld = second.world();

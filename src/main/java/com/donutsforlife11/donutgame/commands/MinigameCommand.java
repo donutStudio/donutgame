@@ -13,6 +13,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
+import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
 import com.donutsforlife11.donutgame.internal.command.PluginCommand;
 import com.donutsforlife11.donutgame.internal.file.FileService;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
@@ -210,7 +211,7 @@ public class MinigameCommand implements PluginCommand {
             sendError(sender, "No active game exists at that index.");
             return Command.SINGLE_SUCCESS;
         }
-        game.playerManager().join(players)
+        PlayerManagerHandle.join(game.playerManager(), players)
             .thenAccept(joined -> sendSuccess(sender, "Joined " + joined + " player(s) to game " + game.index() + "."))
             .exceptionally(error -> {
                 sendError(sender, "Failed to join player(s) to game " + game.index() + ". See console for details.");

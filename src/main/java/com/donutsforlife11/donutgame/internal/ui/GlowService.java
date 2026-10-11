@@ -18,6 +18,7 @@ import org.bukkit.entity.Player;
 
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.event.PacketListenerAbstract;
 import com.github.retrooper.packetevents.event.PacketListenerCommon;
@@ -167,7 +168,7 @@ public class GlowService {
         }
         Set<Player> bukkitViewers = new HashSet<>();
         for (GamePlayer viewer : viewers) {
-            Player player = viewer == null ? null : viewer.bukkitPlayer();
+            Player player = GamePlayerHandle.bukkitPlayer(viewer);
             if (player != null && player.isOnline()) {
                 bukkitViewers.add(player);
             }
@@ -239,7 +240,7 @@ public class GlowService {
             return bukkitViewers;
         }
         for (GamePlayer viewer : viewers) {
-            Player player = viewer == null ? null : viewer.bukkitPlayer();
+            Player player = GamePlayerHandle.bukkitPlayer(viewer);
             if (player != null && player.isOnline()) {
                 bukkitViewers.add(player);
             }

@@ -15,6 +15,7 @@ import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameRegion;
+import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
 import com.donutsforlife11.donutgame.api.time.GameTimer;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
@@ -169,7 +170,7 @@ public class BorderManager {
         Collection<GameBorder> currentBorders = new ArrayList<>(borders);
         Collection<Player> onlinePlayers = new ArrayList<>();
         for (var gamePlayer : module.playerManager().getOnlinePlayers()) {
-            Player player = gamePlayer.bukkitPlayer();
+            Player player = GamePlayerHandle.bukkitPlayer(gamePlayer);
             if (player != null) {
                 onlinePlayers.add(player);
             }
@@ -188,7 +189,7 @@ public class BorderManager {
             return;
         }
         for (var gamePlayer : module.playerManager().getNonSpectators()) {
-            Player player = gamePlayer.bukkitPlayer();
+            Player player = GamePlayerHandle.bukkitPlayer(gamePlayer);
             GameLocation location = gamePlayer.location();
             if (player == null || location == null || insideAnyBorder(location) || !canTakeBorderDamage(player)) {
                 continue;

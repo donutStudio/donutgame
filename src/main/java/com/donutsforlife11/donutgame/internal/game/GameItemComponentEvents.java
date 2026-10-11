@@ -52,6 +52,8 @@ import org.bukkit.util.Vector;
 import com.donutsforlife11.donutgame.api.item.GameItemComponents;
 import com.donutsforlife11.donutgame.api.item.GameItemComponents.PlayerVisibilityMode;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
+import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
 
 public class GameItemComponentEvents implements Listener {
@@ -384,7 +386,7 @@ public class GameItemComponentEvents implements Listener {
     private void refreshPlayerVisibilityForAll() {
         for (GameModule game : moduleService.activeGames().values()) {
             for (GamePlayer viewer : game.playerManager().getOnlinePlayers()) {
-                Player bukkitViewer = viewer.bukkitPlayer();
+                Player bukkitViewer = GamePlayerHandle.bukkitPlayer(viewer);
                 if (bukkitViewer == null) {
                     continue;
                 }
@@ -398,7 +400,7 @@ public class GameItemComponentEvents implements Listener {
         GameModule game = viewer.module();
         GameTeam viewerTeam = viewer.getTeam();
         for (GamePlayer target : game.playerManager().getOnlinePlayers()) {
-            Player bukkitTarget = target.bukkitPlayer();
+            Player bukkitTarget = GamePlayerHandle.bukkitPlayer(target);
             if (bukkitTarget == null) {
                 continue;
             }
@@ -523,7 +525,7 @@ public class GameItemComponentEvents implements Listener {
 
     private GamePlayer gamePlayer(Player player) {
         GameModule game = moduleService.getGameOfPlayer(player);
-        return game == null ? null : game.playerManager().getPlayer(player);
+        return game == null ? null : PlayerManagerHandle.getPlayer(game.playerManager(), player);
     }
 
     private record PendingAutoIgnite(UUID playerId, EntityType entityType, int fuse) {

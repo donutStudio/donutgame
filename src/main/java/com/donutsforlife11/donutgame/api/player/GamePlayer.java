@@ -27,10 +27,12 @@ import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.api.entity.GameEntityBase;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
+import com.donutsforlife11.donutgame.api.map.GameLocationHandle;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.item.GameItem;
 import com.donutsforlife11.donutgame.api.item.GameItemComponents;
-import com.donutsforlife11.donutgame.api.item.ItemSpec;
+import com.donutsforlife11.donutgame.api.item.GameItemHandle;
+import com.donutsforlife11.donutgame.api.item.GameItemType;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
 import com.donutsforlife11.donutgame.api.time.GameTimer;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
@@ -40,6 +42,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 
 public class GamePlayer implements GameEntityBase {
     private final GameModule module;
+    private final long generation;
     private final UUID uuid;
     private final PlayerSnapshot playingState = PlayerSnapshot.empty();
     private SpectatorSession spectatorSession;
@@ -58,6 +61,7 @@ public class GamePlayer implements GameEntityBase {
 
     GamePlayer(GameModule module, UUID uuid) {
         this.module = module;
+        this.generation = module.handleGeneration();
         this.uuid = uuid;
         this.state = PlayerState.OFFLINE;
         this.spectatablePlayers = () -> module.playerManager().getPlayers();
@@ -67,11 +71,19 @@ public class GamePlayer implements GameEntityBase {
         return uuid;
     }
 
-    public Player bukkitPlayer() {
+    public String name() {
+        Player player = bukkitPlayer();
+        return player == null ? uuid.toString() : player.getName();
+    }
+
+    Player bukkitPlayer() {
+        if (!module.isHandleGenerationActive(generation)) {
+            return null;
+        }
         return Bukkit.getPlayer(uuid);
     }
 
-    public Entity bukkitEntity() {
+    Entity bukkitEntity() {
         return attachedPlayer();
     }
 
@@ -79,9 +91,9 @@ public class GamePlayer implements GameEntityBase {
     public GameLocation location() {
         Player player = attachedPlayer();
         if (player != null) {
-            return new GameLocation(world(), player.getLocation());
+            return GameLocationHandle.create(world(), player.getLocation());
         }
-        return lastLocation == null ? null : new GameLocation(world(), lastLocation);
+        return lastLocation == null ? null : GameLocationHandle.create(world(), lastLocation);
     }
 
     public GameModule module() {
@@ -241,13 +253,13 @@ public class GamePlayer implements GameEntityBase {
         return module().teamManager().getPlayerTeam(this);
     }
 
-    public void captureExternalScoreboard(Player player) {
+    void captureExternalScoreboard(Player player) {
         if (player != null && previousScoreboard == null) {
             previousScoreboard = player.getScoreboard();
         }
     }
 
-    public void restoreExternalScoreboard(Player player) {
+    void restoreExternalScoreboard(Player player) {
         if (player != null && previousScoreboard != null) {
             player.setScoreboard(previousScoreboard);
         }
@@ -345,19 +357,24 @@ public class GamePlayer implements GameEntityBase {
         return lastWorldName;
     }
 
-    public Location lastLocation() {
+    Location lastLocation() {
         return lastLocation == null ? null : lastLocation.clone();
     }
 
-    public void give(ItemSpec item) {
+    public GameLocation lastGameLocation() {
+        Location location = lastLocation();
+        return location == null ? null : GameLocationHandle.create(world(), location);
+    }
+
+    public void give(GameItemType item) {
         giveItem(item);
     }
 
-    public void giveItem(ItemSpec item) {
+    public void giveItem(GameItemType item) {
         if (item == null) {
-            throw new IllegalArgumentException("item cannot be null");
+            return;
         }
-        giveItem(item.createItem());
+        giveItem(item.create());
     }
 
     public void giveItem(GameItem item) {
@@ -638,11 +655,8 @@ public class GamePlayer implements GameEntityBase {
     }
 
     @Override
-    public void setItem(EquipmentSlot slot, ItemSpec item) {
-        if (item == null) {
-            throw new IllegalArgumentException("item cannot be null");
-        }
-        setItem(slot, item.createItem());
+    public void setItem(EquipmentSlot slot, GameItemType item) {
+        setItem(slot, item == null ? null : item.create());
     }
 
     @Override
@@ -680,21 +694,12 @@ public class GamePlayer implements GameEntityBase {
     }
 
     @Override
-    public void clearItems(ItemSpec item) {
-        if (item == null) {
-            clearItems();
-            return;
-        }
-        clearItems(item::matches);
-    }
-
-    @Override
     public void clearItems(GameItem item) {
         if (item == null) {
             clearItems();
             return;
         }
-        ItemStack bukkitItem = item.bukkitItem();
+        ItemStack bukkitItem = GameItemHandle.bukkitItem(item);
         clearItems(stack -> stack != null && stack.isSimilar(bukkitItem));
     }
 

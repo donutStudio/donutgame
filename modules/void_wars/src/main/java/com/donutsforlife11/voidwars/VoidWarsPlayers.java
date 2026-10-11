@@ -11,7 +11,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.bukkit.GameMode;
-import org.bukkit.entity.Player;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -181,11 +180,11 @@ final class VoidWarsPlayers {
 
     @GameEventHandler
     public void onDeath(GameEvent<PlayerDeathEvent> event) {
-        GamePlayer player = event.get("player", GamePlayer.class);
+        GamePlayer player = event.getPlayer();
         if (player == null) {
             return;
         }
-        GamePlayer gameAttacker = creditedKiller(event.bukkitEvent());
+        GamePlayer gameAttacker = event.getKiller();
         if (gameAttacker != null && gameAttacker != player) {
             kills.merge(gameAttacker.uuid(), 1, Integer::sum);
         }
@@ -195,10 +194,10 @@ final class VoidWarsPlayers {
         }
         boolean canRespawn = livingTeammate(player) != null;
         if (canRespawn) {
-            event.bukkitEvent().setKeepInventory(true);
-            event.bukkitEvent().setKeepLevel(true);
-            event.bukkitEvent().setDroppedExp(0);
-            event.bukkitEvent().getDrops().clear();
+            event.setKeepInventory(true);
+            event.setKeepLevel(true);
+            event.setDroppedExp(0);
+            event.clearDrops();
         }
         GameLocation spectatorLocation = game.border() != null && player.location() != null && game.border().containsLocation(player.location())
             ? player.location()
@@ -217,7 +216,7 @@ final class VoidWarsPlayers {
 
     @GameEventHandler
     public void onJoin(GameEvent<PlayerJoinEvent> event) {
-        GamePlayer player = event.get("player", GamePlayer.class);
+        GamePlayer player = event.getPlayer();
         if (player != null && !game.teamManager().playerHasTeam(player)) {
             lateSpectators.add(player.uuid());
             setupPlayer(player, false, false);
@@ -227,29 +226,21 @@ final class VoidWarsPlayers {
 
     @GameEventHandler
     public void onLateJoin(GameEvent<GamePlayerLateJoinEvent> event) {
-        GamePlayer player = event.get("player", GamePlayer.class);
+        GamePlayer player = event.getPlayer();
         if (player != null && !game.teamManager().playerHasTeam(player)) {
             lateSpectators.add(player.uuid());
-            event.bukkitEvent().setSpectatorLocation(game.world().getPoint(VoidWars.SPAWN));
+            event.setSpectatorLocation(game.world().getPoint(VoidWars.SPAWN));
         }
         checkRoundOver();
     }
 
     @GameEventHandler
     public void onQuit(GameEvent<PlayerQuitEvent> event) {
-        GamePlayer player = event.get("player", GamePlayer.class);
+        GamePlayer player = event.getPlayer();
         if (player != null) {
             player.setSpectator(true);
         }
         checkRoundOver();
-    }
-
-    private GamePlayer creditedKiller(PlayerDeathEvent event) {
-        Player killer = event.getPlayer().getKiller();
-        if (killer == null && event.getDamageSource().getCausingEntity() instanceof Player causingPlayer) {
-            killer = causingPlayer;
-        }
-        return killer == null ? null : game.playerManager().getPlayer(killer);
     }
 
     private GameTeam fairestTeamFor(GamePlayer player) {

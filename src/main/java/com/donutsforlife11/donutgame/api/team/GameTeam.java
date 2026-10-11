@@ -14,8 +14,10 @@ import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 
 import com.donutsforlife11.donutgame.api.item.GameItem;
-import com.donutsforlife11.donutgame.api.item.ItemSpec;
+import com.donutsforlife11.donutgame.api.item.GameItemType;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
+import com.donutsforlife11.donutgame.api.entity.GameEntityHandle;
 import com.donutsforlife11.donutgame.internal.ui.GlowService;
 
 import net.kyori.adventure.text.Component;
@@ -63,10 +65,10 @@ public class GameTeam {
         }
         manager.unassign(this, player);
         clearGlow(player);
-        Player bukkitPlayer = player.bukkitPlayer();
+        Player bukkitPlayer = GamePlayerHandle.bukkitPlayer(player);
         if (!removed && bukkitPlayer != null) {
             team.removeEntry(bukkitPlayer.getName());
-            player.restoreExternalScoreboard(bukkitPlayer);
+            GamePlayerHandle.restoreExternalScoreboard(player, bukkitPlayer);
         }
         refreshTeamGlow();
         return this;
@@ -137,8 +139,8 @@ public class GameTeam {
         return displayName;
     }
 
-    public GameTeam setItem(ItemSpec item) {
-        return setItem(item == null ? null : item.createItem());
+    public GameTeam setItem(GameItemType item) {
+        return setItem(item == null ? null : item.create());
     }
 
     public GameTeam setItem(GameItem item) {
@@ -244,19 +246,23 @@ public class GameTeam {
     }
 
     public Team.OptionStatus collisionRule() {
+        return collisionRule;
+    }
+
+    public Team.OptionStatus effectiveCollisionRuleSetting() {
         return team.getOption(Team.Option.COLLISION_RULE);
     }
 
-    public Team bukkitTeam() {
+    Team bukkitTeam() {
         return team;
     }
 
     void syncPlayer(GamePlayer player) {
-        Player bukkitPlayer = player == null ? null : player.bukkitPlayer();
+        Player bukkitPlayer = GamePlayerHandle.bukkitPlayer(player);
         if (removed || bukkitPlayer == null) {
             return;
         }
-        player.captureExternalScoreboard(bukkitPlayer);
+        GamePlayerHandle.captureExternalScoreboard(player, bukkitPlayer);
         bukkitPlayer.setScoreboard(team.getScoreboard());
         team.addEntry(bukkitPlayer.getName());
         syncGlow(player);
@@ -289,7 +295,7 @@ public class GameTeam {
             return;
         }
         GlowService glowService = manager.playerManager().module().plugin().glowService();
-        if (glowService == null || !glowService.setPacketGlowing(player.bukkitEntity(), true, () -> glowViewers(player), null)) {
+        if (glowService == null || !glowService.setPacketGlowing(GameEntityHandle.bukkitEntity(player), true, () -> glowViewers(player), null)) {
             clearGlow(player);
         }
     }
@@ -297,7 +303,7 @@ public class GameTeam {
     private void clearGlow(GamePlayer player) {
         GlowService glowService = manager.playerManager().module().plugin().glowService();
         if (glowService != null && player != null) {
-            glowService.setPacketGlowing(player.bukkitEntity(), false, Set::of, null);
+            glowService.setPacketGlowing(GameEntityHandle.bukkitEntity(player), false, Set::of, null);
         }
     }
 

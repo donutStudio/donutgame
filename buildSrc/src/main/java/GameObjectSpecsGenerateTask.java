@@ -93,20 +93,18 @@ public abstract class GameObjectSpecsGenerateTask extends DefaultTask {
         return constants;
     }
 
-    private List<EntityData> entities(ClassLoader classLoader, String source) throws ReflectiveOperationException {
+    private List<String> entities(ClassLoader classLoader, String source) throws ReflectiveOperationException {
         Class<?> entityType = classLoader.loadClass("org.bukkit.entity.EntityType");
-        Map<String, String> imports = imports(source);
-        List<EntityData> entities = new ArrayList<>();
+        List<String> entities = new ArrayList<>();
         Matcher matcher = Pattern.compile("(?m)^\\s*([A-Z0-9_]+)\\(\"[^\"]+\",\\s*([\\w.]+)\\.class,").matcher(section(source, "EntityType"));
         while (matcher.find()) {
             String constantName = matcher.group(1);
             if (deprecatedEnumConstant(entityType, constantName)) {
                 continue;
             }
-            Class<?> entityClass = classLoader.loadClass(resolveEntityClassName(matcher.group(2), imports));
-            entities.add(new EntityData(constantName, javaName(entityClass)));
+            entities.add(constantName);
         }
-        entities.sort(Comparator.comparing(EntityData::constantName));
+        entities.sort(Comparator.naturalOrder());
         return entities;
     }
 
@@ -131,13 +129,6 @@ public abstract class GameObjectSpecsGenerateTask extends DefaultTask {
         return source.substring(startIndex + start.length(), endIndex);
     }
 
-    private String resolveEntityClassName(String sourceName, Map<String, String> imports) {
-        if (sourceName.contains(".")) {
-            return sourceName;
-        }
-        return imports.getOrDefault(sourceName, "org.bukkit.entity." + sourceName);
-    }
-
     private boolean deprecatedEnumConstant(Class<?> type, String name) {
         try {
             Field field = type.getField(name);
@@ -148,23 +139,28 @@ public abstract class GameObjectSpecsGenerateTask extends DefaultTask {
     }
 
     private void writeGameBlocks(Path outputDirectory, List<String> blocks) throws IOException {
+        if (!blocks.contains("AIR")) {
+            blocks = new ArrayList<>(blocks);
+            blocks.add("AIR");
+            blocks.sort(Comparator.naturalOrder());
+        }
         StringBuilder source = generatedHeader(OBJECT_PACKAGE_NAME);
         source.append("public final class GameBlocks {\n");
         for (String block : blocks) {
-            source.append("    public static final BlockSpec<org.bukkit.block.data.BlockData> ")
+            source.append("    public static final GameBlockType ")
                 .append(block)
-                .append(" = BlockSpec.of(org.bukkit.Material.")
+                .append(" = GameBlockType.of(org.bukkit.Material.")
                 .append(block)
                 .append(");\n");
         }
         source.append("\n");
         source.append("    private GameBlocks() {\n");
         source.append("    }\n\n");
-        source.append("    public static BlockSpec<org.bukkit.block.data.BlockData> of(org.bukkit.Material material) {\n");
-        source.append("        return BlockSpec.of(material);\n");
+        source.append("    public static GameBlockType of(org.bukkit.Material material) {\n");
+        source.append("        return GameBlockType.of(material);\n");
         source.append("    }\n\n");
-        source.append("    public static <D extends org.bukkit.block.data.BlockData> BlockSpec<D> of(org.bukkit.Material material, Class<D> dataType) {\n");
-        source.append("        return BlockSpec.of(material, dataType);\n");
+        source.append("    public static org.bukkit.block.data.BlockData data(org.bukkit.Material material) {\n");
+        source.append("        return material.createBlockData();\n");
         source.append("    }\n");
         source.append("}\n");
         writeJava(outputDirectory, OBJECT_PACKAGE_NAME, "GameBlocks", source.toString());
@@ -174,25 +170,22 @@ public abstract class GameObjectSpecsGenerateTask extends DefaultTask {
         StringBuilder source = generatedHeader(ITEM_PACKAGE_NAME);
         source.append("public final class GameItems {\n");
         for (String item : items) {
-            source.append("    public static final ItemSpec ")
+            source.append("    public static final GameItemType ")
                 .append(item)
-                .append(" = ItemSpec.of(org.bukkit.Material.")
+                .append(" = GameItemType.of(org.bukkit.Material.")
                 .append(item)
                 .append(");\n");
         }
         source.append("\n");
         source.append("    private GameItems() {\n");
         source.append("    }\n\n");
-        source.append("    public static ItemSpec of(org.bukkit.Material material) {\n");
-        source.append("        return ItemSpec.of(material);\n");
+        source.append("    public static GameItemType of(org.bukkit.Material material) {\n");
+        source.append("        return GameItemType.of(material);\n");
         source.append("    }\n\n");
         source.append("    public static GameItem item(org.bukkit.Material material) {\n");
         source.append("        return GameItem.of(material);\n");
         source.append("    }\n");
         source.append("\n");
-        source.append("    public static ItemSpec of(String notation) {\n");
-        source.append("        return ItemSpec.of(notation);\n");
-        source.append("    }\n\n");
         source.append("    public static GameItem item(String notation) {\n");
         source.append("        return ItemNotation.item(notation);\n");
         source.append("    }\n\n");
@@ -218,25 +211,21 @@ public abstract class GameObjectSpecsGenerateTask extends DefaultTask {
         writeJava(outputDirectory, ITEM_PACKAGE_NAME, "GameItems", source.toString());
     }
 
-    private void writeGameEntities(Path outputDirectory, List<EntityData> entities) throws IOException {
+    private void writeGameEntities(Path outputDirectory, List<String> entities) throws IOException {
         StringBuilder source = generatedHeader(OBJECT_PACKAGE_NAME);
         source.append("public final class GameEntities {\n");
-        for (EntityData entity : entities) {
-            source.append("    public static final EntitySpec<")
-                .append(entity.javaType())
-                .append("> ")
-                .append(entity.constantName())
-                .append(" = EntitySpec.of(org.bukkit.entity.EntityType.")
-                .append(entity.constantName())
-                .append(", ")
-                .append(entity.javaType())
-                .append(".class);\n");
+        for (String entity : entities) {
+            source.append("    public static final GameEntityType ")
+                .append(entity)
+                .append(" = GameEntityType.of(org.bukkit.entity.EntityType.")
+                .append(entity)
+                .append(");\n");
         }
         source.append("\n");
         source.append("    private GameEntities() {\n");
         source.append("    }\n\n");
-        source.append("    public static <E extends org.bukkit.entity.Entity> EntitySpec<E> of(org.bukkit.entity.EntityType type, Class<E> entityClass) {\n");
-        source.append("        return EntitySpec.of(type, entityClass);\n");
+        source.append("    public static GameEntityType of(org.bukkit.entity.EntityType type) {\n");
+        source.append("        return GameEntityType.of(type);\n");
         source.append("    }\n");
         source.append("}\n");
         writeJava(outputDirectory, OBJECT_PACKAGE_NAME, "GameEntities", source.toString());
@@ -263,11 +252,4 @@ public abstract class GameObjectSpecsGenerateTask extends DefaultTask {
         Files.deleteIfExists(itemPackageDirectory.resolve("GameItems.java"));
     }
 
-    private String javaName(Class<?> type) {
-        String canonicalName = type.getCanonicalName();
-        return canonicalName == null ? type.getName().replace('$', '.') : canonicalName;
-    }
-
-    private record EntityData(String constantName, String javaType) {
-    }
 }

@@ -25,7 +25,7 @@ public class GameLocation {
         this(null, x, y, z, (float) yaw, (float) pitch);
     }
 
-    public GameLocation(GameWorld world, Location location) {
+    GameLocation(GameWorld world, Location location) {
         this(
             validateWorld(world, location),
             location.getX(),
@@ -53,14 +53,14 @@ public class GameLocation {
         return world;
     }
 
-    public Location bukkitLocation() {
+    Location bukkitLocation() {
         if (world == null) {
             throw new IllegalStateException("Location is not bound to a GameWorld.");
         }
-        return toBukkit(world.bukkitWorld());
+        return toBukkit(GameWorldHandle.requireBukkitWorld(world));
     }
 
-    public Location toBukkit(World world) {
+    Location toBukkit(World world) {
         Objects.requireNonNull(world, "world");
         return new Location(world, x, y, z, yaw, pitch);
     }
@@ -103,7 +103,8 @@ public class GameLocation {
 
     private static GameWorld validateWorld(GameWorld world, Location location) {
         Objects.requireNonNull(location, "location");
-        if (world != null && world.bukkitWorld() != null && location.getWorld() != null && !world.bukkitWorld().equals(location.getWorld())) {
+        World bukkitWorld = GameWorldHandle.bukkitWorld(world);
+        if (world != null && bukkitWorld != null && location.getWorld() != null && !bukkitWorld.equals(location.getWorld())) {
             throw new IllegalArgumentException("Bukkit location belongs to " + location.getWorld().getName() + ", not GameWorld " + world.id() + ".");
         }
         return world;

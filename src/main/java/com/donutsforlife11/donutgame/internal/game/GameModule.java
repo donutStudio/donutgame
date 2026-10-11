@@ -1,7 +1,5 @@
 package com.donutsforlife11.donutgame.internal.game;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
@@ -26,18 +24,11 @@ import org.bukkit.plugin.EventExecutor;
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.border.BorderManager;
 import com.donutsforlife11.donutgame.api.data.GameData;
-import com.donutsforlife11.donutgame.api.entity.GameEntity;
 import com.donutsforlife11.donutgame.api.event.GameEventAdapterRegistry;
 import com.donutsforlife11.donutgame.api.event.GameEventRegistrar;
-import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameMap;
-import com.donutsforlife11.donutgame.api.map.GameRegion;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.map.MapManager;
-import com.donutsforlife11.donutgame.api.object.BlockSpec;
-import com.donutsforlife11.donutgame.api.object.EntitySpec;
-import com.donutsforlife11.donutgame.api.item.ItemSpec;
-import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.team.TeamManager;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
@@ -73,6 +64,7 @@ public abstract class GameModule {
     private YamlConfiguration config;
     private volatile boolean started;
     private volatile ModuleLifecycleState lifecycleState = ModuleLifecycleState.NEW;
+    private final long handleGeneration = System.nanoTime();
     private final Map<String, GameWorld> worlds = new LinkedHashMap<>();
     private final Set<Listener> registeredListeners = new LinkedHashSet<>();
 
@@ -153,7 +145,6 @@ public abstract class GameModule {
                     try {
                         onLoad();
                         registerGameEventHandlers(this);
-                        registerFieldGameEventHandlers();
                         setLifecycleState(ModuleLifecycleState.LOADED);
                         setLifecycleState(ModuleLifecycleState.COUNTDOWN);
                         startCountdownSequence().whenComplete((startedModule, throwable) -> {
@@ -293,25 +284,6 @@ public abstract class GameModule {
         return borderManager;
     }
 
-    protected final void setBlock(GameLocation location, BlockSpec<?> block) {
-        world().setBlock(location, block);
-    }
-
-    protected final void fill(GameRegion region, BlockSpec<?> block) {
-        world().fillBlocks(region, block);
-    }
-
-    protected final void give(GamePlayer player, ItemSpec item) {
-        if (player == null) {
-            throw new IllegalArgumentException("player cannot be null");
-        }
-        player.give(item);
-    }
-
-    protected final GameEntity summon(GameLocation location, EntitySpec<?> entity) {
-        return world().summon(location, entity);
-    }
-
     protected final CompletableFuture<GameMap> resetMap() {
         return mapManager.resetMap();
     }
@@ -361,6 +333,14 @@ public abstract class GameModule {
 
     public final ModuleLifecycleState lifecycleState() {
         return lifecycleState;
+    }
+
+    public final long handleGeneration() {
+        return handleGeneration;
+    }
+
+    public final boolean isHandleGenerationActive(long generation) {
+        return generation == handleGeneration && lifecycleState != ModuleLifecycleState.UNLOADED;
     }
 
     public final boolean hasStarted() {
@@ -460,28 +440,5 @@ public abstract class GameModule {
             HandlerList.unregisterAll(listener);
         }
         registeredListeners.clear();
-    }
-
-    private void registerFieldGameEventHandlers() {
-        for (Class<?> current = getClass(); current != null && current != GameModule.class; current = current.getSuperclass()) {
-            for (Field field : current.getDeclaredFields()) {
-                if (Modifier.isStatic(field.getModifiers()) || field.getType().isPrimitive()) {
-                    continue;
-                }
-                Object target = fieldValue(field);
-                if (target != null && target != this) {
-                    registerGameEventHandlers(target);
-                }
-            }
-        }
-    }
-
-    private Object fieldValue(Field field) {
-        try {
-            field.setAccessible(true);
-            return field.get(this);
-        } catch (IllegalAccessException | RuntimeException exception) {
-            return null;
-        }
     }
 }

@@ -19,6 +19,7 @@ import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.border.BorderManager;
 import com.donutsforlife11.donutgame.api.map.MapManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
+import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
 import com.donutsforlife11.donutgame.api.team.TeamManager;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.api.ui.UIManager;
@@ -69,7 +70,7 @@ public class ModuleService {
             );
             teamManager.initialize();
             plugin.getLogger().info("Loading module " + descriptor.id() + " as active game " + index + ".");
-            return module.startLoadSequence(() -> playerManager.joinInitial(initialPlayers))
+            return module.startLoadSequence(() -> PlayerManagerHandle.joinInitial(playerManager, initialPlayers))
                 .thenApply(ignored -> {
                     plugin.getLogger().info("Loaded module " + descriptor.id() + " as active game " + index + ".");
                     return module;
@@ -162,7 +163,7 @@ public class ModuleService {
             return null;
         }
         for (GameModule game : activeGames.values()) {
-            if (game.playerManager().owns(player)) {
+            if (PlayerManagerHandle.owns(game.playerManager(), player)) {
                 return game;
             }
         }
@@ -188,7 +189,7 @@ public class ModuleService {
             if (game == null) {
                 continue;
             }
-            total = total.thenCompose(count -> game.playerManager().leave(player).thenApply(left -> count + (left ? 1 : 0)));
+            total = total.thenCompose(count -> PlayerManagerHandle.leave(game.playerManager(), player).thenApply(left -> count + (left ? 1 : 0)));
         }
         return total;
     }
@@ -204,14 +205,14 @@ public class ModuleService {
             return CompletableFuture.completedFuture(false);
         }
         if (currentGame != null && currentGame != lockedGame) {
-            leavePrevious = currentGame.playerManager().leave(player);
+            leavePrevious = PlayerManagerHandle.leave(currentGame.playerManager(), player);
         }
         GameModule offlineGame = getOfflineGameOfPlayer(player.getUniqueId());
         if (offlineGame != null && offlineGame != lockedGame) {
-            leavePrevious = leavePrevious.thenCompose(ignored -> offlineGame.playerManager().leave(player));
+            leavePrevious = leavePrevious.thenCompose(ignored -> PlayerManagerHandle.leave(offlineGame.playerManager(), player));
         }
         boolean reconnectingToLockedGame = lockedGame.playerManager().ownsOffline(player.getUniqueId());
-        return leavePrevious.thenCompose(ignored -> lockedGame.playerManager().join(player, !reconnectingToLockedGame));
+        return leavePrevious.thenCompose(ignored -> PlayerManagerHandle.join(lockedGame.playerManager(), player, !reconnectingToLockedGame));
     }
 
     public CompletableFuture<Integer> joinLockedGame(java.util.Collection<Player> players) {

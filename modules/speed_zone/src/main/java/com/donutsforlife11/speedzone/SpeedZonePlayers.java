@@ -266,14 +266,14 @@ final class SpeedZonePlayers {
 
     @GameEventHandler
     public void onDeath(GameEvent<PlayerDeathEvent> event) {
-        GamePlayer player = event.get("player", GamePlayer.class);
+        GamePlayer player = event.getPlayer();
         if (player == null) {
             return;
         }
-        event.bukkitEvent().setKeepInventory(true);
-        event.bukkitEvent().setKeepLevel(true);
-        event.bukkitEvent().setDroppedExp(0);
-        event.bukkitEvent().getDrops().clear();
+        event.setKeepInventory(true);
+        event.setKeepLevel(true);
+        event.setDroppedExp(0);
+        event.clearDrops();
 
         GameLocation location = player.location();
         if (game.border() != null && location != null && !game.border().containsLocation(location)) {
@@ -296,7 +296,7 @@ final class SpeedZonePlayers {
 
     @GameEventHandler
     public void onRespawn(GameEvent<PlayerRespawnEvent> event) {
-        GamePlayer player = event.get("player", GamePlayer.class);
+        GamePlayer player = event.getPlayer();
         if (player == null || player.isSpectator()) {
             return;
         }
@@ -308,7 +308,7 @@ final class SpeedZonePlayers {
 
     @GameEventHandler
     public void onJoin(GameEvent<PlayerJoinEvent> event) {
-        GamePlayer player = event.get("player", GamePlayer.class);
+        GamePlayer player = event.getPlayer();
         if (player == null || game.teamManager().playerHasTeam(player)) {
             return;
         }
@@ -318,19 +318,19 @@ final class SpeedZonePlayers {
 
     @GameEventHandler
     public void onLateJoin(GameEvent<GamePlayerLateJoinEvent> event) {
-        GamePlayer player = event.get("player", GamePlayer.class);
+        GamePlayer player = event.getPlayer();
         if (player == null || game.teamManager().playerHasTeam(player)) {
             return;
         }
         lateSpectators.add(player.uuid());
         data.put(player.uuid(), new PlayerData(0, 0, 0.0));
         player.setSpawnPoint(game.checkpoints().get(0));
-        event.bukkitEvent().setSpectatorLocation(game.checkpoints().get(0));
+        event.setSpectatorLocation(game.checkpoints().get(0));
     }
 
     @GameEventHandler
     public void onQuit(GameEvent<PlayerQuitEvent> event) {
-        GamePlayer player = event.get("player", GamePlayer.class);
+        GamePlayer player = event.getPlayer();
         if (player != null) {
             player.setSpectator(true);
             releaseGateIfReady();

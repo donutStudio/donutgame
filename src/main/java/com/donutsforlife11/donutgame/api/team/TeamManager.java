@@ -24,6 +24,7 @@ import com.donutsforlife11.donutgame.api.item.GameItem;
 import com.donutsforlife11.donutgame.api.item.GameItemComponents;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
+import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -106,7 +107,7 @@ public class TeamManager {
         return getPlayerTeam(player) != null;
     }
 
-    public Scoreboard scoreboard() {
+    Scoreboard scoreboard() {
         return scoreboard;
     }
 
@@ -179,8 +180,8 @@ public class TeamManager {
         if (attacker == null || attacker == target) {
             return;
         }
-        GamePlayer targetPlayer = playerManager.getPlayer(target);
-        GamePlayer attackerPlayer = playerManager.getPlayer(attacker);
+        GamePlayer targetPlayer = PlayerManagerHandle.getPlayer(playerManager, target);
+        GamePlayer attackerPlayer = PlayerManagerHandle.getPlayer(playerManager, attacker);
         GameTeam team = getPlayerTeam(targetPlayer);
         if (team != null && team == getPlayerTeam(attackerPlayer) && !team.allowsFriendlyFireDamage(event.getDamageSource().getDamageType())) {
             event.setCancelled(true);

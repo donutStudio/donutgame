@@ -8,6 +8,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 import com.donutsforlife11.donutgame.api.map.GameWorld;
+import com.donutsforlife11.donutgame.api.map.GameWorldHandle;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
 final class PlayerTeleporter {
@@ -45,7 +46,7 @@ final class PlayerTeleporter {
 
     World defaultWorld() {
         GameWorld gameWorld = module.defaultWorld();
-        World world = gameWorld == null ? null : gameWorld.bukkitWorld();
+        World world = GameWorldHandle.bukkitWorld(gameWorld);
         if (world == null) {
             throw new IllegalStateException("Game " + module.index() + " does not have a loaded default world.");
         }

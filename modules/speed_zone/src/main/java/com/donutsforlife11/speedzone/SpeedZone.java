@@ -40,7 +40,6 @@ public final class SpeedZone extends GameModule {
     boolean stopOnLaps;
 
     private SpeedZonePlayers players;
-    @SuppressWarnings("unused")
     private SpeedZoneBuildProtection buildProtection;
     private GameBorder border;
     private GameTimer timer;
@@ -58,6 +57,8 @@ public final class SpeedZone extends GameModule {
 
         buildProtection = new SpeedZoneBuildProtection(this);
         players = new SpeedZonePlayers(this, new SpeedZoneModifiers());
+        registerGameEventHandlers(players);
+        registerGameEventHandlers(buildProtection);
         players.assignTeams();
         players.loadCheckpointModifiers();
         players.setupAllPlayers();
@@ -202,7 +203,7 @@ public final class SpeedZone extends GameModule {
     private Component winnerSubtitle(Collection<GamePlayer> winners) {
         if (teamSize <= 1) {
             GamePlayer winner = winners.iterator().next();
-            String name = winner.bukkitPlayer() == null ? winner.uuid().toString() : winner.bukkitPlayer().getName();
+            String name = winner.name();
             return Component.text("Winner: " + name);
         }
         GameTeam team = winners.iterator().next().getTeam();

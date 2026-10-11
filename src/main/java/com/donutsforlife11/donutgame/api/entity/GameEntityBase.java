@@ -25,9 +25,12 @@ import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
+import com.donutsforlife11.donutgame.api.map.GameLocationHandle;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
+import com.donutsforlife11.donutgame.api.map.GameWorldHandle;
 import com.donutsforlife11.donutgame.api.item.GameItem;
-import com.donutsforlife11.donutgame.api.item.ItemSpec;
+import com.donutsforlife11.donutgame.api.item.GameItemHandle;
+import com.donutsforlife11.donutgame.api.item.GameItemType;
 import com.donutsforlife11.donutgame.api.player.PlayerAttributeDefaults;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.internal.ui.GlowService;
@@ -40,11 +43,9 @@ public interface GameEntityBase {
 
     UUID uuid();
 
-    Entity bukkitEntity();
-
     default GameLocation location() {
-        Entity entity = bukkitEntity();
-        return entity == null ? null : new GameLocation(world(), entity.getLocation());
+        Entity entity = GameEntityHandle.bukkitEntity(this);
+        return entity == null ? null : GameLocationHandle.create(world(), entity.getLocation());
     }
 
     default CompletableFuture<Boolean> teleport(GameLocation location) {
@@ -52,10 +53,10 @@ public interface GameEntityBase {
             throw new IllegalArgumentException("location cannot be null");
         }
         GameWorld targetWorld = location.world() == null ? world() : location.world();
-        if (targetWorld == null || targetWorld.bukkitWorld() == null) {
+        if (targetWorld == null || GameWorldHandle.bukkitWorld(targetWorld) == null) {
             throw new IllegalStateException("Entity " + uuid() + " is not in a loaded GameWorld.");
         }
-        return requireEntity().teleportAsync(location.toBukkit(targetWorld.bukkitWorld()));
+        return requireEntity().teleportAsync(GameLocationHandle.toBukkit(location, GameWorldHandle.requireBukkitWorld(targetWorld)));
     }
 
     default void setHealth(float health) {
@@ -99,7 +100,7 @@ public interface GameEntityBase {
     }
 
     default boolean isDead() {
-        Entity entity = bukkitEntity();
+        Entity entity = GameEntityHandle.bukkitEntity(this);
         return entity == null || entity.isDead();
     }
 
@@ -293,11 +294,8 @@ public interface GameEntityBase {
         return requireAttribute(attribute).getValue();
     }
 
-    default void setItem(EquipmentSlot slot, ItemSpec item) {
-        if (item == null) {
-            throw new IllegalArgumentException("item cannot be null");
-        }
-        setItem(slot, item.createItem());
+    default void setItem(EquipmentSlot slot, GameItemType item) {
+        setItem(slot, item == null ? null : item.create());
     }
 
     default void setItem(EquipmentSlot slot, GameItem item) {
@@ -311,23 +309,12 @@ public interface GameEntityBase {
         }
     }
 
-    default void clearItems(ItemSpec item) {
-        if (item == null) {
-            clearItems();
-            return;
-        }
-        clearEquipment(item::matches);
-        if (requireEntity() instanceof org.bukkit.entity.HumanEntity human) {
-            clearInventory(human.getInventory(), item::matches);
-        }
-    }
-
     default void clearItems(GameItem item) {
         if (item == null) {
             clearItems();
             return;
         }
-        ItemStack bukkitItem = item.bukkitItem();
+        ItemStack bukkitItem = GameItemHandle.bukkitItem(item);
         clearEquipment(stack -> stack != null && stack.isSimilar(bukkitItem));
         if (requireEntity() instanceof org.bukkit.entity.HumanEntity human) {
             clearInventory(human.getInventory(), stack -> stack != null && stack.isSimilar(bukkitItem));
@@ -340,7 +327,7 @@ public interface GameEntityBase {
     }
 
     private Entity requireEntity() {
-        Entity entity = bukkitEntity();
+        Entity entity = GameEntityHandle.bukkitEntity(this);
         if (entity == null) {
             throw new IllegalStateException("Entity " + uuid() + " is not loaded.");
         }

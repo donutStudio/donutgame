@@ -4,27 +4,34 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import org.bukkit.Difficulty;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
 
 import com.donutsforlife11.donutgame.api.entity.GameEntity;
-import com.donutsforlife11.donutgame.api.object.BlockSpec;
-import com.donutsforlife11.donutgame.api.object.EntitySpec;
+import com.donutsforlife11.donutgame.api.entity.GameEntityHandle;
+import com.donutsforlife11.donutgame.api.object.GameBlockType;
+import com.donutsforlife11.donutgame.api.object.GameEntityType;
 
 public class GameWorld {
+    public static final long DEFAULT_WORLD_EDIT_BLOCK_LIMIT = 262_144L;
+
     private final String id;
     private final Map<String, List<GameLocation>> points = new LinkedHashMap<>();
     private final Map<String, List<GameRegion>> regions = new LinkedHashMap<>();
     private final List<Consumer<Boolean>> playerCollisionListeners = new ArrayList<>();
     private final GameWorldGamerules gamerules = new GameWorldGamerules(this);
     private World bukkitWorld;
+    private long generation;
     private boolean hungerEnabled = true;
     private boolean playerCollisionsEnabled;
+    private long worldEditBlockLimit = DEFAULT_WORLD_EDIT_BLOCK_LIMIT;
 
     public GameWorld(String id) {
         if (id == null || id.isBlank()) {
@@ -42,12 +49,19 @@ public class GameWorld {
         return world == null ? id : world.getName();
     }
 
-    public World bukkitWorld() { 
+    World bukkitWorld() {
         return bukkitWorld;
-    } // Will have to enforce encapsulation later so game modules can't access the bukkit worlds
+    }
 
-    public void setBukkitWorld(World bukkitWorld) {
+    void setBukkitWorld(World bukkitWorld) {
+        if (this.bukkitWorld != bukkitWorld) {
+            generation++;
+        }
         this.bukkitWorld = bukkitWorld;
+    }
+
+    long generation() {
+        return generation;
     }
 
     public GameLocation worldSpawn() {
@@ -59,76 +73,110 @@ public class GameWorld {
         requireWorld().setSpawnLocation(toBukkit(spawn));
     }
 
-    public CompletableFuture<Void> setBlock(GameLocation location, BlockSpec<?> block) {
+    public void setBlock(GameLocation location, Material material) {
         requireLocation(location);
-        requireBlock(block);
-        block.applyTo(toBukkit(location).getBlock());
-        return CompletableFuture.completedFuture(null);
+        toBukkit(location).getBlock().setType(requireMaterial(material), false);
     }
 
-    public CompletableFuture<Void> fillBlocks(GameRegion region, BlockSpec<?> block) {
-        requireRegion(region);
+    public void setBlock(GameLocation location, GameBlockType block) {
         requireBlock(block);
+        setBlock(location, block.material());
+    }
+
+    public void setBlock(GameLocation location, BlockData blockData) {
+        requireLocation(location);
+        toBukkit(location).getBlock().setBlockData(requireBlockData(blockData), false);
+    }
+
+    public GameBlock blockAt(GameLocation location) {
+        requireLocation(location);
+        GameLocation scoped = location.world() == null ? location.inWorld(this) : location;
+        return new GameBlock(this, generation, scoped.blockX(), scoped.blockY(), scoped.blockZ());
+    }
+
+    public void fill(GameRegion region, Material material) {
+        fill(region, requireMaterial(material).createBlockData());
+    }
+
+    public void fill(GameRegion region, GameBlockType block) {
+        requireBlock(block);
+        fill(region, block.createBlockData());
+    }
+
+    public void fill(GameRegion region, BlockData blockData) {
+        RegionBounds bounds = requireEditableRegion(region);
+        BlockData data = requireBlockData(blockData);
         World world = requireWorld();
-        int minX = region.min().blockX();
-        int minY = region.min().blockY();
-        int minZ = region.min().blockZ();
-        int maxX = region.max().blockX();
-        int maxY = region.max().blockY();
-        int maxZ = region.max().blockZ();
-        for (int x = minX; x <= maxX; x++) {
-            for (int y = minY; y <= maxY; y++) {
-                for (int z = minZ; z <= maxZ; z++) {
-                    block.applyTo(world.getBlockAt(x, y, z));
+        for (int x = bounds.minX(); x <= bounds.maxX(); x++) {
+            for (int y = bounds.minY(); y <= bounds.maxY(); y++) {
+                for (int z = bounds.minZ(); z <= bounds.maxZ(); z++) {
+                    world.getBlockAt(x, y, z).setBlockData(data.clone(), false);
                 }
             }
         }
-        return CompletableFuture.completedFuture(null);
     }
 
-    public CompletableFuture<Void> replaceBlocks(GameRegion region, BlockSpec<?> from, BlockSpec<?> to) {
-        requireRegion(region);
+    public void replace(GameRegion region, Material from, Material to) {
+        replace(region, requireMaterial(from).createBlockData(), requireMaterial(to).createBlockData());
+    }
+
+    public void replace(GameRegion region, GameBlockType from, GameBlockType to) {
         requireBlock(from);
         requireBlock(to);
+        replace(region, from.createBlockData(), to.createBlockData());
+    }
+
+    public void replace(GameRegion region, BlockData from, BlockData to) {
+        RegionBounds bounds = requireEditableRegion(region);
+        BlockData fromData = requireBlockData(from);
+        BlockData toData = requireBlockData(to);
         World world = requireWorld();
-        int minX = region.min().blockX();
-        int minY = region.min().blockY();
-        int minZ = region.min().blockZ();
-        int maxX = region.max().blockX();
-        int maxY = region.max().blockY();
-        int maxZ = region.max().blockZ();
-        for (int x = minX; x <= maxX; x++) {
-            for (int y = minY; y <= maxY; y++) {
-                for (int z = minZ; z <= maxZ; z++) {
+        for (int x = bounds.minX(); x <= bounds.maxX(); x++) {
+            for (int y = bounds.minY(); y <= bounds.maxY(); y++) {
+                for (int z = bounds.minZ(); z <= bounds.maxZ(); z++) {
                     org.bukkit.block.Block block = world.getBlockAt(x, y, z);
-                    if (from.matches(block)) {
-                        to.applyTo(block);
+                    if (block.getBlockData().equals(fromData)) {
+                        block.setBlockData(toData.clone(), false);
                     }
                 }
             }
         }
-        return CompletableFuture.completedFuture(null);
     }
 
-    public CompletableFuture<Void> summon(EntitySpec<?> entity, GameLocation location) {
-        summonEntity(location, entity);
-        return CompletableFuture.completedFuture(null);
-    }
-
-    public GameEntity summonEntity(GameLocation location, EntitySpec<?> entity) {
+    public GameEntity spawn(GameLocation location, EntityType type) {
         requireLocation(location);
-        requireEntity(entity);
-        World world = requireWorld();
-        Entity bukkitEntity = entity.spawn(world, toBukkit(location));
-        return new GameEntity(this, bukkitEntity);
+        EntityType entityType = requireEntityType(type);
+        Entity bukkitEntity = requireWorld().spawnEntity(toBukkit(location), entityType);
+        return GameEntityHandle.create(this, generation, bukkitEntity);
     }
 
-    public CompletableFuture<Void> fill(GameRegion region, BlockSpec<?> block) {
-        return fillBlocks(region, block);
+    public GameEntity spawn(GameLocation location, EntityType type, Consumer<? super GameEntity> configuration) {
+        GameEntity entity = spawn(location, type);
+        if (configuration != null) {
+            configuration.accept(entity);
+        }
+        return entity;
     }
 
-    public GameEntity summon(GameLocation location, EntitySpec<?> entity) {
-        return summonEntity(location, entity);
+    public GameEntity spawn(GameLocation location, GameEntityType type) {
+        requireEntity(type);
+        return spawn(location, type.entityType());
+    }
+
+    public GameEntity spawn(GameLocation location, GameEntityType type, Consumer<? super GameEntity> configuration) {
+        GameEntity entity = spawn(location, type);
+        if (configuration != null) {
+            configuration.accept(entity);
+        }
+        return entity;
+    }
+
+    public GameEntity summon(GameLocation location, EntityType type) {
+        return spawn(location, type);
+    }
+
+    public GameEntity summon(GameLocation location, GameEntityType type) {
+        return spawn(location, type);
     }
 
     public void addPoint(String name, GameLocation location) {
@@ -258,6 +306,17 @@ public class GameWorld {
         return hungerEnabled;
     }
 
+    public void setWorldEditBlockLimit(long blockLimit) {
+        if (blockLimit <= 0) {
+            throw new IllegalArgumentException("World edit block limit must be positive.");
+        }
+        worldEditBlockLimit = blockLimit;
+    }
+
+    public long worldEditBlockLimit() {
+        return worldEditBlockLimit;
+    }
+
     public void setPlayerCollisionsEnabled(boolean enabled) {
         playerCollisionsEnabled = enabled;
         World world = bukkitWorld;
@@ -286,8 +345,23 @@ public class GameWorld {
         regions.clear();
     }
 
-    private Location toBukkit(GameLocation location) {
+    Location toBukkit(GameLocation location) {
         return location.toBukkit(requireWorld());
+    }
+
+    World requireBukkitWorld() {
+        return requireWorld();
+    }
+
+    World requireBukkitWorld(long handleGeneration) {
+        requireCurrentGeneration(handleGeneration, "GameWorld");
+        return requireWorld();
+    }
+
+    void requireCurrentGeneration(long handleGeneration, String handleType) {
+        if (handleGeneration != generation) {
+            throw new IllegalStateException(handleType + " handle for GameWorld " + id + " is stale.");
+        }
     }
 
     private World requireWorld() {
@@ -312,16 +386,63 @@ public class GameWorld {
         }
     }
 
-    private void requireBlock(BlockSpec<?> block) {
+    private RegionBounds requireEditableRegion(GameRegion region) {
+        requireRegion(region);
+        World world = requireWorld();
+        RegionBounds bounds = new RegionBounds(
+            region.min().blockX(),
+            region.min().blockY(),
+            region.min().blockZ(),
+            region.max().blockX(),
+            region.max().blockY(),
+            region.max().blockZ()
+        );
+        if (bounds.minY() < world.getMinHeight() || bounds.maxY() >= world.getMaxHeight()) {
+            throw new IllegalArgumentException(
+                "Region Y bounds " + bounds.minY() + ".." + bounds.maxY()
+                    + " are outside world height " + world.getMinHeight() + ".." + (world.getMaxHeight() - 1) + "."
+            );
+        }
+        long volume = bounds.volume();
+        if (volume > worldEditBlockLimit) {
+            throw new IllegalArgumentException(
+                "World edit touches " + volume + " blocks, above the configured limit of " + worldEditBlockLimit + "."
+            );
+        }
+        return bounds;
+    }
+
+    private void requireBlock(GameBlockType block) {
         if (block == null) {
             throw new IllegalArgumentException("block cannot be null");
         }
     }
 
-    private void requireEntity(EntitySpec<?> entity) {
+    private Material requireMaterial(Material material) {
+        if (material == null) {
+            throw new IllegalArgumentException("material cannot be null");
+        }
+        return material;
+    }
+
+    private BlockData requireBlockData(BlockData blockData) {
+        if (blockData == null) {
+            throw new IllegalArgumentException("blockData cannot be null");
+        }
+        return blockData.clone();
+    }
+
+    private void requireEntity(GameEntityType entity) {
         if (entity == null) {
             throw new IllegalArgumentException("entity cannot be null");
         }
+    }
+
+    private EntityType requireEntityType(EntityType entity) {
+        if (entity == null) {
+            throw new IllegalArgumentException("entity cannot be null");
+        }
+        return entity;
     }
 
     private void requireName(String name) {
@@ -334,5 +455,11 @@ public class GameWorld {
         return left.blockX() == right.blockX()
             && left.blockY() == right.blockY()
             && left.blockZ() == right.blockZ();
+    }
+
+    private record RegionBounds(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        long volume() {
+            return (long) (maxX - minX + 1) * (long) (maxY - minY + 1) * (long) (maxZ - minZ + 1);
+        }
     }
 }

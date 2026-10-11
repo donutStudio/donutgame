@@ -41,7 +41,6 @@ public class VoidWars extends GameModule {
     private GameBorder border;
     private VoidWarsEvents events;
     private VoidWarsPlayers players;
-    @SuppressWarnings("unused")
     private VoidWarsRegionProtection regionProtection;
     private VoidWarsSidebar sidebar;
 
@@ -52,6 +51,8 @@ public class VoidWars extends GameModule {
         events = new VoidWarsEvents(this);
         players = new VoidWarsPlayers(this);
         regionProtection = new VoidWarsRegionProtection(this);
+        registerGameEventHandlers(players);
+        registerGameEventHandlers(regionProtection);
         events.load();
         players.assignTeams();
         loadRound();
@@ -153,7 +154,7 @@ public class VoidWars extends GameModule {
     private Component winnerSubtitle(Collection<GamePlayer> winners) {
         if (teamSize <= 1) {
             GamePlayer winner = winners.iterator().next();
-            return Component.text("Winner: " + (winner.bukkitPlayer() == null ? winner.uuid().toString() : winner.bukkitPlayer().getName()));
+            return Component.text("Winner: " + winner.name());
         }
         GameTeam team = winners.iterator().next().getTeam();
         return Component.text("Winning Team: ").append(team == null ? Component.text("Unknown Team") : team.displayName());

@@ -115,11 +115,11 @@ public abstract class GameWorldGamerulesGenerateTask extends DefaultTask {
         for (GameRuleData gamerule : gamerules) {
             source.append("\n");
             source.append("    public ").append(gamerule.type().primitiveType()).append(" ").append(gamerule.methodName()).append("() {\n");
-            source.append("        ").append(gamerule.type().boxedType()).append(" value = world.bukkitWorld().getGameRuleValue(org.bukkit.GameRules.").append(gamerule.constantName()).append(");\n");
+            source.append("        ").append(gamerule.type().boxedType()).append(" value = GameWorldHandle.requireBukkitWorld(world).getGameRuleValue(org.bukkit.GameRules.").append(gamerule.constantName()).append(");\n");
             source.append("        return value == null ? ").append(gamerule.type().fallback()).append(" : value;\n");
             source.append("    }\n\n");
             source.append("    public void ").append(gamerule.methodName()).append("(").append(gamerule.type().primitiveType()).append(" value) {\n");
-            source.append("        world.bukkitWorld().setGameRule(org.bukkit.GameRules.").append(gamerule.constantName()).append(", value);\n");
+            source.append("        GameWorldHandle.requireBukkitWorld(world).setGameRule(org.bukkit.GameRules.").append(gamerule.constantName()).append(", value);\n");
             source.append("    }\n");
         }
         source.append("}\n");

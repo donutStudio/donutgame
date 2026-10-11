@@ -11,8 +11,11 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 import com.donutsforlife11.donutgame.api.map.GameLocation;
+import com.donutsforlife11.donutgame.api.map.GameLocationHandle;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
+import com.donutsforlife11.donutgame.api.map.GameWorldHandle;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
 import com.donutsforlife11.donutgame.api.ui.title.TitlePacketTracker;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
@@ -140,7 +143,7 @@ public class UIManager {
     }
 
     private Player resolvePlayer(GamePlayer gamePlayer) {
-        return gamePlayer == null ? null : gamePlayer.bukkitPlayer();
+        return GamePlayerHandle.bukkitPlayer(gamePlayer);
     }
 
     private Collection<GamePlayer> single(GamePlayer gamePlayer) {
@@ -167,11 +170,11 @@ public class UIManager {
         }
         GameWorld locationWorld = location.world();
         if (locationWorld != null) {
-            return location.bukkitLocation();
+            return GameLocationHandle.bukkitLocation(location);
         }
         GameWorld moduleWorld = module.world();
-        World world = moduleWorld == null ? null : moduleWorld.bukkitWorld();
-        return location.toBukkit(world == null ? player.getWorld() : world);
+        World world = GameWorldHandle.bukkitWorld(moduleWorld);
+        return GameLocationHandle.toBukkit(location, world == null ? player.getWorld() : world);
     }
 
     private Component component(Component component) {

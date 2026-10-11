@@ -21,6 +21,8 @@ import org.bukkit.inventory.meta.SkullMeta;
 import com.donutsforlife11.donutgame.api.item.GameItem;
 import com.donutsforlife11.donutgame.api.item.GameItemComponents;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
+import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
 
 import io.papermc.paper.datacomponent.DataComponentTypes;
@@ -96,7 +98,7 @@ public class SpectatorMenuEvents implements Listener {
     }
 
     private void open(MenuHolder holder) {
-        Player player = holder.viewer().bukkitPlayer();
+        Player player = GamePlayerHandle.bukkitPlayer(holder.viewer());
         if (player != null) {
             player.openInventory(holder.inventory());
         }
@@ -181,7 +183,7 @@ public class SpectatorMenuEvents implements Listener {
             return;
         }
         viewer.teleport(target.location());
-        Player player = viewer.bukkitPlayer();
+        Player player = GamePlayerHandle.bukkitPlayer(viewer);
         if (player != null) {
             player.closeInventory();
         }
@@ -199,13 +201,13 @@ public class SpectatorMenuEvents implements Listener {
 
     private List<GamePlayer> nonSpectatorPlayers(Collection<GamePlayer> players) {
         return players.stream()
-            .filter(player -> player != null && player.bukkitPlayer() != null && !player.isSpectator())
+            .filter(player -> GamePlayerHandle.bukkitPlayer(player) != null && !player.isSpectator())
             .toList();
     }
 
     private GamePlayer spectator(Player player) {
         GameModule game = moduleService.getGameOfPlayer(player);
-        GamePlayer gamePlayer = game == null ? null : game.playerManager().getPlayer(player);
+        GamePlayer gamePlayer = game == null ? null : PlayerManagerHandle.getPlayer(game.playerManager(), player);
         return gamePlayer != null && gamePlayer.isSpectator() ? gamePlayer : null;
     }
 
@@ -216,9 +218,9 @@ public class SpectatorMenuEvents implements Listener {
     private static ItemStack playerHead(GamePlayer player) {
         ItemStack item = new ItemStack(Material.PLAYER_HEAD);
         item.editMeta(SkullMeta.class, meta -> {
-            meta.setOwningPlayer(player.bukkitPlayer());
+            meta.setOwningPlayer(GamePlayerHandle.bukkitPlayer(player));
             meta.customName(
-                Component.text(player.bukkitPlayer().getName()).decoration(TextDecoration.ITALIC, false)
+                Component.text(player.name()).decoration(TextDecoration.ITALIC, false)
             );
         });
         return item;

@@ -66,6 +66,66 @@ allprojects {
 }
 
 tasks {
+    val checkModuleApiBoundary by registering {
+        group = "verification"
+        description = "Reject game module imports of raw live Bukkit handles."
+
+        val forbiddenExactImports = setOf(
+            "org.bukkit.Bukkit",
+            "org.bukkit.Location",
+            "org.bukkit.World",
+            "org.bukkit.block.Block",
+            "org.bukkit.block.BlockState",
+            "org.bukkit.block.Chest",
+            "org.bukkit.block.Container",
+            "org.bukkit.entity.Entity",
+            "org.bukkit.entity.Player",
+            "org.bukkit.inventory.Inventory",
+            "org.bukkit.scoreboard.Scoreboard",
+            "org.bukkit.scoreboard.Team"
+        )
+        val forbiddenWildcardPackages = setOf(
+            "org.bukkit",
+            "org.bukkit.block",
+            "org.bukkit.entity",
+            "org.bukkit.inventory",
+            "org.bukkit.scoreboard"
+        )
+        val importPattern = Regex("^\\s*import\\s+(?:static\\s+)?([\\w.]+)(\\.\\*)?\\s*;")
+
+        doLast {
+            val moduleDirectory = layout.projectDirectory.dir("modules").asFile
+            if (!moduleDirectory.isDirectory) {
+                return@doLast
+            }
+
+            val violations = moduleDirectory.walkTopDown()
+                .filter { it.isFile && it.extension == "java" && it.invariantSeparatorsPath.contains("/src/main/java/") }
+                .flatMap { sourceFile ->
+                    sourceFile.readLines().mapIndexedNotNull { index, line ->
+                        val match = importPattern.find(line) ?: return@mapIndexedNotNull null
+                        val imported = match.groupValues[1]
+                        val wildcard = match.groupValues[2].isNotEmpty()
+                        val forbidden = forbiddenExactImports.any { imported == it || imported.startsWith("$it.") }
+                            || (wildcard && imported in forbiddenWildcardPackages)
+                        if (forbidden) {
+                            "${sourceFile.relativeTo(projectDir).invariantSeparatorsPath}:${index + 1}: $line"
+                        } else {
+                            null
+                        }
+                    }
+                }
+                .toList()
+
+            if (violations.isNotEmpty()) {
+                throw GradleException(
+                    "Game modules must use Donutgame scoped APIs instead of raw live Bukkit handles:\n" +
+                        violations.joinToString("\n")
+                )
+            }
+        }
+    }
+
     val generateGameEventApi by registering(GameEventApiGenerateTask::class) {
         classpath.from(configurations.compileClasspath)
         adapterRegistrySource.set(layout.projectDirectory.file("src/main/java/com/donutsforlife11/donutgame/api/event/GameEventAdapterRegistry.java"))
@@ -119,5 +179,17 @@ tasks {
 
     build {
         dependsOn(shadowJar)
+    }
+
+    check {
+        dependsOn(checkModuleApiBoundary)
+    }
+}
+
+subprojects {
+    plugins.withId("java") {
+        tasks.named("compileJava") {
+            dependsOn(rootProject.tasks.named("checkModuleApiBoundary"))
+        }
     }
 }

@@ -28,7 +28,9 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 
 import com.donutsforlife11.donutgame.api.map.GameLocation;
+import com.donutsforlife11.donutgame.api.map.GameLocationHandle;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
 
 public class SpectatorGuardEvents implements Listener {
     private final ModuleService moduleService;
@@ -170,7 +172,7 @@ public class SpectatorGuardEvents implements Listener {
             return;
         }
         GameLocation spawnPoint = spectator.spawnPoint();
-        Location destination = spawnPoint == null ? world.getSpawnLocation() : spawnPoint.toBukkit(world);
+        Location destination = spawnPoint == null ? world.getSpawnLocation() : GameLocationHandle.toBukkit(spawnPoint, world);
         player.teleport(destination);
     }
 
@@ -185,7 +187,7 @@ public class SpectatorGuardEvents implements Listener {
 
     private GamePlayer spectator(Player player) {
         GameModule game = moduleService.getGameOfPlayer(player);
-        GamePlayer gamePlayer = game == null ? null : game.playerManager().getPlayer(player);
+        GamePlayer gamePlayer = game == null ? null : PlayerManagerHandle.getPlayer(game.playerManager(), player);
         return gamePlayer != null && gamePlayer.isSpectator() ? gamePlayer : null;
     }
 

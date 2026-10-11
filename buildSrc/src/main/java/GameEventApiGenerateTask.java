@@ -318,7 +318,7 @@ public abstract class GameEventApiGenerateTask extends DefaultTask {
             if (element == null || element.primitiveVoid()) {
                 return null;
             }
-            return TypeRef.list(element.javaType());
+            return TypeRef.list(element.javaType(), element.rawClass());
         }
         if (isSafe(rawType)) {
             return TypeRef.safe(javaTypeName(genericType), javaName(rawType));
@@ -463,9 +463,16 @@ public abstract class GameEventApiGenerateTask extends DefaultTask {
 
     private void writeInterface(Path outputDirectory, String interfaceName, List<GeneratedMethod> methods) throws IOException {
         StringBuilder source = new StringBuilder();
-        source.append("package ").append(PACKAGE_NAME).append(";\n\n");
-        source.append("@javax.annotation.processing.Generated(\"").append(getClass().getName()).append("\")\n");
-        source.append("public interface ").append(interfaceName).append("<E extends org.bukkit.event.Event> extends GameEventAccess<E> {\n");
+        source.append("package ")
+            .append(PACKAGE_NAME)
+            .append(";\n\n");
+        source.append("@javax.annotation.processing.Generated(\"")
+            .append(getClass().getName())
+            .append("\")\n");
+        source.append("@SuppressWarnings(\"unchecked\")\n");
+        source.append("public interface ")
+                .append(interfaceName)
+                .append("<E extends org.bukkit.event.Event> {\n");
         for (GeneratedMethod method : methods) {
             source.append("\n");
             source.append(methodSource(method));
@@ -490,10 +497,11 @@ public abstract class GameEventApiGenerateTask extends DefaultTask {
 
     private String methodSource(GeneratedMethod method) {
         StringBuilder source = new StringBuilder();
-        if (method.returnType().list()) {
-            source.append("    @SuppressWarnings(\"unchecked\")\n");
-        }
-        source.append("    default ").append(method.returnType().javaType()).append(" ").append(method.name()).append("(");
+        source.append("    default ")
+            .append(method.returnType().javaType())
+            .append(" ")
+            .append(method.name())
+            .append("(");
         for (int i = 0; i < method.parameters().size(); i++) {
             if (i > 0) {
                 source.append(", ");
@@ -501,22 +509,23 @@ public abstract class GameEventApiGenerateTask extends DefaultTask {
             source.append(method.parameters().get(i).javaType()).append(" arg").append(i);
         }
         source.append(") {\n");
+        source.append("        GameEventAccess<E> access = (GameEventAccess<E>) this;\n");
         if (method.accessKind() == AccessKind.SETTER) {
-            source.append("        set(\"").append(method.property()).append("\", arg0);\n");
+            source.append("        access.set(\"").append(method.property()).append("\", arg0);\n");
             source.append("    }\n");
             return source.toString();
         }
         TypeRef returnType = method.returnType();
         if (returnType.mapped() || returnType.safe()) {
             if (returnType.parameterized()) {
-                source.append("        return (").append(returnType.javaType()).append(") getRaw(\"").append(method.property()).append("\");\n");
+                source.append("        return (").append(returnType.javaType()).append(") access.getRaw(\"").append(method.property()).append("\");\n");
             } else {
-                source.append("        return get(\"").append(method.property()).append("\", ").append(returnType.rawClass()).append(".class);\n");
+                source.append("        return access.get(\"").append(method.property()).append("\", ").append(returnType.rawClass()).append(".class);\n");
             }
         } else if (returnType.list()) {
-            source.append("        return (").append(returnType.javaType()).append(") getRaw(\"").append(method.property()).append("\");\n");
+            source.append("        return access.getList(\"").append(method.property()).append("\", ").append(returnType.rawClass()).append(".class);\n");
         } else {
-            source.append("        Object value = getRaw(\"").append(method.property()).append("\");\n");
+            source.append("        Object value = access.getRaw(\"").append(method.property()).append("\");\n");
             source.append("        return value instanceof ").append(returnType.boxedType()).append(" typed ? typed").append(returnType.primitiveAccessor()).append(" : ").append(returnType.fallback()).append(";\n");
         }
         source.append("    }\n");
@@ -655,6 +664,10 @@ public abstract class GameEventApiGenerateTask extends DefaultTask {
 
         static TypeRef list(String javaType) {
             return new TypeRef("java.util.List<" + javaType + ">", "java.util.List", false, false, true, false, false, true, null, null, null);
+        }
+
+        static TypeRef list(String javaType, String rawClass) {
+            return new TypeRef("java.util.List<" + javaType + ">", rawClass, false, false, true, false, false, true, null, null, null);
         }
 
         static TypeRef primitive(String javaType, String fallback) {

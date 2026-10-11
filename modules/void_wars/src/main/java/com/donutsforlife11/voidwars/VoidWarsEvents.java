@@ -10,23 +10,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Sound;
-import org.bukkit.block.Block;
-import org.bukkit.block.Chest;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.loot.LootTable;
 import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.api.border.GameBorder;
 import com.donutsforlife11.donutgame.api.item.GameItem;
 import com.donutsforlife11.donutgame.api.item.GameItems;
+import com.donutsforlife11.donutgame.api.map.GameBlock;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameRegion;
-import com.donutsforlife11.donutgame.api.object.BlockSpec;
+import com.donutsforlife11.donutgame.api.object.GameBlocks;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.ui.GameSound;
 
@@ -151,7 +148,7 @@ final class VoidWarsEvents {
 
     private void collapseSpawn() {
         for (GameRegion region : game.world().getRegions(VoidWars.SPAWN_PLATFORM)) {
-            game.world().fill(region, BlockSpec.of(Material.AIR));
+            game.world().fill(region, GameBlocks.AIR);
             game.uiManager().playSound(game.playerManager().getPlayers(), GameSound.of(Sound.ENTITY_WARDEN_DEATH).volume(1f).pitch(0.5f));
         }
         if (game.roundTimer() != null && game.roundTimer().elapsedTicks() > 0) {
@@ -165,24 +162,18 @@ final class VoidWarsEvents {
         int count = points.isEmpty() ? 0 : Math.min(points.size(), ThreadLocalRandom.current().nextInt(game.minChests, game.maxChests + 1));
         for (int i = 0; i < count; i++) {
             GameLocation location = points.get(i);
-            game.world().setBlock(location, BlockSpec.of(Material.CHEST));
+            game.world().setBlock(location, GameBlocks.CHEST);
             chests.add(location);
         }
     }
 
     private void fillChests(LootTable lootTable) {
         for (GameLocation location : chests) {
-            Block block = location.bukkitLocation().getBlock();
-            if (block.getType() != Material.CHEST) {
-                game.world().setBlock(location, BlockSpec.of(Material.CHEST));
-                block = location.bukkitLocation().getBlock();
+            GameBlock block = game.world().blockAt(location);
+            if (!block.is(Material.CHEST)) {
+                block.setType(GameBlocks.CHEST);
             }
-            if (block.getState() instanceof Chest chest) {
-                chest.getBlockInventory().clear();
-                chest.setLootTable(lootTable);
-                chest.setSeed(ThreadLocalRandom.current().nextLong());
-                chest.update(true);
-            }
+            block.setLootTable(lootTable, ThreadLocalRandom.current().nextLong());
         }
         if (game.roundTimer() != null && game.roundTimer().elapsedTicks() > 0) {
             game.uiManager().subtitle(game.playerManager().getPlayers(), Component.empty()
@@ -243,11 +234,7 @@ final class VoidWarsEvents {
     }
 
     private Component displayName(ItemStack item) {
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null && meta.hasItemName()) {
-            return meta.itemName();
-        }
-        return Bukkit.getItemFactory().displayName(item);
+        return GameItem.from(item).displayName();
     }
 
     private record TimedLoot(int ticks, LootTable lootTable) {

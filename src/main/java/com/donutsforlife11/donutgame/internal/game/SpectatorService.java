@@ -20,6 +20,8 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPl
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate.PlayerInfo;
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
+import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
 
 import net.kyori.adventure.text.Component;
 
@@ -46,7 +48,7 @@ public class SpectatorService {
     }
 
     public void showSpectator(GamePlayer spectator) {
-        Player player = spectator == null ? null : spectator.bukkitPlayer();
+        Player player = GamePlayerHandle.bukkitPlayer(spectator);
         if (player == null) {
             return;
         }
@@ -59,7 +61,7 @@ public class SpectatorService {
     }
 
     public void hideSpectator(GamePlayer spectator) {
-        Player player = spectator == null ? null : spectator.bukkitPlayer();
+        Player player = GamePlayerHandle.bukkitPlayer(spectator);
         if (player == null) {
             return;
         }
@@ -75,7 +77,7 @@ public class SpectatorService {
         }
         for (GameModule game : plugin.moduleService().activeGames().values()) {
             for (GamePlayer spectator : game.playerManager().getSpectators()) {
-                Player player = spectator.bukkitPlayer();
+                Player player = GamePlayerHandle.bukkitPlayer(spectator);
                 if (player == null) {
                     continue;
                 }
@@ -89,7 +91,7 @@ public class SpectatorService {
 
     public boolean isSpectator(Player player) {
         GameModule game = plugin.moduleService().getGameOfPlayer(player);
-        GamePlayer gamePlayer = game == null ? null : game.playerManager().getPlayer(player);
+        GamePlayer gamePlayer = game == null ? null : PlayerManagerHandle.getPlayer(game.playerManager(), player);
         return gamePlayer != null && gamePlayer.isSpectator();
     }
 

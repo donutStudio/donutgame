@@ -13,6 +13,8 @@ import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.api.border.BorderManager.BorderShape;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
+import com.donutsforlife11.donutgame.api.map.GameLocationHandle;
+import com.donutsforlife11.donutgame.api.map.GameWorldHandle;
 import com.donutsforlife11.donutgame.api.time.GameTimer;
 
 public class GameBorder {
@@ -142,7 +144,7 @@ public class GameBorder {
             return;
         }
 
-        Location centerLocation = center.toBukkit(world);
+        Location centerLocation = GameLocationHandle.toBukkit(center, world);
         Particle particle = isMoving() ? manager.movingParticle() : manager.defaultParticle();
         double viewDistanceSquared = squared(manager.particleViewDistance());
         List<Vector> points = particlePoints();
@@ -237,9 +239,9 @@ public class GameBorder {
 
     private World resolveWorld() {
         if (center.world() != null) {
-            return center.world().bukkitWorld();
+            return GameWorldHandle.bukkitWorld(center.world());
         }
-        return manager.module().world().bukkitWorld();
+        return GameWorldHandle.bukkitWorld(manager.module().world());
     }
 
     private GameLocation requireLocation(GameLocation location) {

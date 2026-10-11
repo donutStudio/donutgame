@@ -37,7 +37,7 @@ final class SpectatorSession implements AutoCloseable {
 
     @Override
     public void close() {
-        close(owner.bukkitPlayer());
+        close(GamePlayerHandle.bukkitPlayer(owner));
     }
 
     void close(Player player) {

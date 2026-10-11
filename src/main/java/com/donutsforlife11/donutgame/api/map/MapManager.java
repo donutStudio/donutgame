@@ -80,7 +80,8 @@ public class MapManager {
             return CompletableFuture.failedFuture(new IllegalArgumentException("World-backed maps cannot be placed into an existing world."));
         }
         GameWorld world = world();
-        if (world.bukkitWorld() == null) {
+        World bukkitWorld = GameWorldHandle.bukkitWorld(world);
+        if (bukkitWorld == null) {
             return CompletableFuture.failedFuture(new IllegalStateException("Module does not have a loaded world."));
         }
 
@@ -95,8 +96,8 @@ public class MapManager {
             return CompletableFuture.failedFuture(new IllegalStateException("Map " + map.id() + " does not have an extracted schematic asset."));
         }
 
-        Location bukkitLocation = origin.toBukkit(world.bukkitWorld());
-        return worldService.pasteSchematic(map.assetPath(), world.bukkitWorld(), bukkitLocation, rotation)
+        Location bukkitLocation = origin.toBukkit(bukkitWorld);
+        return worldService.pasteSchematic(map.assetPath(), bukkitWorld, bukkitLocation, rotation)
             .thenApply(metadata -> {
                 GameMap placement = map.placed(world, origin, rotation, metadata);
                 registerMapData(world, placement);
@@ -140,13 +141,13 @@ public class MapManager {
         }
 
         GameWorld gameWorld = module.defaultWorld();
-        World oldWorld = gameWorld.bukkitWorld();
+        World oldWorld = GameWorldHandle.bukkitWorld(gameWorld);
         String worldName = oldWorld == null ? worldName() : reloadWorldName();
         module.log("Loading map " + map.id() + " into world " + worldName + ".");
         return worldService.loadSlimeWorld(map.assetPath(), worldName)
             .thenCompose(newWorld -> {
                 GameMap placed = map.placed(gameWorld, new GameLocation(gameWorld, 0, 0, 0), MapRotation.DEG_0, null);
-                gameWorld.setBukkitWorld(newWorld);
+                GameWorldHandle.setBukkitWorld(gameWorld, newWorld);
                 worldService.markWorldOwnedBy(module, newWorld);
                 gameWorld.clearMapData();
                 registerMapData(gameWorld, placed);

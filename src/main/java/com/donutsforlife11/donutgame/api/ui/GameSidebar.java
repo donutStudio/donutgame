@@ -10,6 +10,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
 import com.donutsforlife11.donutgame.api.time.GameTimer;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
@@ -177,7 +178,7 @@ public class GameSidebar {
         });
 
         for (GamePlayer viewer : currentViewers.values()) {
-            FastBoard board = boards.computeIfAbsent(viewer.uuid(), ignored -> new FastBoard(viewer.bukkitPlayer()));
+            FastBoard board = boards.computeIfAbsent(viewer.uuid(), ignored -> new FastBoard(GamePlayerHandle.requireBukkitPlayer(viewer)));
             Component renderedTitle = SidebarEntry.safe(title.get());
             List<Component> lines = new ArrayList<>(entries.size() + 2);
             List<Component> scores = new ArrayList<>(entries.size() + 2);
@@ -226,7 +227,7 @@ public class GameSidebar {
             return currentViewers;
         }
         for (GamePlayer viewer : supplied) {
-            if (viewer != null && viewer.bukkitPlayer() != null) {
+            if (GamePlayerHandle.bukkitPlayer(viewer) != null) {
                 currentViewers.put(viewer.uuid(), viewer);
             }
         }

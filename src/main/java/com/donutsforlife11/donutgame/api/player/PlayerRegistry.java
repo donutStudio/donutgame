@@ -16,10 +16,12 @@ import com.donutsforlife11.donutgame.internal.game.GameModule;
 
 final class PlayerRegistry {
     private final GameModule module;
+    private final GamePlayerLifecycleService lifecycle;
     private final Map<UUID, GamePlayer> playersById = new LinkedHashMap<>();
 
-    PlayerRegistry(GameModule module) {
+    PlayerRegistry(GameModule module, GamePlayerLifecycleService lifecycle) {
         this.module = module;
+        this.lifecycle = lifecycle;
     }
 
     GamePlayer get(UUID uuid) {
@@ -33,12 +35,7 @@ final class PlayerRegistry {
     GamePlayer register(Player player) {
         boolean freshSession = !playersById.containsKey(player.getUniqueId());
         GamePlayer gamePlayer = playersById.computeIfAbsent(player.getUniqueId(), uuid -> new GamePlayer(module, uuid));
-        gamePlayer.captureExternalScoreboard(player);
-        if (freshSession) {
-            gamePlayer.startFreshSession(player);
-        } else {
-            gamePlayer.remember(player);
-        }
+        lifecycle.attach(gamePlayer, player, freshSession);
         return gamePlayer;
     }
 
@@ -69,7 +66,7 @@ final class PlayerRegistry {
     Collection<Player> onlineBukkitPlayers() {
         Set<Player> players = new LinkedHashSet<>();
         for (GamePlayer gamePlayer : playersById.values()) {
-            Player player = gamePlayer.bukkitPlayer();
+            Player player = GamePlayerHandle.bukkitPlayer(gamePlayer);
             if (player != null) {
                 players.add(player);
             }
@@ -82,9 +79,8 @@ final class PlayerRegistry {
             return;
         }
         GamePlayer gamePlayer = playersById.get(player.getUniqueId());
-        if (gamePlayer != null && ownsWorld.test(player.getWorld())) {
-            gamePlayer.remember(player);
-            gamePlayer.markOffline();
+        if (gamePlayer != null && lifecycle.playerStillInOwnedWorld(player, ownsWorld)) {
+            lifecycle.markOffline(gamePlayer, player);
         }
     }
 }

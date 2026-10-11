@@ -20,6 +20,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
 import com.donutsforlife11.donutgame.api.map.GameWorld;
+import com.donutsforlife11.donutgame.api.map.GameWorldHandle;
 import com.donutsforlife11.donutgame.api.map.MapRotation;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 import com.donutsforlife11.donutgame.internal.player.PlayerWorldStateService;
@@ -101,11 +102,11 @@ public class WorldService {
     public CompletableFuture<Void> unloadModuleWorlds(GameModule module) {
         CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
         for (GameWorld gameWorld : module.worlds().values()) {
-            World world = gameWorld.bukkitWorld();
+            World world = GameWorldHandle.bukkitWorld(gameWorld);
             if (world == null) {
                 continue;
             }
-            result = result.thenCompose(ignored -> unloadWorld(world.getName()).thenRun(() -> gameWorld.setBukkitWorld(null)));
+            result = result.thenCompose(ignored -> unloadWorld(world.getName()).thenRun(() -> GameWorldHandle.setBukkitWorld(gameWorld, null)));
         }
         return result;
     }
