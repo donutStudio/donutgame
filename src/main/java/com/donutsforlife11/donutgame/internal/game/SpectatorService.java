@@ -22,7 +22,6 @@ import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
 import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
-import com.donutsforlife11.donutgame.api.team.GameTeam;
 
 import net.kyori.adventure.text.Component;
 
@@ -132,7 +131,7 @@ public class SpectatorService {
             if (viewer.equals(player)) {
                 removeSelfSpectatorProfile(protocolManager, channel, player);
             }
-            Component displayName = playerListDisplayName(player);
+            Component displayName = explicitPlayerListName(player);
             PlayerInfo info = new PlayerInfo(
                 userProfile(player),
                 !spectator || !viewer.equals(player),
@@ -201,16 +200,12 @@ public class SpectatorService {
         };
     }
 
-    private Component playerListDisplayName(Player player) {
-        GameModule game = plugin.moduleService().getGameOfPlayer(player);
-        GamePlayer gamePlayer = game == null ? null : PlayerManagerHandle.getPlayer(game.playerManager(), player);
-        GameTeam team = gamePlayer == null ? null : gamePlayer.getTeam();
-        if (team != null) {
-            return team.prefix()
-                .append(Component.text(player.getName(), team.color()))
-                .append(team.suffix());
-        }
-        return player.playerListName();
+    private Component explicitPlayerListName(Player player) {
+        Component name = player.playerListName();
+        // Let the client apply scoreboard-team formatting when the tab name is
+        // just the vanilla username. The fake profile keeps this username, so
+        // the existing team entry can decorate it without a display override.
+        return Component.text(player.getName()).equals(name) ? null : name;
     }
 
     private UserProfile userProfile(Player player) {

@@ -2,4 +2,25 @@ id: doppelganger
 main_class: com.donutsforlife11.doppelganger.Doppelganger
 name: Doppelganger
 maps:
-  - town
+  - orange_hollows
+npc:
+  population: 12
+  target-blocks:
+    - CRAFTING_TABLE
+    - FURNACE
+    - BLAST_FURNACE
+    - SMOKER
+    - BARREL
+    - LECTERN
+    - COMPOSTER
+  scan-radius: 64
+  scan-y-below: 8
+  scan-y-above: 12
+  walk-speed: 0.16
+  idle-seconds:
+    min: 3
+    max: 9
+  wander-chance: 0.20
+  wander-radius: 18
+  max-path-distance: 48
+  max-expanded-nodes: 2500

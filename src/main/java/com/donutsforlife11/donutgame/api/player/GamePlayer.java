@@ -25,6 +25,8 @@ import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 
+import com.destroystokyo.paper.profile.PlayerProfile;
+
 import com.donutsforlife11.donutgame.api.entity.GameEntityBase;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameLocationHandle;
@@ -74,6 +76,11 @@ public class GamePlayer implements GameEntityBase {
     public String name() {
         Player player = bukkitPlayer();
         return player == null ? uuid.toString() : player.getName();
+    }
+
+    public PlayerProfile playerProfile() {
+        Player player = bukkitPlayer();
+        return player == null ? null : player.getPlayerProfile().clone();
     }
 
     Player bukkitPlayer() {

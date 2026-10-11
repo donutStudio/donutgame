@@ -30,6 +30,9 @@ public class DoppelgangerPlayers {
             return;
         }
         npcs.remove(entity.uuid());
+        if (game.npcs() != null) {
+            game.npcs().remove(entity);
+        }
     }
     @GameEventHandler
     public void onNpcDeath(GameEvent<EntityDeathEvent> event) {
@@ -38,6 +41,9 @@ public class DoppelgangerPlayers {
             return;
         }
         npcs.remove(entity.uuid());
+        if (game.npcs() != null) {
+            game.npcs().remove(entity);
+        }
         GameLocation location = event.getLocation();
         game.world().setBlock(location, GameBlocks.PLAYER_HEAD);
     }

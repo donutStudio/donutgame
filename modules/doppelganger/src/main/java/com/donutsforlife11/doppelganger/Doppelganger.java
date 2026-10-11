@@ -12,8 +12,10 @@ public class Doppelganger extends GameModule {
     static String SPAWN = "spawn";
 
     private DoppelgangerPlayers players;
+    private DoppelgangerNPCs npcs;
 
     private final List<GameLocation> spawns = new ArrayList<>();
+    private final Random random = new Random();
 
     @Override
     public void onLoad() {
@@ -21,14 +23,33 @@ public class Doppelganger extends GameModule {
         registerGameEventHandlers(players);
 
         spawns.addAll(world().getPoints(SPAWN));
+        this.npcs = new DoppelgangerNPCs(this);
+        npcs.start();
+    }
+
+    @Override
+    public void onUnload() {
+        if (npcs != null) {
+            npcs.cleanup();
+        }
     }
 
     public List<GameLocation> spawns() {
         return spawns;
     }
     public GameLocation randomSpawn() {
-        Random random = new Random();
+        if (spawns.isEmpty()) {
+            return world().worldSpawn();
+        }
         int index = random.nextInt(spawns.size());
         return spawns.get(index);
+    }
+
+    public Random random() {
+        return random;
+    }
+
+    DoppelgangerNPCs npcs() {
+        return npcs;
     }
 }

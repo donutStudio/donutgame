@@ -246,6 +246,19 @@ public class GameWorld {
         return getRegions(regionName).stream().anyMatch(region -> region.contains(location));
     }
 
+    public boolean isChunkLoaded(int blockX, int blockZ) {
+        World world = requireWorld();
+        return world.isChunkLoaded(blockX >> 4, blockZ >> 4);
+    }
+
+    public int minHeight() {
+        return requireWorld().getMinHeight();
+    }
+
+    public int maxHeight() {
+        return requireWorld().getMaxHeight();
+    }
+
     public GameWorldGamerules gamerules() {
         return gamerules;
     }

@@ -59,6 +59,21 @@ public interface GameEntityBase {
         return requireEntity().teleportAsync(GameLocationHandle.toBukkit(location, GameWorldHandle.requireBukkitWorld(targetWorld)));
     }
 
+    default boolean teleportNow(GameLocation location) {
+        if (location == null) {
+            throw new IllegalArgumentException("location cannot be null");
+        }
+        GameWorld targetWorld = location.world() == null ? world() : location.world();
+        if (targetWorld == null || GameWorldHandle.bukkitWorld(targetWorld) == null) {
+            throw new IllegalStateException("Entity " + uuid() + " is not in a loaded GameWorld.");
+        }
+        return requireEntity().teleport(GameLocationHandle.toBukkit(location, GameWorldHandle.requireBukkitWorld(targetWorld)));
+    }
+
+    default void remove() {
+        requireEntity().remove();
+    }
+
     default void setHealth(float health) {
         LivingEntity entity = requireLivingEntity();
         entity.setHealth(Math.min(Math.max(0.0, health), entity.getAttribute(Attribute.MAX_HEALTH).getValue()));
