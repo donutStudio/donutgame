@@ -127,6 +127,10 @@ public interface GameEntityBase {
         return requireEntity().getVelocity().clone();
     }
 
+    default void setRotation(float yaw, float pitch) {
+        requireEntity().setRotation(yaw, pitch);
+    }
+
     default void setCustomName(Component name) {
         requireEntity().customName(name);
     }

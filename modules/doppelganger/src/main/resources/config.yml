@@ -4,7 +4,7 @@ name: Doppelganger
 maps:
   - orange_hollows
 npc:
-  appearances-per-player: 3
+  appearances-per-player: 4
   target-blocks:
     - minecraft:crafting_table
     - minecraft:furnace

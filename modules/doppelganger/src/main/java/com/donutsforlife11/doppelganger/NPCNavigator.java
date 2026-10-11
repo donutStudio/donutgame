@@ -12,12 +12,15 @@ import java.util.Set;
 
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Openable;
+import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.api.entity.GameEntity;
 import com.donutsforlife11.donutgame.api.map.GameBlock;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 
 final class NPCNavigator {
+    private static final double PLAYER_JUMP_VELOCITY = 0.42;
+
     private static final int[][] CARDINALS = {
         { 1, 0 },
         { -1, 0 },
@@ -32,7 +35,9 @@ final class NPCNavigator {
     private GameLocation currentTarget;
     private int stuckTicks;
     private GameLocation lastLocation;
-    private double horizontalVelocity;
+    private Vector driveVelocity = new Vector();
+    private Vector lastAppliedVelocity = new Vector();
+    private int externalMotionTicks;
     private float currentYaw;
 
     NPCNavigator(Doppelganger game, NPCSettings settings, GameEntity entity) {
@@ -63,7 +68,9 @@ final class NPCNavigator {
         stuckTicks = 0;
         lastLocation = start;
         if (!preserveMotion) {
-            horizontalVelocity = 0.0;
+            driveVelocity = new Vector();
+            lastAppliedVelocity = new Vector();
+            externalMotionTicks = 0;
             currentYaw = start.yaw();
         }
         return true;
@@ -85,42 +92,46 @@ final class NPCNavigator {
         PathNode next = path.peekFirst();
         GameLocation nodeCenter = next.center(game);
         double nodeDx = nodeCenter.x() - location.x();
-        double nodeDy = nodeCenter.y() - location.y();
         double nodeDz = nodeCenter.z() - location.z();
-        double nodeDistance = Math.sqrt(nodeDx * nodeDx + nodeDy * nodeDy + nodeDz * nodeDz);
+        double nodeYDistance = nodeCenter.y() - location.y();
+        double nodeHorizontalDistance = Math.sqrt(nodeDx * nodeDx + nodeDz * nodeDz);
         double baseSpeed = settings.playerWalkSpeed(game);
-        if (nodeDistance <= Math.max(0.08, baseSpeed * 0.7)) {
+        if (nodeHorizontalDistance <= Math.max(0.10, baseSpeed * 0.55) && Math.abs(nodeYDistance) <= 0.75) {
             path.removeFirst();
             openNearbyDoors(next);
             if (path.isEmpty()) {
-                horizontalVelocity *= settings.playerWalkFriction();
+                driveVelocity.multiply(settings.playerWalkFriction());
             }
             GameLocation nextFacing = path.isEmpty() ? nodeCenter : steeringTarget(path.peekFirst(), nodeCenter);
-            entity.teleportNow(withFacing(nodeCenter, nextFacing.x() - nodeCenter.x(), nextFacing.z() - nodeCenter.z()));
-            lastLocation = nodeCenter;
+            face(nextFacing.x() - nodeCenter.x(), nextFacing.z() - nodeCenter.z());
+            lastLocation = location;
             return path.isEmpty() ? MoveResult.ARRIVED : MoveResult.MOVING;
+        }
+
+        if (yieldingToExternalMotion(location)) {
+            return MoveResult.MOVING;
         }
 
         GameLocation nextCenter = steeringTarget(next, location);
         double dx = nextCenter.x() - location.x();
-        double dy = nextCenter.y() - location.y();
         double dz = nextCenter.z() - location.z();
-        double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        double distance = Math.sqrt(dx * dx + dz * dz);
         if (distance <= 0.0001) {
             path.removeFirst();
             return path.isEmpty() ? MoveResult.ARRIVED : MoveResult.MOVING;
         }
 
-        double inputScale = inputScale(nodeDistance, location);
-        double step = Math.min(nextWalkStep(inputScale), distance);
-        if (step <= 0.0001) {
-            return recoverFromStall(next);
-        }
-        double x = location.x() + dx / distance * step;
-        double y = location.y() + dy / distance * step;
-        double z = location.z() + dz / distance * step;
+        double inputScale = inputScale(nodeHorizontalDistance, location);
+        Vector movement = nextVelocity(dx / distance, dz / distance, inputScale, baseSpeed);
         openNearbyDoors(next);
-        entity.teleportNow(withFacing(new GameLocation(game.world(), x, y, z), dx, dz));
+        face(dx, dz);
+        Vector currentVelocity = entity.velocity();
+        double verticalVelocity = currentVelocity.getY();
+        if (nodeYDistance > 0.45 && Math.abs(verticalVelocity) < 0.05) {
+            verticalVelocity = PLAYER_JUMP_VELOCITY;
+        }
+        entity.setVelocity(new Vector(movement.getX(), verticalVelocity, movement.getZ()));
+        lastAppliedVelocity = movement.clone();
         updateStuck(location);
         if (stuckTicks > 60 && currentTarget != null) {
             return recoverFromStall(next);
@@ -134,7 +145,8 @@ final class NPCNavigator {
             return MoveResult.MOVING;
         }
         path.clear();
-        horizontalVelocity = 0.0;
+        driveVelocity = new Vector();
+        lastAppliedVelocity = new Vector();
         return MoveResult.BLOCKED;
     }
 
@@ -154,15 +166,48 @@ final class NPCNavigator {
         return scale;
     }
 
-    private double nextWalkStep(double inputScale) {
+    private Vector nextVelocity(double directionX, double directionZ, double inputScale, double maxSpeed) {
         if (inputScale > 0.02) {
-            double step = horizontalVelocity + settings.playerWalkAcceleration(game) * inputScale;
-            horizontalVelocity = step * settings.playerWalkFriction();
-            return Math.max(0.035, step);
+            double acceleration = settings.playerWalkAcceleration(game) * inputScale;
+            driveVelocity.add(new Vector(directionX * acceleration, 0.0, directionZ * acceleration));
         }
-        double step = horizontalVelocity;
-        horizontalVelocity *= settings.playerWalkFriction();
-        return step;
+
+        Vector moving = driveVelocity.clone();
+        double speed = Math.sqrt(moving.getX() * moving.getX() + moving.getZ() * moving.getZ());
+        if (speed > maxSpeed) {
+            moving.multiply(maxSpeed / speed);
+        }
+        driveVelocity = moving.clone().multiply(settings.playerWalkFriction());
+        return moving;
+    }
+
+    private boolean yieldingToExternalMotion(GameLocation location) {
+        Vector current = entity.velocity();
+        double appliedDifferenceSquared = horizontalDifferenceSquared(current, lastAppliedVelocity);
+        double frictionDifferenceSquared = horizontalDifferenceSquared(current, driveVelocity);
+        double differenceSquared = Math.min(appliedDifferenceSquared, frictionDifferenceSquared);
+        double currentHorizontalSquared = current.getX() * current.getX() + current.getZ() * current.getZ();
+        if (externalMotionTicks > 0) {
+            externalMotionTicks--;
+            driveVelocity = new Vector(current.getX(), 0.0, current.getZ()).multiply(settings.playerWalkFriction());
+            lastAppliedVelocity = new Vector(current.getX(), 0.0, current.getZ());
+            lastLocation = location;
+            return true;
+        }
+        if (currentHorizontalSquared > 0.0025 && differenceSquared > 0.01) {
+            externalMotionTicks = 10;
+            driveVelocity = new Vector(current.getX(), 0.0, current.getZ()).multiply(settings.playerWalkFriction());
+            lastAppliedVelocity = new Vector(current.getX(), 0.0, current.getZ());
+            lastLocation = location;
+            return true;
+        }
+        return false;
+    }
+
+    private double horizontalDifferenceSquared(Vector left, Vector right) {
+        double differenceX = left.getX() - right.getX();
+        double differenceZ = left.getZ() - right.getZ();
+        return differenceX * differenceX + differenceZ * differenceZ;
     }
 
     private GameLocation steeringTarget(PathNode next, GameLocation location) {
@@ -211,12 +256,12 @@ final class NPCNavigator {
         }
     }
 
-    private GameLocation withFacing(GameLocation location, double dx, double dz) {
+    private void face(double dx, double dz) {
         if (Math.abs(dx) >= 0.0001 || Math.abs(dz) >= 0.0001) {
             float targetYaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
             currentYaw = rotateToward(currentYaw, targetYaw, 9.0f);
+            entity.setRotation(currentYaw, 0.0f);
         }
-        return new GameLocation(game.world(), location.x(), location.y(), location.z(), currentYaw, 0.0f);
     }
 
     private List<PathNode> findPath(PathNode start, PathNode goal) {
