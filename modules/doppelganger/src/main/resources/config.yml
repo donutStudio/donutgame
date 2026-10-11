@@ -4,19 +4,53 @@ name: Doppelganger
 maps:
   - orange_hollows
 npc:
-  population: 12
+  appearances-per-player: 3
   target-blocks:
-    - CRAFTING_TABLE
-    - FURNACE
-    - BLAST_FURNACE
-    - SMOKER
-    - BARREL
-    - LECTERN
-    - COMPOSTER
+    - minecraft:crafting_table
+    - minecraft:furnace
+    - minecraft:blast_furnace
+    - minecraft:smoker
+    - minecraft:barrel
+    - minecraft:lectern
+    - minecraft:composter
+  passage-blocks:
+    - minecraft:oak_door
+    - minecraft:spruce_door
+    - minecraft:birch_door
+    - minecraft:jungle_door
+    - minecraft:acacia_door
+    - minecraft:dark_oak_door
+    - minecraft:mangrove_door
+    - minecraft:cherry_door
+    - minecraft:bamboo_door
+    - minecraft:crimson_door
+    - minecraft:warped_door
+    - minecraft:oak_fence_gate
+    - minecraft:spruce_fence_gate
+    - minecraft:birch_fence_gate
+    - minecraft:jungle_fence_gate
+    - minecraft:acacia_fence_gate
+    - minecraft:dark_oak_fence_gate
+    - minecraft:mangrove_fence_gate
+    - minecraft:cherry_fence_gate
+    - minecraft:bamboo_fence_gate
+    - minecraft:crimson_fence_gate
+    - minecraft:warped_fence_gate
+    - minecraft:oak_trapdoor
+    - minecraft:spruce_trapdoor
+    - minecraft:birch_trapdoor
+    - minecraft:jungle_trapdoor
+    - minecraft:acacia_trapdoor
+    - minecraft:dark_oak_trapdoor
+    - minecraft:mangrove_trapdoor
+    - minecraft:cherry_trapdoor
+    - minecraft:bamboo_trapdoor
+    - minecraft:crimson_trapdoor
+    - minecraft:warped_trapdoor
   scan-radius: 64
   scan-y-below: 8
   scan-y-above: 12
-  walk-speed: 0.16
+  walk-speed-multiplier: 1.0
   idle-seconds:
     min: 3
     max: 9

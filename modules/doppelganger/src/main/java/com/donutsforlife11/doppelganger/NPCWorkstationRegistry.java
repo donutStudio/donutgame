@@ -78,7 +78,7 @@ final class NPCWorkstationRegistry {
                 continue;
             }
             for (int y = minY; y <= maxY; y++) {
-                if (NPCPathRules.isStandable(game, x, y, z)) {
+                if (NPCPathRules.isStandable(game, settings, x, y, z)) {
                     choices.add(new NPCDestination(new GameLocation(game.world(), x + 0.5, y, z + 0.5), null));
                     break;
                 }
@@ -96,7 +96,7 @@ final class NPCWorkstationRegistry {
             int x = workstation.blockX() + direction[0];
             int z = workstation.blockZ() + direction[1];
             for (int y = workstation.blockY() - 1; y <= workstation.blockY() + 1; y++) {
-                if (NPCPathRules.isStandable(game, x, y, z)) {
+                if (NPCPathRules.isStandable(game, settings, x, y, z)) {
                     destinations.add(new NPCDestination(
                         new GameLocation(game.world(), x + 0.5, y, z + 0.5),
                         workstation
@@ -136,20 +136,25 @@ final class NPCWorkstationRegistry {
         private NPCPathRules() {
         }
 
-        static boolean isStandable(Doppelganger game, int x, int y, int z) {
+        static boolean isStandable(Doppelganger game, NPCSettings settings, int x, int y, int z) {
             return y > game.world().minHeight()
                 && y < game.world().maxHeight() - 1
                 && isGround(game.world().blockAt(new GameLocation(game.world(), x, y - 1, z)))
-                && isPassable(game.world().blockAt(new GameLocation(game.world(), x, y, z)))
-                && isPassable(game.world().blockAt(new GameLocation(game.world(), x, y + 1, z)));
+                && isPassable(settings, game.world().blockAt(new GameLocation(game.world(), x, y, z)))
+                && isPassable(settings, game.world().blockAt(new GameLocation(game.world(), x, y + 1, z)));
         }
 
-        static boolean isPassable(GameBlock block) {
+        static boolean isPassable(NPCSettings settings, GameBlock block) {
             Material type = block.type();
             BlockData data = block.blockData();
             return type.isAir()
                 || type == Material.WATER
-                || data instanceof Openable;
+                || (settings.passageBlocks.contains(type) && data instanceof Openable);
+        }
+
+        static boolean isPassage(Doppelganger game, NPCSettings settings, int x, int y, int z) {
+            Material type = game.world().blockAt(new GameLocation(game.world(), x, y, z)).type();
+            return settings.passageBlocks.contains(type);
         }
 
         private static boolean isGround(GameBlock block) {

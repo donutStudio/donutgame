@@ -32,6 +32,8 @@ final class NPCNavigator {
     private GameLocation currentTarget;
     private int stuckTicks;
     private GameLocation lastLocation;
+    private double horizontalVelocity;
+    private float currentYaw;
 
     NPCNavigator(Doppelganger game, NPCSettings settings, GameEntity entity) {
         this.game = game;
@@ -40,6 +42,10 @@ final class NPCNavigator {
     }
 
     boolean moveTo(GameLocation target) {
+        return moveTo(target, false);
+    }
+
+    private boolean moveTo(GameLocation target, boolean preserveMotion) {
         GameLocation start = entity.location();
         if (start == null || target == null) {
             return false;
@@ -56,6 +62,10 @@ final class NPCNavigator {
         currentTarget = target;
         stuckTicks = 0;
         lastLocation = start;
+        if (!preserveMotion) {
+            horizontalVelocity = 0.0;
+            currentYaw = start.yaw();
+        }
         return true;
     }
 
@@ -63,29 +73,49 @@ final class NPCNavigator {
         return !path.isEmpty();
     }
 
-    boolean tick() {
+    MoveResult tick() {
         if (path.isEmpty()) {
-            return true;
+            return MoveResult.ARRIVED;
         }
         GameLocation location = entity.location();
         if (location == null) {
             path.clear();
-            return false;
+            return MoveResult.BLOCKED;
         }
         PathNode next = path.peekFirst();
-        GameLocation nextCenter = next.center(game);
+        GameLocation nodeCenter = next.center(game);
+        double nodeDx = nodeCenter.x() - location.x();
+        double nodeDy = nodeCenter.y() - location.y();
+        double nodeDz = nodeCenter.z() - location.z();
+        double nodeDistance = Math.sqrt(nodeDx * nodeDx + nodeDy * nodeDy + nodeDz * nodeDz);
+        double baseSpeed = settings.playerWalkSpeed(game);
+        if (nodeDistance <= Math.max(0.08, baseSpeed * 0.7)) {
+            path.removeFirst();
+            openNearbyDoors(next);
+            if (path.isEmpty()) {
+                horizontalVelocity *= settings.playerWalkFriction();
+            }
+            GameLocation nextFacing = path.isEmpty() ? nodeCenter : steeringTarget(path.peekFirst(), nodeCenter);
+            entity.teleportNow(withFacing(nodeCenter, nextFacing.x() - nodeCenter.x(), nextFacing.z() - nodeCenter.z()));
+            lastLocation = nodeCenter;
+            return path.isEmpty() ? MoveResult.ARRIVED : MoveResult.MOVING;
+        }
+
+        GameLocation nextCenter = steeringTarget(next, location);
         double dx = nextCenter.x() - location.x();
         double dy = nextCenter.y() - location.y();
         double dz = nextCenter.z() - location.z();
         double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (distance <= Math.max(0.08, settings.walkSpeed)) {
+        if (distance <= 0.0001) {
             path.removeFirst();
-            openNearbyDoors(next);
-            entity.teleportNow(withFacing(nextCenter, dx, dz));
-            return path.isEmpty();
+            return path.isEmpty() ? MoveResult.ARRIVED : MoveResult.MOVING;
         }
 
-        double step = Math.min(settings.walkSpeed, distance);
+        double inputScale = inputScale(nodeDistance, location);
+        double step = Math.min(nextWalkStep(inputScale), distance);
+        if (step <= 0.0001) {
+            return recoverFromStall(next);
+        }
         double x = location.x() + dx / distance * step;
         double y = location.y() + dy / distance * step;
         double z = location.z() + dz / distance * step;
@@ -93,9 +123,77 @@ final class NPCNavigator {
         entity.teleportNow(withFacing(new GameLocation(game.world(), x, y, z), dx, dz));
         updateStuck(location);
         if (stuckTicks > 60 && currentTarget != null) {
-            return !moveTo(currentTarget);
+            return recoverFromStall(next);
         }
-        return false;
+        return MoveResult.MOVING;
+    }
+
+    private MoveResult recoverFromStall(PathNode next) {
+        openNearbyDoors(next);
+        if (currentTarget != null && moveTo(currentTarget, true)) {
+            return MoveResult.MOVING;
+        }
+        path.clear();
+        horizontalVelocity = 0.0;
+        return MoveResult.BLOCKED;
+    }
+
+    private double inputScale(double distance, GameLocation location) {
+        double scale = 1.0;
+        if (path.size() <= 2) {
+            scale *= Math.max(0.0, Math.min(1.0, distance / 1.8));
+        }
+        PathNode first = path.peekFirst();
+        PathNode second = secondPathNode();
+        if (first != null && second != null) {
+            double turn = Math.abs(angleBetween(location, first, second));
+            if (turn > 35.0) {
+                scale *= 0.72;
+            }
+        }
+        return scale;
+    }
+
+    private double nextWalkStep(double inputScale) {
+        if (inputScale > 0.02) {
+            double step = horizontalVelocity + settings.playerWalkAcceleration(game) * inputScale;
+            horizontalVelocity = step * settings.playerWalkFriction();
+            return Math.max(0.035, step);
+        }
+        double step = horizontalVelocity;
+        horizontalVelocity *= settings.playerWalkFriction();
+        return step;
+    }
+
+    private GameLocation steeringTarget(PathNode next, GameLocation location) {
+        PathNode after = secondPathNode();
+        if (after == null) {
+            return next.center(game);
+        }
+        GameLocation nextCenter = next.center(game);
+        double dx = nextCenter.x() - location.x();
+        double dz = nextCenter.z() - location.z();
+        double horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+        if (horizontalDistance > 0.65) {
+            return nextCenter;
+        }
+        GameLocation afterCenter = after.center(game);
+        double blend = Math.max(0.0, Math.min(0.55, (0.65 - horizontalDistance) / 0.65));
+        return new GameLocation(
+            game.world(),
+            nextCenter.x() + (afterCenter.x() - nextCenter.x()) * blend,
+            nextCenter.y() + (afterCenter.y() - nextCenter.y()) * blend,
+            nextCenter.z() + (afterCenter.z() - nextCenter.z()) * blend
+        );
+    }
+
+    private PathNode secondPathNode() {
+        if (path.size() < 2) {
+            return null;
+        }
+        var iterator = path.iterator();
+        iterator.next();
+        return iterator.next();
     }
 
     private void updateStuck(GameLocation location) {
@@ -114,10 +212,11 @@ final class NPCNavigator {
     }
 
     private GameLocation withFacing(GameLocation location, double dx, double dz) {
-        float yaw = Math.abs(dx) < 0.0001 && Math.abs(dz) < 0.0001
-            ? location.yaw()
-            : (float) Math.toDegrees(Math.atan2(-dx, dz));
-        return new GameLocation(game.world(), location.x(), location.y(), location.z(), yaw, 0.0f);
+        if (Math.abs(dx) >= 0.0001 || Math.abs(dz) >= 0.0001) {
+            float targetYaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+            currentYaw = rotateToward(currentYaw, targetYaw, 9.0f);
+        }
+        return new GameLocation(game.world(), location.x(), location.y(), location.z(), currentYaw, 0.0f);
     }
 
     private List<PathNode> findPath(PathNode start, PathNode goal) {
@@ -167,7 +266,7 @@ final class NPCNavigator {
             }
             for (int y : new int[] { current.y(), current.y() + 1, current.y() - 1, current.y() - 2 }) {
                 PathNode candidate = new PathNode(x, y, z);
-                if ((candidate.equals(goal) || NPCWorkstationRegistry.NPCPathRules.isStandable(game, x, y, z))
+                if ((candidate.equals(goal) || NPCWorkstationRegistry.NPCPathRules.isStandable(game, settings, x, y, z))
                     && noSharpCornerCut(current, candidate)) {
                     neighbors.add(candidate);
                     break;
@@ -183,14 +282,22 @@ final class NPCNavigator {
         if (dx == 0 || dz == 0) {
             return true;
         }
-        return NPCWorkstationRegistry.NPCPathRules.isStandable(game, from.x() + dx, to.y(), from.z())
-            && NPCWorkstationRegistry.NPCPathRules.isStandable(game, from.x(), to.y(), from.z() + dz);
+        return NPCWorkstationRegistry.NPCPathRules.isStandable(game, settings, from.x() + dx, to.y(), from.z())
+            && NPCWorkstationRegistry.NPCPathRules.isStandable(game, settings, from.x(), to.y(), from.z() + dz);
     }
 
     private double movementCost(PathNode from, PathNode to) {
         double cost = 1.0 + Math.abs(to.y() - from.y()) * 0.35;
-        if (isDoor(to.x(), to.y(), to.z()) || isDoor(to.x(), to.y() + 1, to.z())) {
-            cost += 1.5;
+        int verticalDelta = to.y() - from.y();
+        boolean passage = isPassage(to.x(), to.y(), to.z()) || isPassage(to.x(), to.y() + 1, to.z());
+        if (passage) {
+            cost -= 0.35;
+        }
+        if (verticalDelta > 0 && !passage) {
+            cost += 4.0;
+        }
+        if (verticalDelta < 0) {
+            cost += 0.7;
         }
         return cost;
     }
@@ -204,8 +311,9 @@ final class NPCNavigator {
         }
     }
 
-    private boolean isDoor(int x, int y, int z) {
-        return game.world().blockAt(new GameLocation(game.world(), x, y, z)).blockData() instanceof Openable;
+    private boolean isPassage(int x, int y, int z) {
+        return NPCWorkstationRegistry.NPCPathRules.isPassage(game, settings, x, y, z)
+            && game.world().blockAt(new GameLocation(game.world(), x, y, z)).blockData() instanceof Openable;
     }
 
     private void openDoor(int x, int y, int z) {
@@ -219,6 +327,38 @@ final class NPCNavigator {
 
     private double heuristic(PathNode current, PathNode goal) {
         return Math.abs(goal.x() - current.x()) + Math.abs(goal.y() - current.y()) + Math.abs(goal.z() - current.z());
+    }
+
+    private double angleBetween(GameLocation location, PathNode first, PathNode second) {
+        if (first == null || second == null) {
+            return 0.0;
+        }
+        GameLocation firstCenter = first.center(game);
+        GameLocation secondCenter = second.center(game);
+        double firstYaw = Math.toDegrees(Math.atan2(-(firstCenter.x() - location.x()), firstCenter.z() - location.z()));
+        double secondYaw = Math.toDegrees(Math.atan2(-(secondCenter.x() - firstCenter.x()), secondCenter.z() - firstCenter.z()));
+        return wrapDegrees(secondYaw - firstYaw);
+    }
+
+    private float rotateToward(float current, float target, float maxStep) {
+        float delta = (float) wrapDegrees(target - current);
+        if (delta > maxStep) {
+            delta = maxStep;
+        } else if (delta < -maxStep) {
+            delta = -maxStep;
+        }
+        return current + delta;
+    }
+
+    private double wrapDegrees(double angle) {
+        angle %= 360.0;
+        if (angle >= 180.0) {
+            angle -= 360.0;
+        }
+        if (angle < -180.0) {
+            angle += 360.0;
+        }
+        return angle;
     }
 
     private List<PathNode> rebuildPath(Map<PathNode, PathNode> parent, PathNode end) {
@@ -235,6 +375,12 @@ final class NPCNavigator {
     }
 
     private record SearchNode(PathNode node, double score) {
+    }
+
+    enum MoveResult {
+        MOVING,
+        ARRIVED,
+        BLOCKED
     }
 
     private record PathNode(int x, int y, int z) {

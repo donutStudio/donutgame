@@ -98,19 +98,28 @@ final class DoppelgangerNPCs {
     }
 
     private List<ResolvableProfile> profilesToSpawn() {
-        List<ResolvableProfile> realProfiles = game.playerManager().getPlayers().stream()
-            .map(GamePlayer::playerProfile)
-            .filter(profile -> profile != null)
-            .map(ResolvableProfile::resolvableProfile)
+        List<GamePlayer> players = game.playerManager().getOnlinePlayers().stream()
+            .filter(player -> player != null && player.isOnline())
             .toList();
-        int realPlayerCount = game.playerManager().getPlayers().size();
-        int npcCount = Math.max(1, settings.population - realPlayerCount);
-        if (realProfiles.isEmpty()) {
+
+        int realPlayerCount = players.size();
+        int totalAppearances = Math.max(1, realPlayerCount) * settings.appearancesPerPlayer;
+        int npcCount = Math.max(1, totalAppearances - realPlayerCount);
+        if (players.isEmpty()) {
             return Collections.nCopies(npcCount, Mannequin.defaultProfile());
         }
 
+        List<ResolvableProfile> realProfiles = players.stream()
+            .map(this::resolvableProfile)
+            .filter(profile -> profile != null)
+            .toList();
+        if (realProfiles.isEmpty()) {
+            game.log("No live player profiles were available for NPC skins; skipping NPC spawn instead of using default skins.");
+            return List.of();
+        }
+
         List<ResolvableProfile> assignments = new ArrayList<>();
-        int appearancesPerPlayer = (int) Math.ceil((double) settings.population / realProfiles.size());
+        int appearancesPerPlayer = Math.max(1, settings.appearancesPerPlayer);
         for (ResolvableProfile profile : realProfiles) {
             for (int count = 1; count < appearancesPerPlayer; count++) {
                 assignments.add(profile);
@@ -128,6 +137,17 @@ final class DoppelgangerNPCs {
         }
         Collections.shuffle(assignments, game.random());
         return assignments;
+    }
+
+    private ResolvableProfile resolvableProfile(GamePlayer player) {
+        var profile = player.playerProfile();
+        if (profile != null) {
+            return ResolvableProfile.resolvableProfile(profile);
+        }
+        return ResolvableProfile.resolvableProfile()
+            .uuid(player.uuid())
+            .name(player.name())
+            .build();
     }
 
     Set<UUID> uuids() {

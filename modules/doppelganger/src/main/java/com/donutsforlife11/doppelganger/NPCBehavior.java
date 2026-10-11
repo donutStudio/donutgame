@@ -47,12 +47,22 @@ final class NPCBehavior {
     }
 
     private void tickWalking() {
-        if (!navigator.tick()) {
-            return;
+        switch (navigator.tick()) {
+            case MOVING -> {
+                return;
+            }
+            case BLOCKED -> {
+                state = State.IDLE;
+                waitTicks = 0;
+                destination = null;
+                return;
+            }
+            case ARRIVED -> {
+                faceDestination();
+                waitTicks = game.random().nextInt(settings.idleMinTicks, settings.idleMaxTicks + 1);
+                state = State.WORKING;
+            }
         }
-        faceDestination();
-        waitTicks = game.random().nextInt(settings.idleMinTicks, settings.idleMaxTicks + 1);
-        state = State.WORKING;
     }
 
     private void tickWorking() {
