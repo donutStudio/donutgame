@@ -22,6 +22,7 @@ import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
 import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
+import com.donutsforlife11.donutgame.api.team.GameTeam;
 
 import net.kyori.adventure.text.Component;
 
@@ -131,17 +132,15 @@ public class SpectatorService {
             if (viewer.equals(player)) {
                 removeSelfSpectatorProfile(protocolManager, channel, player);
             }
+            Component displayName = playerListDisplayName(player);
             PlayerInfo info = new PlayerInfo(
                 userProfile(player),
                 !spectator || !viewer.equals(player),
                 player.getPing(),
                 spectator && !viewer.equals(player) ? GameMode.SPECTATOR : packetGameMode(player),
-                spectatorDisplayName(viewer, player, spectator),
+                viewer.equals(player) ? displayName : null,
                 null
             );
-            if (viewer.equals(player) && spectator) {
-                sendSelfSpectatorProfile(protocolManager, channel, player);
-            }
             EnumSet<Action> actions = EnumSet.of(Action.UPDATE_LISTED, Action.UPDATE_GAME_MODE, Action.UPDATE_LATENCY, Action.UPDATE_DISPLAY_NAME);
             if (!viewer.equals(player) || !spectator) {
                 actions.add(Action.ADD_PLAYER);
@@ -150,19 +149,22 @@ public class SpectatorService {
                 actions,
                 List.of(info)
             ));
+            if (viewer.equals(player) && spectator) {
+                sendSelfSpectatorProfile(protocolManager, channel, player, displayName);
+            }
             return true;
         } catch (NoClassDefFoundError | RuntimeException exception) {
             return false;
         }
     }
 
-    private void sendSelfSpectatorProfile(ProtocolManager protocolManager, Object channel, Player player) {
+    private void sendSelfSpectatorProfile(ProtocolManager protocolManager, Object channel, Player player, Component displayName) {
         PlayerInfo fakeInfo = new PlayerInfo(
             userProfile(player, selfSpectatorProfileId(player)),
             true,
             player.getPing(),
             GameMode.SPECTATOR,
-            playerListDisplayName(player),
+            displayName,
             null
         );
         protocolManager.sendPacket(channel, new WrapperPlayServerPlayerInfoUpdate(
@@ -199,14 +201,15 @@ public class SpectatorService {
         };
     }
 
-    private Component spectatorDisplayName(Player viewer, Player player, boolean spectator) {
-        if (!viewer.equals(player)) {
-            return null;
-        }
-        return spectator ? null : playerListDisplayName(player);
-    }
-
     private Component playerListDisplayName(Player player) {
+        GameModule game = plugin.moduleService().getGameOfPlayer(player);
+        GamePlayer gamePlayer = game == null ? null : PlayerManagerHandle.getPlayer(game.playerManager(), player);
+        GameTeam team = gamePlayer == null ? null : gamePlayer.getTeam();
+        if (team != null) {
+            return team.prefix()
+                .append(Component.text(player.getName(), team.color()))
+                .append(team.suffix());
+        }
         return player.playerListName();
     }
 

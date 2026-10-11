@@ -469,7 +469,6 @@ public abstract class GameEventApiGenerateTask extends DefaultTask {
         source.append("@javax.annotation.processing.Generated(\"")
             .append(getClass().getName())
             .append("\")\n");
-        source.append("@SuppressWarnings(\"unchecked\")\n");
         source.append("public interface ")
                 .append(interfaceName)
                 .append("<E extends org.bukkit.event.Event> {\n");
