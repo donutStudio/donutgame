@@ -14,6 +14,13 @@ import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Mannequin;
+import org.bukkit.plugin.java.JavaPlugin;
+
+import com.destroystokyo.paper.profile.PlayerProfile;
+import com.donutsforlife11.donutgame.Donutgame;
+import com.donutsforlife11.donutgame.api.entity.npc.GameNpc;
+import com.donutsforlife11.donutgame.api.player.GamePlayer;
 
 import com.donutsforlife11.donutgame.api.entity.GameEntity;
 import com.donutsforlife11.donutgame.api.entity.GameEntityHandle;
@@ -149,6 +156,27 @@ public class GameWorld {
         EntityType entityType = Objects.requireNonNull(type, "type");
         Entity bukkitEntity = requireWorld().spawnEntity(toBukkit(location), entityType);
         return GameEntityHandle.create(this, generation, bukkitEntity);
+    }
+
+    public GameNpc newNpc(GameLocation location) {
+        return newNpc(location, (PlayerProfile) null);
+    }
+
+    public GameNpc newNpc(GameLocation location, PlayerProfile profile) {
+        requireLocation(location);
+        Mannequin mannequin = requireWorld().spawn(toBukkit(location), Mannequin.class);
+        try {
+            GameNpc npc = new GameNpc(this, generation, mannequin, profile);
+            JavaPlugin.getPlugin(Donutgame.class).npcService().register(npc);
+            return npc;
+        } catch (RuntimeException exception) {
+            mannequin.remove();
+            throw exception;
+        }
+    }
+
+    public GameNpc newNpc(GameLocation location, GamePlayer player) {
+        return newNpc(location, Objects.requireNonNull(Objects.requireNonNull(player, "player").playerProfile(), "Player must be online"));
     }
 
     public GameEntity spawn(GameLocation location, EntityType type, Consumer<? super GameEntity> configuration) {

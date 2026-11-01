@@ -20,6 +20,7 @@ import com.donutsforlife11.donutgame.internal.map.MapService;
 import com.donutsforlife11.donutgame.internal.map.WorldService;
 import com.donutsforlife11.donutgame.internal.player.PlayerWorldStateService;
 import com.donutsforlife11.donutgame.internal.ui.GlowService;
+import com.donutsforlife11.donutgame.api.entity.npc.GameNpcService;
 
 public final class Donutgame extends JavaPlugin {
     private FileService fileService;
@@ -29,6 +30,7 @@ public final class Donutgame extends JavaPlugin {
     private PlayerWorldStateService playerWorldStateService;
     private GlowService glowService;
     private SpectatorService spectatorService;
+    private GameNpcService npcService;
 
     @Override
     public void onEnable() {
@@ -44,6 +46,8 @@ public final class Donutgame extends JavaPlugin {
         spectatorService.enable();
         worldService = new WorldService(this, playerWorldStateService);
         moduleService = new ModuleService(this);
+        npcService = new GameNpcService(this);
+        npcService.enable();
         getServer().getPluginManager().registerEvents(new GamePlayerConnectionEvents(moduleService), this);
         getServer().getPluginManager().registerEvents(new GameKillCreditEvents(moduleService), this);
         getServer().getPluginManager().registerEvents(new GameItemComponentEvents(moduleService), this);
@@ -68,6 +72,9 @@ public final class Donutgame extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (npcService != null) {
+            npcService.disable();
+        }
         if (moduleService != null) {
             moduleService.unloadAll();
         }
@@ -114,6 +121,10 @@ public final class Donutgame extends JavaPlugin {
 
     public SpectatorService spectatorService() {
         return spectatorService;
+    }
+
+    public GameNpcService npcService() {
+        return npcService;
     }
 
     private void updateConfig() {

@@ -422,7 +422,17 @@ void removeWalkableBlocks(GameBlockType... blocks) // Explicitly removes blocks 
 void removeWalkableBlocks(Collection<GameBlockType> blocks) // Similar to above but with a data structure
 Collection<GameBlockType> crossableBlocks() // Returns list of WHITELISTED crossable blocks (including blocks crossable by default)
 Collection<GameBlockType> walkableBlocks() // Returns list of WHITELISTED walkable blocks (including blocks walkable by default)
+void addCrossableTags(TagKey<BlockType>... tags) // Adds all blocks from Paper registry tags, including custom datapack tags
+void removeCrossableTags(TagKey<BlockType>... tags) // Removes all blocks from those tags
+void addWalkableTags(TagKey<BlockType>... tags) // Adds all supports from those tags
+void removeWalkableTags(TagKey<BlockType>... tags) // Removes all supports from those tags
 ```
+
+NPC defaults: invulnerable, movable, non-persistent, with hidden descriptions, movement speed 0.1 and step height 0.6. Controllers default to arrival distance 0.35, follow range 32, timeout 200 ticks and vertical tolerance 1. Interaction and attack cooldowns are separate, per player, and default to 5 ticks. Callbacks replace the previous callback of the same kind; passing null clears it. NPCs are removed when their world is replaced/unloaded or their entity unloads, and when the plugin disables. Use the server thread for all NPC operations.
+
+Pathfinding uses bounded A* (at most 4096 expanded nodes), only in loaded chunks, with collision-shape clearance and safe support checks. It supports partial blocks, avoids corner cutting, and refuses drops over 3 blocks or rises above ordinary player jump height (1.25 blocks). Unsafe defaults include fire/campfire/portal tags, fluids, magma, cactus, berry bushes, wither roses, powder snow, cobwebs and pointed dripstone. Other solid supports and carpets/snow are allowed. Tag operations expand their current registry contents when called; subsequent block overrides take precedence. Allowing a block does not disable its physical collision. An empty path means no safe route was found within the search budget. Following waits outside its range, retries failed paths after 40 active ticks, and replans moving/blocked paths at most once per 10 active ticks.
+
+Movement uses player-like ground acceleration, slipperiness, sprint and sneak scaling with native mannequin gravity, collision and jumping. Paper has no mannequin movement-input API; exact client-player parity (including swimming, flight and all input-dependent behavior) is not guaranteed.
 
 ## PLAYER SYSTEM
 **PlayerManager**

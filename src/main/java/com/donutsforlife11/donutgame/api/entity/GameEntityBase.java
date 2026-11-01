@@ -128,7 +128,36 @@ public interface GameEntityBase {
     }
 
     default void setRotation(float yaw, float pitch) {
-        requireEntity().setRotation(yaw, pitch);
+        setRotation(yaw, pitch, 0);
+    }
+
+    default void setRotation(float yaw, float pitch, int ticks) {
+        JavaPlugin.getPlugin(Donutgame.class).npcService().rotate(this, yaw, pitch, ticks);
+    }
+
+    default void setRotationTowards(GameLocation location) {
+        setRotationTowards(location, 0);
+    }
+
+    default void setRotationTowards(GameLocation location, int ticks) {
+        if (location == null || (location.world() != null && location.world() != world())) {
+            throw new IllegalArgumentException("Rotation target must be in the entity's world.");
+        }
+        Entity entity = requireEntity();
+        org.bukkit.Location eye = entity instanceof LivingEntity living ? living.getEyeLocation() : entity.getLocation();
+        Vector direction = new Vector(location.x() - eye.getX(), location.y() - eye.getY(), location.z() - eye.getZ());
+        if (direction.lengthSquared() > 1.0E-12) {
+            eye.setDirection(direction);
+            setRotation(eye.getYaw(), eye.getPitch(), ticks);
+        }
+    }
+
+    default void swingMainHand() {
+        requireLivingEntity().swingMainHand();
+    }
+
+    default void swingOffhand() {
+        requireLivingEntity().swingOffHand();
     }
 
     default void setCustomName(Component name) {
