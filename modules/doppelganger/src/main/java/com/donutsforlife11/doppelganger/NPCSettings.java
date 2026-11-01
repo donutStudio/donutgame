@@ -12,7 +12,7 @@ import org.bukkit.attribute.Attribute;
 
 final class NPCSettings {
     private static final double DEFAULT_PLAYER_MOVEMENT_ATTRIBUTE = 0.1;
-    private static final double PLAYER_WALK_ACCELERATION_PER_TICK = 0.098;
+    private static final double VANILLA_WALK_BLOCKS_PER_SECOND = 4.317;
 
     final int appearancesPerPlayer;
     final int scanRadius;
@@ -25,6 +25,10 @@ final class NPCSettings {
     final int idleMaxTicks;
     final double wanderChance;
     final int wanderRadius;
+    final boolean debugDestinations;
+    final boolean debugPathfinding;
+    final boolean debugMovement;
+    final int debugSampleTicks;
     final Set<Material> targetBlocks;
     final Set<Material> passageBlocks;
 
@@ -40,6 +44,10 @@ final class NPCSettings {
         int idleMaxTicks,
         double wanderChance,
         int wanderRadius,
+        boolean debugDestinations,
+        boolean debugPathfinding,
+        boolean debugMovement,
+        int debugSampleTicks,
         Set<Material> targetBlocks,
         Set<Material> passageBlocks
     ) {
@@ -54,6 +62,10 @@ final class NPCSettings {
         this.idleMaxTicks = Math.max(idleMinTicks, idleMaxTicks);
         this.wanderChance = wanderChance;
         this.wanderRadius = wanderRadius;
+        this.debugDestinations = debugDestinations;
+        this.debugPathfinding = debugPathfinding;
+        this.debugMovement = debugMovement;
+        this.debugSampleTicks = Math.max(20, debugSampleTicks);
         this.targetBlocks = targetBlocks;
         this.passageBlocks = passageBlocks;
     }
@@ -71,6 +83,7 @@ final class NPCSettings {
         int idleMaxTicks = seconds(getInt(npc, "idle-seconds.max", 9));
         double wanderChance = getDouble(npc, "wander-chance", 0.20);
         int wanderRadius = getInt(npc, "wander-radius", 18);
+        ConfigurationSection debug = npc == null ? null : npc.getConfigurationSection("debug");
         return new NPCSettings(
             appearancesPerPlayer,
             scanRadius,
@@ -83,6 +96,10 @@ final class NPCSettings {
             idleMaxTicks,
             wanderChance,
             wanderRadius,
+            getBoolean(debug, "destinations", false),
+            getBoolean(debug, "pathfinding", false),
+            getBoolean(debug, "movement", false),
+            getInt(debug, "sample-ticks", 100),
             materials(npc, "target-blocks", List.of(
                 "minecraft:crafting_table",
                 "minecraft:furnace",
@@ -131,21 +148,15 @@ final class NPCSettings {
     }
 
     double playerWalkSpeed(Doppelganger game) {
-        return playerWalkAcceleration(game) / (1.0 - playerWalkFriction());
-    }
-
-    double playerWalkAcceleration(Doppelganger game) {
         double averageAttribute = game.playerManager().getOnlinePlayers().stream()
             .map(GamePlayer -> GamePlayer.attributeValue(Attribute.MOVEMENT_SPEED))
             .filter(value -> value > 0.0)
             .mapToDouble(Double::doubleValue)
             .average()
             .orElse(DEFAULT_PLAYER_MOVEMENT_ATTRIBUTE);
-        return PLAYER_WALK_ACCELERATION_PER_TICK * (averageAttribute / DEFAULT_PLAYER_MOVEMENT_ATTRIBUTE) * walkSpeedMultiplier;
-    }
-
-    double playerWalkFriction() {
-        return 0.546;
+        return (VANILLA_WALK_BLOCKS_PER_SECOND / 20.0)
+            * (averageAttribute / DEFAULT_PLAYER_MOVEMENT_ATTRIBUTE)
+            * walkSpeedMultiplier;
     }
 
     private static Set<Material> materials(ConfigurationSection npc, String path, List<String> fallback, Material emptyFallback) {
@@ -181,6 +192,10 @@ final class NPCSettings {
 
     private static double getDouble(ConfigurationSection section, String path, double fallback) {
         return section == null ? fallback : section.getDouble(path, fallback);
+    }
+
+    private static boolean getBoolean(ConfigurationSection section, String path, boolean fallback) {
+        return section == null ? fallback : section.getBoolean(path, fallback);
     }
 
     private static int seconds(int seconds) {

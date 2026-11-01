@@ -5,8 +5,6 @@ import java.util.Collections;
 import java.util.List;
 
 import org.bukkit.Material;
-import org.bukkit.block.data.BlockData;
-import org.bukkit.block.data.Openable;
 
 import com.donutsforlife11.donutgame.api.map.GameBlock;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
@@ -31,10 +29,13 @@ final class NPCWorkstationRegistry {
     void discover() {
         destinations.clear();
         if (game.spawns().isEmpty()) {
+            debug("Skipping workstation discovery because the map has no spawn points.");
             return;
         }
 
         Bounds bounds = Bounds.around(game, settings);
+        int scannedBlocks = 0;
+        int targetBlocks = 0;
         for (int x = bounds.minX(); x <= bounds.maxX(); x++) {
             for (int z = bounds.minZ(); z <= bounds.maxZ(); z++) {
                 if (!game.world().isChunkLoaded(x, z)) {
@@ -42,14 +43,18 @@ final class NPCWorkstationRegistry {
                 }
                 for (int y = bounds.minY(); y <= bounds.maxY(); y++) {
                     GameLocation blockLocation = new GameLocation(game.world(), x, y, z);
+                    scannedBlocks++;
                     if (!settings.targetBlocks.contains(game.world().blockAt(blockLocation).type())) {
                         continue;
                     }
+                    targetBlocks++;
                     addStandableTargetsNear(blockLocation);
                 }
             }
         }
         game.log("Discovered " + destinations.size() + " NPC workstation stand spots.");
+        debug("Scanned " + scannedBlocks + " blocks, found " + targetBlocks + " workstation blocks, accepted "
+            + destinations.size() + " stand spots.");
     }
 
     List<NPCDestination> destinations() {
@@ -77,14 +82,33 @@ final class NPCWorkstationRegistry {
             if (!game.world().isChunkLoaded(x, z)) {
                 continue;
             }
-            for (int y = minY; y <= maxY; y++) {
-                if (NPCPathRules.isStandable(game, settings, x, y, z)) {
-                    choices.add(new NPCDestination(new GameLocation(game.world(), x + 0.5, y, z + 0.5), null));
+            int[] offsets = {0, 1, -1, 2, -2, 3, -3};
+            for (int offset : offsets) {
+                int y = origin.blockY() + offset;
+
+                if (y < minY || y > maxY) {
+                    continue;
+                }
+
+                if (NPCPathRules.isStandable(
+                        game, settings, x, y, z)) {
+
+                    choices.add(new NPCDestination(
+                        new GameLocation(
+                            game.world(),
+                            x + 0.5,
+                            y,
+                            z + 0.5
+                        ),
+                        null
+                    ));
+
                     break;
                 }
             }
         }
         if (choices.isEmpty()) {
+            debug("No random wander candidates near " + describe(origin) + "; falling back to workstation destinations.");
             return randomDestination();
         }
         Collections.shuffle(choices, game.random());
@@ -105,6 +129,19 @@ final class NPCWorkstationRegistry {
                 }
             }
         }
+    }
+
+    private void debug(String message) {
+        if (settings.debugDestinations) {
+            game.log("[npc:destinations] " + message);
+        }
+    }
+
+    private String describe(GameLocation location) {
+        if (location == null) {
+            return "null";
+        }
+        return location.blockX() + "," + location.blockY() + "," + location.blockZ();
     }
 
     record NPCDestination(GameLocation standAt, GameLocation lookAt) {
@@ -146,10 +183,8 @@ final class NPCWorkstationRegistry {
 
         static boolean isPassable(NPCSettings settings, GameBlock block) {
             Material type = block.type();
-            BlockData data = block.blockData();
-            return type.isAir()
-                || type == Material.WATER
-                || (settings.passageBlocks.contains(type) && data instanceof Openable);
+            org.bukkit.block.data.BlockData data = block.blockData();
+            return type.isAir() || (settings.passageBlocks.contains(type) && data instanceof org.bukkit.block.data.Openable);
         }
 
         static boolean isPassage(Doppelganger game, NPCSettings settings, int x, int y, int z) {
@@ -159,7 +194,10 @@ final class NPCWorkstationRegistry {
 
         private static boolean isGround(GameBlock block) {
             Material type = block.type();
-            return type.isSolid() && type != Material.CACTUS && type != Material.MAGMA_BLOCK;
+            org.bukkit.block.data.BlockData data = block.blockData();
+            return ((type.isSolid() && type != Material.CACTUS && type != Material.MAGMA_BLOCK)
+                || data instanceof org.bukkit.block.data.type.Snow snow && snow.getLayers() >= 5)
+                && type != Material.SWEET_BERRY_BUSH;
         }
     }
 }

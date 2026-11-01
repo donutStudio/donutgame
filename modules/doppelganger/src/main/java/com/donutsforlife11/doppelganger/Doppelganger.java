@@ -23,13 +23,27 @@ public class Doppelganger extends GameModule {
         this.players = new DoppelgangerPlayers(this);
         registerGameEventHandlers(players);
 
-        world().setWorldSpawn(world().getPoint(SPAWN));
-        for (GamePlayer player : playerManager().getPlayers()) {
-            player.teleport(world().worldSpawn());
-        }
+        GameLocation spawn = world().getPoint(SPAWN);
+        world().setWorldSpawn(spawn);
+
+        spawns.clear();
         spawns.addAll(world().getPoints(SPAWN));
+
+        for (GamePlayer player : playerManager().getPlayers()) {
+            player.teleport(randomSpawn());
+        }
+
         this.npcs = new DoppelgangerNPCs(this);
+
+        log("Doppelganger loaded. Found " + spawns.size() + " spawn points.");
+        log("Starting Doppelganger with " + playerManager().getPlayers().size() + " registered players.");
         npcs.start();
+    }
+
+    @Override
+    public void onStart() {
+        // log("Starting Doppelganger with " + playerManager().getPlayers().size() + " registered players.");
+        // npcs.start();
     }
 
     @Override

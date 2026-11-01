@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-import org.bukkit.entity.Mannequin;
 import org.bukkit.scheduler.BukkitTask;
 
 import com.donutsforlife11.donutgame.api.entity.GameEntity;
+import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.object.GameEntities;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 
@@ -22,6 +22,7 @@ final class DoppelgangerNPCs {
     private final NPCWorkstationRegistry workstations;
     private final List<GameEntity> entities = new ArrayList<>();
     private final List<NPCBehavior> behaviors = new ArrayList<>();
+    private final List<ResolvableProfile> profiles = new ArrayList<>();
     private BukkitTask tickTask;
 
     DoppelgangerNPCs(Doppelganger game) {
@@ -32,22 +33,103 @@ final class DoppelgangerNPCs {
 
     void start() {
         cleanup();
-        workstations.discover();
-        List<ResolvableProfile> profiles = profilesToSpawn();
-        List<com.donutsforlife11.donutgame.api.map.GameLocation> spawns = new ArrayList<>(game.spawns());
-        Collections.shuffle(spawns, game.random());
-        for (int index = 0; index < profiles.size(); index++) {
-            var spawn = spawns.isEmpty() ? game.world().worldSpawn() : spawns.get(index % spawns.size());
-            ResolvableProfile profile = profiles.get(index);
-            GameEntity entity = game.world().spawn(spawn, GameEntities.MANNEQUIN, spawned -> {
-                spawned.editEntity(Mannequin.class, mannequin -> configureMannequin(mannequin, profile));
-            });
-            entities.add(entity);
-            behaviors.add(new NPCBehavior(game, settings, workstations, entity));
+
+        List<ResolvableProfile> assignments = profilesToSpawn();
+
+        game.log("NPC startup: "
+            + assignments.size() + " mannequins requested.");
+
+        if (assignments.isEmpty()) {
+            game.log("No NPCs spawned: no player profiles available.");
+            return;
         }
-        tickTask = game.plugin().getServer().getScheduler().runTaskTimer(game.plugin(), this::tick, 1L, 1L);
-        game.log("Spawned " + entities.size() + " lightweight doppelganger NPCs.");
+
+        List<GameLocation> spawns = new ArrayList<>(game.spawns());
+
+        if (spawns.isEmpty()) {
+            spawns.add(game.world().worldSpawn());
+        }
+
+        Collections.shuffle(spawns, game.random());
+
+        int spawnedCount = 0;
+
+        for (int index = 0; index < assignments.size(); index++) {
+            ResolvableProfile profile = assignments.get(index);
+
+            GameLocation spawn = spawns.get(index % spawns.size());
+
+            try {
+                GameEntity entity = game.world().spawn(
+                    spawn,
+                    GameEntities.MANNEQUIN
+                );
+
+                if (entity == null) {
+                    game.log("NPC spawn returned null at index " + index);
+                    continue;
+                }
+
+                boolean configured = entity.editEntity(
+                    org.bukkit.entity.Mannequin.class,
+                    mannequin -> configureMannequin(mannequin, profile)
+                );
+
+                if (!configured) {
+                    game.log("Spawned entity is not a mannequin: "
+                        + entity.type());
+
+                    entity.remove();
+                    continue;
+                }
+
+                entities.add(entity);
+                profiles.add(profile);
+
+                behaviors.add(new NPCBehavior(
+                    game,
+                    settings,
+                    workstations,
+                    entity
+                ));
+
+                spawnedCount++;
+
+            } catch (Exception exception) {
+                game.logError(
+                    "Failed to spawn mannequin at index " + index,
+                    exception
+                );
+            }
+        }
+
+    if (spawnedCount == 0) {
+        game.log("NPC startup failed: no mannequins were created.");
+        return;
     }
+
+    try {
+        workstations.discover();
+    } catch (RuntimeException exception) {
+        game.logError(
+            "Workstation discovery failed; NPC wandering may be limited.",
+            exception
+        );
+    }
+
+    tickTask = game.plugin()
+        .getServer()
+        .getScheduler()
+        .runTaskTimer(
+            game.plugin(),
+            this::tick,
+            1L,
+            1L
+        );
+
+    game.log("Spawned " + spawnedCount
+        + " doppelganger townspeople.");
+}
 
     void cleanup() {
         if (tickTask != null) {
@@ -61,6 +143,7 @@ final class DoppelgangerNPCs {
         }
         entities.clear();
         behaviors.clear();
+        profiles.clear();
     }
 
     boolean owns(GameEntity entity) {
@@ -75,18 +158,42 @@ final class DoppelgangerNPCs {
         for (int index = entities.size() - 1; index >= 0; index--) {
             if (entities.get(index).uuid().equals(uuid)) {
                 entities.remove(index);
+                if (index < profiles.size()) {
+                    profiles.remove(index);
+                }
                 behaviors.remove(index);
             }
         }
     }
 
     private void tick() {
-        for (NPCBehavior behavior : List.copyOf(behaviors)) {
-            behavior.tick();
+        for (int index = behaviors.size() - 1; index >= 0; index--) {
+            NPCBehavior behavior = behaviors.get(index);
+
+            try {
+                behavior.tick();
+            } catch (RuntimeException | LinkageError error) {
+                game.logError("NPC behavior failed. Disabling AI for this NPC.", error);
+                behaviors.remove(index);
+            }
         }
     }
 
-    private void configureMannequin(Mannequin mannequin, ResolvableProfile profile) {
+    // private void removeFailedBehavior(int index, String message, Throwable throwable) {
+    //     game.logError(message, throwable);
+    //     behaviors.remove(index);
+    //     if (index < entities.size()) {
+    //         GameEntity entity = entities.remove(index);
+    //         if (!entity.isDead()) {
+    //             entity.remove();
+    //         }
+    //     }
+    //     if (index < profiles.size()) {
+    //         profiles.remove(index);
+    //     }
+    // }
+
+    private void configureMannequin(org.bukkit.entity.Mannequin mannequin, ResolvableProfile profile) {
         mannequin.setImmovable(false);
         mannequin.setInvulnerable(false);
         mannequin.setSilent(true);
@@ -103,25 +210,24 @@ final class DoppelgangerNPCs {
             .toList();
 
         int realPlayerCount = players.size();
-        int totalAppearances = Math.max(1, realPlayerCount) * settings.appearancesPerPlayer;
-        int npcCount = Math.max(1, totalAppearances - realPlayerCount);
+        int npcCount = realPlayerCount * Math.max(0, settings.appearancesPerPlayer - 1);
         if (players.isEmpty()) {
-            return Collections.nCopies(npcCount, Mannequin.defaultProfile());
+            game.log("No active players available for NPC profiles.");
+            return List.of();
         }
 
-        List<ResolvableProfile> realProfiles = players.stream()
+        List<ResolvableProfile> playerProfiles = players.stream()
             .map(this::resolvableProfile)
             .filter(profile -> profile != null)
             .toList();
-        if (realProfiles.isEmpty()) {
-            game.log("No live player profiles were available for NPC skins; skipping NPC spawn instead of using default skins.");
+        if (playerProfiles.isEmpty()) {
+            game.log("No player profiles were available for doppelganger NPC skins.");
             return List.of();
         }
 
         List<ResolvableProfile> assignments = new ArrayList<>();
-        int appearancesPerPlayer = Math.max(1, settings.appearancesPerPlayer);
-        for (ResolvableProfile profile : realProfiles) {
-            for (int count = 1; count < appearancesPerPlayer; count++) {
+        for (ResolvableProfile profile : playerProfiles) {
+            for (int copy = 1; copy < settings.appearancesPerPlayer; copy++) {
                 assignments.add(profile);
                 if (assignments.size() >= npcCount) {
                     break;
@@ -131,9 +237,10 @@ final class DoppelgangerNPCs {
                 break;
             }
         }
-        int index = 0;
+
+        int fillIndex = 0;
         while (assignments.size() < npcCount) {
-            assignments.add(realProfiles.get(index++ % realProfiles.size()));
+            assignments.add(playerProfiles.get(fillIndex++ % playerProfiles.size()));
         }
         Collections.shuffle(assignments, game.random());
         return assignments;

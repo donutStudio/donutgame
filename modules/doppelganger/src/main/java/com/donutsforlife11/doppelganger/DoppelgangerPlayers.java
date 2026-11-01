@@ -37,14 +37,24 @@ public class DoppelgangerPlayers {
     @GameEventHandler
     public void onNpcDeath(GameEvent<EntityDeathEvent> event) {
         GameEntity entity = event.getEntity();
-        if (entity == null || !entity.is(GameEntities.MANNEQUIN)) {
+
+        if (entity == null || game.npcs() == null) {
             return;
         }
-        npcs.remove(entity.uuid());
-        if (game.npcs() != null) {
-            game.npcs().remove(entity);
+
+        if (!game.npcs().owns(entity)) {
+            return;
         }
+
+        game.npcs().remove(entity);
+
         GameLocation location = event.getLocation();
-        game.world().setBlock(location, GameBlocks.PLAYER_HEAD);
+
+        if (location != null) {
+            game.world().setBlock(
+                location,
+                GameBlocks.PLAYER_HEAD
+            );
+        }
     }
 }
