@@ -102,13 +102,13 @@ public abstract class GameModule {
     public void beforeLoad() {
         String explicitMap = config.getString("map");
         if (explicitMap != null && !explicitMap.isBlank()) {
-            mapManager.setMap(explicitMap);
+            mapManager.load(explicitMap);
             return;
         }
 
         List<String> maps = config.getStringList("maps");
         if (!maps.isEmpty()) {
-            mapManager.setMap(maps.get(ThreadLocalRandom.current().nextInt(maps.size())));
+            mapManager.load(maps.get(ThreadLocalRandom.current().nextInt(maps.size())));
         }
     }
 
@@ -191,7 +191,7 @@ public abstract class GameModule {
             requireOneOf(ModuleLifecycleState.COUNTDOWN, ModuleLifecycleState.STARTED);
             setLifecycleState(ModuleLifecycleState.RELOADING);
             started = false;
-            return resetMap()
+            return mapManager.resetMap()
                 .thenApply(ignored -> {
                     return enterCountdown(this::onReload, "reload");
                 })
@@ -260,10 +260,6 @@ public abstract class GameModule {
 
     public BorderManager borderManager() {
         return borderManager;
-    }
-
-    protected final CompletableFuture<GameMap> resetMap() {
-        return mapManager.resetMap();
     }
 
     public final Map<String, GameWorld> worlds() {

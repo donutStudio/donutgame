@@ -5,7 +5,8 @@
 void beforeLoad() // Runs before onLoad() is called. If not overridden, this just defaults to placing a map according to the game's config
 void onLoad() // Runs after the game is loaded
 void onStart() // Runs when the game first starts
-void unload() // Unloads the game module
+protected CompletableFuture<ModuleUnloadResult> unload() // Unloads the game module
+void onReload() // Runs after the map resets when the module reloads
 void onUnload() // Runs when the game unloads
 GameData data() // Returns the module's data
 MapManager mapManager() // Returns the module's map manager
@@ -19,8 +20,6 @@ GameWorld world() // Returns this module's active world
 
 ## MAP SYSTEM
 
-Modules currently assume one active GameWorld. The code still keeps the internal shape needed to support multiple worlds later, but public module code should use `world()` or `mapManager().world()` for now.
-
 **MapManager**
 ```java
 GameMap mapFromId(String id) // Reads a map object from a registered map id without loading it as the active world
@@ -30,6 +29,8 @@ CompletableFuture<GameMap> place(String id, GameLocation location) // Places a c
 CompletableFuture<GameMap> place(String id, GameLocation location, MapRotation rotation) // Places a copy of a schematic-based map from an id into the world at a rotation, completes when loaded/ready
 CompletableFuture<GameMap> place(GameMap map, GameLocation location) // Similar to above but takes in a GameMap instead, completes when loaded/ready
 CompletableFuture<GameMap> place(GameMap map, GameLocation location, MapRotation rotation) // Similar to above but can specify a rotation too
+CompletableFuture<GameMap> resetMap() // Reloads a fresh copy of the current map
+CompletableFuture<GameMap> whenReady() // Returns the pending map load, or the current map if ready
 GameMap map() // Returns the current active map
 GameWorld world() // Returns the module's active world
 ```
@@ -78,11 +79,24 @@ Difficulty difficulty() // Returns the GameWorld's difficulty
 void setHungerEnabled(boolean enabled) // Sets whether or not the mechanic of hunger and saturation is enabled in the GameWorld
 boolean hungerEnabled() // Returns whether or not hunger is enabled
 // Block management (more may be added in future)
-CompletableFuture<Void> setBlock(GameLocation location, BlockSpec block) // Sets a block at a location, like /setblock
-CompletableFuture<Void> fillBlocks(GameRegion region, BlockSpec block) // Fills a region, like /fill
-CompletableFuture<Void> replaceBlocks(GameRegion region, BlockSpec from, BlockSpec to) // Fills a region but only replacing certain blocks
-// Entity management (more may be added in future)
-CompletableFuture<Void> summon(EntitySpec entity, GameLocation loc) // Summons an entity at a location
+void setBlock(GameLocation location, Material material) // Sets a block at a location
+void setBlock(GameLocation location, GameBlockType block) // Sets a block at a location
+void setBlock(GameLocation location, BlockData blockData) // Sets a block at a location
+GameBlock blockAt(GameLocation location) // Returns a block wrapper at a location
+void fill(GameRegion region, Material material) // Fills a region
+void fill(GameRegion region, GameBlockType block) // Fills a region
+void fill(GameRegion region, BlockData blockData) // Fills a region
+void replace(GameRegion region, Material from, Material to) // Replaces blocks with exactly matching block data
+void replace(GameRegion region, GameBlockType from, GameBlockType to) // Replaces blocks with exactly matching block data
+void replace(GameRegion region, BlockData from, BlockData to) // Replaces blocks with exactly matching block data
+// Entity management
+GameEntity spawn(GameLocation location, EntityType type) // Spawns an entity at a location
+GameEntity spawn(GameLocation location, GameEntityType type) // Similar to above but takes a generated entity type
+GameEntity spawn(GameLocation location, EntityType type, Consumer<? super GameEntity> configuration) // Spawns and configures an entity
+GameEntity spawn(GameLocation location, GameEntityType type, Consumer<? super GameEntity> configuration) // Similar to above but takes a generated entity type
+GameNpc newNpc(GameLocation location) // Spawns a new NPC at a location with a default profile/skin
+GameNpc newNpc(GameLocation location, PlayerProfile profile) // Spawns a new NPC but with a profile emulating that of a player
+GameNpc newNpc(GameLocation location, GamePlayer player) // Similar to above but automatically populates a profile based on a GamePlayer
 ```
 **GameWorldGamerules**
 ```java
@@ -107,11 +121,15 @@ double volume() // Returns sizeX * sizeY * sizeZ
 GameLocation() // Constructs new empty game location at 0, 0, 0 with pitch 0 and yaw 0
 GameLocation(double x, double y, double z) // Similar to above but with an x y and z position
 GameLocation(double x, double y, double z, double yaw, double pitch) // Similar to above but with a yaw and pitch
+GameLocation(GameWorld world, double x, double y, double z) // Creates a location in a world
+GameLocation(GameWorld world, double x, double y, double z, float yaw, float pitch) // Similar to above but with yaw and pitch
+GameWorld world() // Returns the location's world, or null if unbound
+GameLocation inWorld(GameWorld world) // Returns a copy bound to a world
 double x() // Returns x position
 double y() // Returns y position
 double z() // Returns z position
-double yaw() // Returns yaw
-double pitch() // Returns pitch
+float yaw() // Returns yaw
+float pitch() // Returns pitch
 int blockX() // Returns integer/block grid bound x position
 int blockY() // Returns integer/block grid bound y position
 int blockZ() // Returns integer/block grid bound z position
@@ -227,7 +245,7 @@ String label() // Returns the sidebar's label
 ```
 
 ## ENTITIES
-**GameItem / GameItemBase**
+**GameItem**
 ```java
 GameItem(Material material) // Wraps a new item of a material
 GameItem(ItemStack item) // Wraps a copy of a Bukkit item stack
@@ -236,16 +254,20 @@ static GameItem from(ItemStack item) // Wraps a Bukkit item stack, returning nul
 Material material() // Returns the item's material
 int amount() // Returns the item amount
 void setAmount(int amount) // Sets the item amount
-GameItem configure(Consumer<ItemStack> configuration) // Applies a low-level Bukkit configuration when needed
-boolean editMeta(Consumer<ItemMeta> editor) // Edits the item's metadata
+GameItem configure(Consumer<? super ItemStack> configuration) // Applies a low-level Bukkit configuration when needed
+boolean editMeta(Consumer<? super ItemMeta> editor) // Edits the item's metadata
 boolean isSimilar(GameItem other) // Checks whether two items are similar
-ItemStack bukkitItem() // Returns the wrapped Bukkit item stack for Paper/Bukkit interop
 ItemStack copyBukkitItem() // Returns a cloned Bukkit item stack
-// Common ItemStack wrappers are exposed on GameItemBase, including getType/setType, getAmount/setAmount,
-// getItemMeta/setItemMeta/editMeta, enchantment helpers, item flag helpers, and Paper data component methods
-// like getData/setData/hasData/unsetData/resetData/copyDataFrom/matchesWithoutData.
+GameItemType type() // Returns the item's type wrapper
+void setType(Material type) // Changes the item's material
+ItemMeta getItemMeta() // Returns the item's metadata
+boolean setItemMeta(ItemMeta itemMeta) // Sets the item's metadata
+<T> T getData(DataComponentType.Valued<T> type) // Reads a Paper data component
+<T> void setData(DataComponentType.Valued<T> type, T value) // Sets a Paper data component
+<T> void setData(DataComponentType.Valued<T> type, DataComponentBuilder<T> valueBuilder) // Sets a Paper data component using a builder
+void setData(DataComponentType.NonValued type) // Sets a Paper marker component
+void unsetData(DataComponentType type) // Removes a Paper data component
 ```
-
 **GameItemComponent / GameItemComponents**
 ```java
 record GameItemComponent<T>(NamespacedKey key, PersistentDataType<?, T> type)
@@ -253,20 +275,23 @@ GameItemComponents.SPECTATOR_MENU // Marks an item as opening the spectator tele
 GameItemComponents.INFINITE_BUILD // Replenishes placed blocks and defaults max stack size to 65 when no max-stack override exists
 GameItemComponents.TEAM_SYNC // Recolors the item to the holder's team, then removes itself from the item
 GameItemComponents.AUTO_IGNITE // Stores an auto-ignite fuse in ticks for explosive spawn/use or block-placement TNT behavior
+// These custom data methods are on GameItem
 T getData(GameItemComponent<T> component) // Reads custom plugin-owned item data from PDC
-T getDataOrDefault(GameItemComponent<T> component, T fallback) // Reads custom data with a fallback
-boolean hasData(GameItemComponent<T> component) // Checks if custom data is present
 void setData(GameItemComponent<T> component, T value) // Stores custom plugin-owned item data
 void removeData(GameItemComponent<?> component) // Removes custom plugin-owned item data
 ```
-
 **GameEntityBase**
 ```java
 // Most of these would have default implementations so not to make GameEntity and GamePlayer too big, but some that really really need overrides will have them
-Entity bukkitEntity() // Returns the underlying bukkit entity, hopefully the API will try to make needing the bukkit entity uncommon but its still an option for any case that MIGHT need it
 CompletableFuture<Boolean> teleport(GameLocation location) // Teleports this entity to a game location
+boolean teleportNow(GameLocation location) // Teleports this entity synchronously
+void remove() // Removes the entity
 GameLocation location() // Returns the entity's location
 GameWorld world() // Returns the entity's GameWorld
+void setRotation(float yaw, float pitch) // Immediately sets the NPC's rotation
+void setRotation(float yaw, float pitch, int ticks) // Sets the NPC's rotation over time
+void setRotationTowards(GameLocation location) // Immediately rotates the NPC immediately towards a location
+void setRotationTowards(GameLocation location, int ticks) // Rotates the NPC towards a location over time
 // Health and damage
 void setHealth(float health) // Sets the entity's health (clamped to its max health)
 void heal() // Heals the entity to its max health
@@ -277,7 +302,9 @@ float health() // Returns the entity's current health
 void kill() // Kills the entity (of course death behaves a bit different for players and entities though)
 boolean isDead() // Returns whether or not the entity is dead
 // Common entity config
-void setVelocity(Vectory velocity) // Sets the entity's velocity
+void swingMainHand() // Swings the mainhand of the entity if applicable, behaving similar to vanilla /swing
+void swingOffhand() // Swings the offhand of the entity if applicable, behaving similar to vanilla /swing
+void setVelocity(Vector velocity) // Sets the entity's velocity
 Vector velocity() // Returns the entity's velocity
 void setCustomName(Component name) // Sets a custom name for the entity
 void setCustomNameVisible(boolean visible) // Sets if the custom name is visible or not
@@ -314,26 +341,95 @@ void resetAttributeBase(Attribute attribute) // Resets the base value of that at
 double attributeBase(Attribute attribute) // Returns the value of that attribute's base on the entity
 void addModifier(Attribute attribute, AttributeModifier modifier) // Adds an attribute modifier
 void removeModifier(Attribute attribute, AttributeModifier modifier) // Removes an attribute modifier
-void attributeModifierValue(Attribute attribute, AttributeModifier modifier) // Gets the value of an attribute modifier
+double attributeModifierValue(Attribute attribute, AttributeModifier modifier) // Gets the value of an attribute modifier
 List<AttributeModifier> attributeModifiers(Attribute attribute) // Returns all modifiers present for that attribute
 double attributeValue(Attribute attribute) // Returns the calculated attribute value for this entity, including base and all modifiers present
 // Items (more may be added in future)
-void setItem(EquipmentSlot slot, ItemSpec item) // Sets an item in the specified slot like /item replace
+void setItem(EquipmentSlot slot, GameItemType item) // Sets an item in the specified slot like /item replace
 void setItem(EquipmentSlot slot, GameItem item) // Similar to above but takes in a GameItem
 void clearItems() // Clears all items in all slots of the entity (and inventory as well if its a player)
-void clearItems(ItemSpec item) // Similar to above but only clears instances of a certain ItemSpec (that of course with components will make it check for items to clear with even more specifity)
-void clearItems(GameItem item) // Similar to above but takes in a GameItem
+void clearItems(GameItem item) // Clears items similar to the given item
 GameItem getItem(EquipmentSlot slot) // Returns an item from an equipment slot
 ```
 **GameEntity** (implements GameEntityBase)
 ```java
 UUID uuid() // Returns the entity's UUID
 ```
+**GameNpc** (has all the same applicable methods as GameEntity and GameEntityBase)
+```java
+GameEntity entity() // Returns the underlying mannequin GameEntity (NPCs are by default). Creating a mannequin by default adjusts default fields of GameEntities to better suit NPC purposes (for example NPCs will be invulnerable by default)
+void setProfile(PlayerProfile profile) // Sets the entity's profile from a player profile
+PlayerProfile profile() // Returns the NPC's profile
+void setDescription(Component description) // Sets the mannequin's description
+void setDescriptionVisible(boolean visible) // Shows or hides the mannequins description, hidden by default
+Component description() // Returns the mannequin's description
+void setImmovable(boolean immovable) // Sets whether or not the NPC cannot physically move (does not affect interaction)
+boolean isImmovable() // Returns whether or not the NPC is immovable
+void setSneaking(boolean sneaking) // Sets whether or not the NPC is sneaking
+boolean isSneaking() // Returns whether or not the NPC is sneaking
+void setSprinting(boolean sprinting) // Sets whether or not the NPC is sprinting
+boolean isSprinting() // Returns whether or not the NPC is sprinting
+void jump() // Makes the NPC jump
+void onInteract(Consumer<GamePlayer> action) // Runs an action when the player interacts with (right clicks) the NPC
+void onAttack(Consumer<GamePlayer> action) // Runs an action when the player attacks/swings at the NPC (regardless of if any damage was actually taken/invulnerability)
+void setInteractionCooldown(int ticks) // Sets a cooldown for running actions on NPC interaction
+void setAttackCooldown(int ticks) // Similar to above but for attack interactions
+int interactionCooldown() // Returns interaction cooldown
+int attackCooldown() // Returns attack cooldown
+GameNpcController controller() // Returns this NPC's controller
+```
+**GameNpcController**
+```java
+// Every call to a navigate function like moveTo or follow overwrites previous ongoing navigation attempts, navigation insta fails if the npc is immovable
+void moveTo(GameLocation location) // Makes the NPC attempt to walk/sprint (if its sprinting) directly towards the location's direction until it reaches it. For navigation assume speed to be based on the movement speed attribute of the NPC, which will be tuned by default to match players exactly, and the exact way the NPCs move and the physics should mimic that of a real player exactly
+void moveAlong(List<GameLocation> locations) // Similar to above but makes it move along an ordered list of paths, completing navigation attempt upon finishing the path
+void follow(Supplier<GameLocation> location) // Makes the NPC continuously attempt to move towards a location, even after it's reached it- like if it is at the supplied location the NPC is idle, but if that location changes it will automatically continue pursuing it, recalculating paths when necessary. Navigation attempts complete once the NPC arrives at its target, and new attempts start once the target is a sufficient distance based on arrival distance
+void follow(GameEntityBase entity) // Similar to above but takes in an entity's location instead of directly supplying a location
+void setArrivalDistance(double range) // Sets a minimum distance from a target for an NPC to consider itself having arrived. This also affects how far the target needs to be to start a new navigation attempt for following behaviour
+void setNavigationRange(double range) // Sets a maximum distance from a follow target past which the NPC will not navigate to the the target
+double arrivalDistance() // Returns the arrival distance
+double navigationRange() // Returns the navigation range
+void cancelNavigation() // Cancels current navigation attempt, including follows, without reporting it as a failure
+void pause() // Pauses the NPC's navigation instantaneously, even pausing navigation timeouts
+void resume() // Resumes the NPC's navigation, including any ongoing attempts that were happening before it was paused
+boolean isPaused() // Returns whether or not navigation is paused
+void setNavigationTimeout(int ticks) // Sets the time it takes for an NPC to give up on its navigation attempt if it cannot reach its target and gives up. Setting to -1 disables the timeout
+int navigationTimeout() // Returns the NPC's current navigation timeout
+boolean isNavigating() // Returns whether or not the NPC is undergoing an active navigation attempt
+GameLocation navigationTarget() // Returns the current navigation target
+void onNavigationSuccess(Consumer<GameNpc> action) // Runs when a navigation attempt successfully completes
+void onNavigationFail(Consumer<GameNpc> action) // Runs when a navigation attempt fails or times out
+void setVerticalTolerance(double height) // Sets tolerance of NPC for verticality in its current navigation path- the height is how high it will attempt to vertically move, up say things like stairs or jumping up blocks. Defaults to 1.0, meaning that the maximum height of blocks it will try to vertically traverse (like through jumping) over when navigating is 1 block high- so if its 1.5 blocks high it won't try to jump over it. Setting to zero will essentially disable vertical navigation attempts. Not just jumping every time, but rather taking into account the geometry of the vertical obstructor on its path
+double verticalTolerance() // Returns vertical tolerance
+// AI pathfinding
+List<GameLocation> findPath(GameLocation location) // Calculates and returns a traversable list of game locations along a path to a location, avoiding obstacles and blocks it can't stand on/be over, without actually moving the NPC (the output of this can be used to pass into moveAlong). This also takes vertical tolerance into account. Obstacles could have some default values under the hood
+void pathfindTo(GameLocation location) // Similar to above but instead of just returning a list of positions without moving it, it moves it to the specified location like moveTo but using a calculated path directly
+void pathfindFollowing(Supplier<GameLocation> location) // Similar to above where it uses AI pathfinding but is analoguous to follow instead of moveTo
+void pathfindFollowing(GameEntityBase entity) // Similar to above but analoguous to the entity overload for follow function
+PathfindSettings pathfindSettings() // Returns the NPC's pathfinding settings
+```
+**PathfindSettings**
+```java
+void setRadius(double radius) // Sets the max radius for the below AI pathfinding functions (default 32)
+double radius() // Returns the pathfinding radius
+void addCrossableBlocks(GameBlockType... blocks) // Explicitly adds certain blocks that are not treated as obstacles (won't throw if something is already on the list, assume similar behaviour for others)
+void addCrossableBlocks(Collection<GameBlockType> blocks) // Similar to above but with a data structure
+void removeCrossableBlocks(GameBlockType... blocks) // Explictly removes blocks that should not be treated as obstacles from crossable blocks list
+void removeCrossableBlocks(Collection<GameBlockType> blocks) // Similar to above but with a data structure
+void addWalkableBlocks(GameBlockType... blocks) // Explicitly adds certain blocks that are considered able to be safely stood on or walked over by the NPC (by default the whitelist would be most blocks except stuff like air, lava, etc)
+void addWalkableBlocks(Collection<GameBlockType> blocks) // Similar to above but with a data structure
+void removeWalkableBlocks(GameBlockType... blocks) // Explicitly removes blocks that are considered unable to be safely stood on or walked over by the NPC from walkable blocks
+void removeWalkableBlocks(Collection<GameBlockType> blocks) // Similar to above but with a data structure
+Collection<GameBlockType> crossableBlocks() // Returns list of WHITELISTED crossable blocks (including blocks crossable by default)
+Collection<GameBlockType> walkableBlocks() // Returns list of WHITELISTED walkable blocks (including blocks walkable by default)
+```
 
 ## PLAYER SYSTEM
 **PlayerManager**
 ```java
-Collection<GamePlayer> getPlayers() // Returns all GamePlayers owned by the game
+GamePlayer getPlayer(UUID uuid) // Returns an owned player by UUID, or null
+Collection<GamePlayer> getPlayers() // Returns all GamePlayers owned by the game, including offline players
+Collection<GamePlayer> getOnlinePlayers() // Returns only online GamePlayers owned by the game
 Collection<GamePlayer> getSpectators() // Returns all spectating GamePlayers owned by the game
 Collection<GamePlayer> getNonSpectators() // Returns all non spectating GamePlayers owned by the game
 ```
@@ -357,6 +453,7 @@ void setSpectatableTeams(Collection<GameTeam> teams) // Sets teams this player c
 void setSpectatableTeams(Supplier<Collection<GameTeam>> teams) // Similar to above but supplies the teams directly
 // General methods
 void setSpawnPoint(GameLocation location) // Sets a player's spawnpoint at a specified game location
+PlayerProfile playerProfile() // Returns the player's profile, the same thing that would be returned by getPlayerProfile on the underlying bukkit player
 GameLocation spawnPoint() // Returns the player's spawnpoint
 GameTeam getTeam() // Returns the player's team (or null if they aren't in one)
 void setGameMode(GameMode gameMode) // Sets the player's gamemode
@@ -369,7 +466,7 @@ void setArrowsInBody(int arrows) // Sets the arrows in a player's body
 int arrowsInBody() // Returns the arrows in a player's body
 void reset() // Resets the player to the default state, including gamemode, inventory, health, attributes, effects, arrows in body, fire ticks, everything
 // Items (more may be added in future)
-void giveItem(ItemSpec item) // Gives an item to a player
+void giveItem(GameItemType item) // Gives an item to a player
 void giveItem(GameItem item) // Similar to above but takes in a GameItem
 List<GameItem> inventory() // Returns a player's inventory
 List<GameItem> hotbar() // Kinda like above but constrained to only the hotbar
@@ -399,7 +496,7 @@ GameTeam setColor(NamedTextColor color) // Sets the team's color
 NamedTextColor color() // Returns the team's color
 GameTeam setDisplayName(Component displayName) // Sets the team's display name
 Component displayName() // Returns the team's display name
-GameTeam setItem(ItemSpec item) // Sets the team's representative item
+GameTeam setItem(GameItemType item) // Sets the team's representative item
 GameTeam setItem(GameItem item) // Similar to above but takes in a GameItem
 GameItem item() // Returns the team's representative item
 GameTeam setTeamGlow(boolean glow) // Sets whether or not there is team glow (as in being able to see your teammates glowing in your team color)

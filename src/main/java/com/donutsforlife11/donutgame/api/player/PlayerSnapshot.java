@@ -41,6 +41,8 @@ final class PlayerSnapshot {
     boolean canPickupItems = true;
     boolean allowFlight;
     boolean flying;
+    float flySpeed = 0.1f;
+    float walkSpeed = 0.2f;
     private long lastTimedUpdateMillis = System.currentTimeMillis();
 
     static PlayerSnapshot empty() {
@@ -78,6 +80,8 @@ final class PlayerSnapshot {
         canPickupItems = player.getCanPickupItems();
         allowFlight = player.getAllowFlight();
         flying = player.isFlying();
+        flySpeed = player.getFlySpeed();
+        walkSpeed = player.getWalkSpeed();
         touchTimedValues();
     }
 
@@ -99,6 +103,8 @@ final class PlayerSnapshot {
         boolean effectiveAllowFlight = allowsFlight();
         player.setAllowFlight(effectiveAllowFlight);
         player.setFlying(effectiveAllowFlight && flying);
+        player.setFlySpeed(flySpeed);
+        player.setWalkSpeed(walkSpeed);
         player.setFoodLevel(foodLevel);
         player.setSaturation(saturation);
         player.setArrowsInBody(arrowsInBody);
@@ -147,6 +153,8 @@ final class PlayerSnapshot {
         gameMode = gameMode == GameMode.SPECTATOR ? GameMode.SURVIVAL : gameMode;
         allowFlight = gameMode == GameMode.CREATIVE;
         flying = false;
+        flySpeed = 0.1f;
+        walkSpeed = 0.2f;
     }
 
     void clearSpectatorProjection() {

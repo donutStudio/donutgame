@@ -43,14 +43,6 @@ public class MapManager {
         return future;
     }
 
-    public CompletableFuture<GameMap> setMap(String mapId) {
-        return load(mapId);
-    }
-
-    public CompletableFuture<GameMap> setMap(GameMap map) {
-        return load(map);
-    }
-
     public CompletableFuture<GameMap> resetMap() {
         GameMap map = currentMap;
         if (map == null) {
@@ -112,7 +104,7 @@ public class MapManager {
         }
         GameMap map = currentMap;
         return map == null
-            ? CompletableFuture.failedFuture(new IllegalStateException("Module did not set a map in beforeLoad(). Configure 'map', configure 'maps', or call mapManager().setMap(...)."))
+            ? CompletableFuture.failedFuture(new IllegalStateException("Module did not set a map in beforeLoad(). Configure 'map', configure 'maps', or call mapManager().load(...)."))
             : CompletableFuture.completedFuture(map);
     }
 

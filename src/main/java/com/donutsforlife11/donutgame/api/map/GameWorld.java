@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 import org.bukkit.Difficulty;
@@ -75,17 +76,17 @@ public class GameWorld {
 
     public void setBlock(GameLocation location, Material material) {
         requireLocation(location);
-        toBukkit(location).getBlock().setType(requireMaterial(material), false);
+        toBukkit(location).getBlock().setType(Objects.requireNonNull(material, "material"), false);
     }
 
     public void setBlock(GameLocation location, GameBlockType block) {
-        requireBlock(block);
+        Objects.requireNonNull(block, "block");
         setBlock(location, block.material());
     }
 
     public void setBlock(GameLocation location, BlockData blockData) {
         requireLocation(location);
-        toBukkit(location).getBlock().setBlockData(requireBlockData(blockData), false);
+        toBukkit(location).getBlock().setBlockData(Objects.requireNonNull(blockData, "blockData").clone(), false);
     }
 
     public GameBlock blockAt(GameLocation location) {
@@ -95,17 +96,17 @@ public class GameWorld {
     }
 
     public void fill(GameRegion region, Material material) {
-        fill(region, requireMaterial(material).createBlockData());
+        fill(region, Objects.requireNonNull(material, "material").createBlockData());
     }
 
     public void fill(GameRegion region, GameBlockType block) {
-        requireBlock(block);
+        Objects.requireNonNull(block, "block");
         fill(region, block.createBlockData());
     }
 
     public void fill(GameRegion region, BlockData blockData) {
         RegionBounds bounds = requireEditableRegion(region);
-        BlockData data = requireBlockData(blockData);
+        BlockData data = Objects.requireNonNull(blockData, "blockData").clone();
         World world = requireWorld();
         for (int x = bounds.minX(); x <= bounds.maxX(); x++) {
             for (int y = bounds.minY(); y <= bounds.maxY(); y++) {
@@ -117,19 +118,19 @@ public class GameWorld {
     }
 
     public void replace(GameRegion region, Material from, Material to) {
-        replace(region, requireMaterial(from).createBlockData(), requireMaterial(to).createBlockData());
+        replace(region, Objects.requireNonNull(from, "from").createBlockData(), Objects.requireNonNull(to, "to").createBlockData());
     }
 
     public void replace(GameRegion region, GameBlockType from, GameBlockType to) {
-        requireBlock(from);
-        requireBlock(to);
+        Objects.requireNonNull(from, "from");
+        Objects.requireNonNull(to, "to");
         replace(region, from.createBlockData(), to.createBlockData());
     }
 
     public void replace(GameRegion region, BlockData from, BlockData to) {
         RegionBounds bounds = requireEditableRegion(region);
-        BlockData fromData = requireBlockData(from);
-        BlockData toData = requireBlockData(to);
+        BlockData fromData = Objects.requireNonNull(from, "from").clone();
+        BlockData toData = Objects.requireNonNull(to, "to").clone();
         World world = requireWorld();
         for (int x = bounds.minX(); x <= bounds.maxX(); x++) {
             for (int y = bounds.minY(); y <= bounds.maxY(); y++) {
@@ -145,7 +146,7 @@ public class GameWorld {
 
     public GameEntity spawn(GameLocation location, EntityType type) {
         requireLocation(location);
-        EntityType entityType = requireEntityType(type);
+        EntityType entityType = Objects.requireNonNull(type, "type");
         Entity bukkitEntity = requireWorld().spawnEntity(toBukkit(location), entityType);
         return GameEntityHandle.create(this, generation, bukkitEntity);
     }
@@ -159,7 +160,7 @@ public class GameWorld {
     }
 
     public GameEntity spawn(GameLocation location, GameEntityType type) {
-        requireEntity(type);
+        Objects.requireNonNull(type, "type");
         return spawn(location, type.entityType());
     }
 
@@ -169,14 +170,6 @@ public class GameWorld {
             configuration.accept(entity);
         }
         return entity;
-    }
-
-    public GameEntity summon(GameLocation location, EntityType type) {
-        return spawn(location, type);
-    }
-
-    public GameEntity summon(GameLocation location, GameEntityType type) {
-        return spawn(location, type);
     }
 
     public void addPoint(String name, GameLocation location) {
@@ -423,39 +416,6 @@ public class GameWorld {
             );
         }
         return bounds;
-    }
-
-    private void requireBlock(GameBlockType block) {
-        if (block == null) {
-            throw new IllegalArgumentException("block cannot be null");
-        }
-    }
-
-    private Material requireMaterial(Material material) {
-        if (material == null) {
-            throw new IllegalArgumentException("material cannot be null");
-        }
-        return material;
-    }
-
-    private BlockData requireBlockData(BlockData blockData) {
-        if (blockData == null) {
-            throw new IllegalArgumentException("blockData cannot be null");
-        }
-        return blockData.clone();
-    }
-
-    private void requireEntity(GameEntityType entity) {
-        if (entity == null) {
-            throw new IllegalArgumentException("entity cannot be null");
-        }
-    }
-
-    private EntityType requireEntityType(EntityType entity) {
-        if (entity == null) {
-            throw new IllegalArgumentException("entity cannot be null");
-        }
-        return entity;
     }
 
     private void requireName(String name) {

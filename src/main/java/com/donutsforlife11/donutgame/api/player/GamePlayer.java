@@ -373,10 +373,6 @@ public class GamePlayer implements GameEntityBase {
         return location == null ? null : GameLocationHandle.create(world(), location);
     }
 
-    public void give(GameItemType item) {
-        giveItem(item);
-    }
-
     public void giveItem(GameItemType item) {
         if (item == null) {
             return;
@@ -751,7 +747,7 @@ public class GamePlayer implements GameEntityBase {
         pendingDeathSpectatorLocation = null;
         closeSpectatorSession(player);
         resetPlayingStateForGame();
-        clearSpectatorProjectionFromPlayingState();
+        playingState.clearSpectatorProjection();
         player.setCollidable(world().playerCollisionsEnabled());
         state = PlayerState.ONLINE;
         World world = player.getWorld();
@@ -847,7 +843,7 @@ public class GamePlayer implements GameEntityBase {
     void clearSpectatorStateAfterWorldExit(Player player) {
         pendingDeathSpectatorLocation = null;
         closeSpectatorSession(player);
-        clearSpectatorProjectionFromPlayingState();
+        playingState.clearSpectatorProjection();
         clearPhysicalSpectatorProjection(player);
     }
 
@@ -858,12 +854,12 @@ public class GamePlayer implements GameEntityBase {
             return;
         }
         pendingDeathSpectatorLocation = null;
-        clearSpectatorProjectionFromPlayingState();
+        playingState.clearSpectatorProjection();
         GameLocation target = location == null ? spawnPoint() : location;
         if (target != null) {
             setSpawnPoint(target);
         }
-        revivePlayingState(maxHealth());
+        playingState.restoreAliveDefaults(maxHealth());
         exitSpectator(target);
         player = attachedPlayer();
         if (player != null) {
@@ -945,7 +941,7 @@ public class GamePlayer implements GameEntityBase {
         String before = player == null ? null : describePhysicalState(player);
         pendingDeathSpectatorLocation = null;
         closeSpectatorSession(player);
-        clearSpectatorProjectionFromPlayingState();
+        playingState.clearSpectatorProjection();
 
         if (player != null) {
             if (player.isDead()) {
@@ -1010,10 +1006,6 @@ public class GamePlayer implements GameEntityBase {
         );
     }
 
-    private void revivePlayingState(double maxHealth) {
-        playingState.restoreAliveDefaults(maxHealth);
-    }
-
     private void resetPlayingStateForGame() {
         playingState.reset(GameMode.SURVIVAL);
         playingState.gameMode = GameMode.ADVENTURE;
@@ -1027,7 +1019,7 @@ public class GamePlayer implements GameEntityBase {
         String before = player == null ? null : describePhysicalState(player);
         pendingDeathSpectatorLocation = null;
         closeSpectatorSession(player);
-        clearSpectatorProjectionFromPlayingState();
+        playingState.clearSpectatorProjection();
         if (player == null) {
             return;
         }
@@ -1058,10 +1050,6 @@ public class GamePlayer implements GameEntityBase {
 
     private void capturePlayingStateWithoutSpectatorProjection(Player player) {
         capturePlayingState(player);
-        clearSpectatorProjectionFromPlayingState();
-    }
-
-    private void clearSpectatorProjectionFromPlayingState() {
         playingState.clearSpectatorProjection();
     }
 

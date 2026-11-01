@@ -162,7 +162,7 @@ public class PlayerWorldStateService implements Listener {
         player.setCanPickupItems(true);
         player.setAllowFlight(false);
         player.setFlying(false);
-        player.setFlySpeed(0.05f);
+        player.setFlySpeed(0.1f);
         player.setWalkSpeed(0.2f);
         player.setSneaking(false);
         player.setSprinting(false);

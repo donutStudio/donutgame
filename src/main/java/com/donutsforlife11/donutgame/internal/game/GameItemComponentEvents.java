@@ -11,8 +11,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
-import org.bukkit.damage.DamageSource;
-import org.bukkit.damage.DamageType;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Creeper;
@@ -20,7 +18,6 @@ import org.bukkit.entity.Egg;
 import org.bukkit.entity.EnderCrystal;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
-import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.entity.Snowball;
@@ -32,7 +29,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
-import org.bukkit.event.entity.ProjectileHitEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.entity.EntitySpawnEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -60,9 +57,9 @@ import com.donutsforlife11.donutgame.api.team.GameTeam;
 
 public class GameItemComponentEvents implements Listener {
     private static final String VANILLA_PROJECTILE_KEY = "vanilla_projectile";
-    private static final Map<Class<? extends Projectile>, SpecialProjectile> SPECIAL_PROJECTILES = Map.of(
-        Snowball.class, new SpecialProjectile(0.33, DamageType.ARROW),
-        Egg.class, new SpecialProjectile(0.0001, DamageType.ARROW)
+    private static final Map<Class<? extends Projectile>, Double> SPECIAL_PROJECTILES = Map.of(
+        Snowball.class, 0.33,
+        Egg.class, 0.0001
     );
 
     private final ModuleService moduleService;
@@ -110,7 +107,7 @@ public class GameItemComponentEvents implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onPlayerInteract(PlayerInteractEvent event) {
-        if (event.getHand() == null || !isUseAction(event.getAction())) {
+        if (event.getHand() == null || (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK)) {
             return;
         }
         GamePlayer player = gamePlayer(event.getPlayer());
@@ -131,7 +128,7 @@ public class GameItemComponentEvents implements Listener {
         }
         int fuse = GameItemComponents.autoIgniteFuse(item);
         EntityType entityType = spawnType(item.getType());
-        if (fuse <= 0 || entityType == null || !canAutoIgnite(entityType)) {
+        if (fuse <= 0 || entityType == null || (entityType != EntityType.CREEPER && entityType != EntityType.TNT && entityType != EntityType.END_CRYSTAL)) {
             return;
         }
         pendingAutoIgnites.put(player.uuid(), new PendingAutoIgnite(player.uuid(), entityType, fuse));
@@ -152,27 +149,21 @@ public class GameItemComponentEvents implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onProjectileHit(ProjectileHitEvent event) {
-        Projectile projectile = event.getEntity();
-        SpecialProjectile special = specialProjectile(projectile);
-        if (special == null) {
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onProjectileDamage(EntityDamageByEntityEvent event) {
+        if (!(event.getDamager() instanceof Projectile projectile)
+            || projectile.getPersistentDataContainer().has(vanillaProjectileKey, PersistentDataType.BYTE)
+            || !(projectile.getShooter() instanceof Player player) || gamePlayer(player) == null) {
             return;
         }
-        if (isVanillaProjectile(projectile)) {
-            return;
+        // Modify the native hit rather than nesting another damage call inside impact.
+        // Keep vanilla damage when it is already higher (for example snowballs on blazes).
+        for (Map.Entry<Class<? extends Projectile>, Double> entry : SPECIAL_PROJECTILES.entrySet()) {
+            if (entry.getKey().isInstance(projectile)) {
+                event.setDamage(Math.max(event.getDamage(), entry.getValue()));
+                break;
+            }
         }
-        if (!(projectile.getShooter() instanceof Player player)) {
-            return;
-        }
-        if (!(event.getHitEntity() instanceof LivingEntity target)) {
-            return;
-        }
-        if (gamePlayer(player) == null) {
-            return;
-        }
-
-        target.damage(special.damage(), projectileDamageSource(projectile, player, special.damageType()));
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -300,13 +291,21 @@ public class GameItemComponentEvents implements Listener {
             return;
         }
         PlayerInventory inventory = player.getInventory();
+        boolean changed = false;
         for (int index = 0; index < inventory.getSize(); index++) {
             ItemStack item = inventory.getItem(index);
             if (item != null) {
-                inventory.setItem(index, GameItemComponents.normalize(gamePlayer, item));
+                ItemStack normalized = GameItemComponents.normalize(gamePlayer, item.clone());
+                if (!item.equals(normalized)) {
+                    inventory.setItem(index, normalized);
+                    changed = true;
+                }
             }
         }
-        player.updateInventory();
+        // Full inventory resends can interrupt held-use weapons and consumables.
+        if (changed) {
+            player.updateInventory();
+        }
     }
 
     private void scheduleInfiniteUseReplenish(Player player, EquipmentSlot hand, ItemStack usedItem) {
@@ -480,14 +479,6 @@ public class GameItemComponentEvents implements Listener {
         }
     }
 
-    private boolean canAutoIgnite(EntityType entityType) {
-        return entityType == EntityType.CREEPER || entityType == EntityType.TNT || entityType == EntityType.END_CRYSTAL;
-    }
-
-    private boolean isUseAction(Action action) {
-        return action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK;
-    }
-
     private ItemStack launchedProjectileItem(Player player, Projectile projectile) {
         Material material = projectile instanceof Snowball ? Material.SNOWBALL : projectile instanceof Egg ? Material.EGG : null;
         if (material == null) {
@@ -499,28 +490,6 @@ public class GameItemComponentEvents implements Listener {
         }
         ItemStack offHand = player.getInventory().getItemInOffHand();
         return offHand.getType() == material ? offHand : null;
-    }
-
-    private boolean isVanillaProjectile(Projectile projectile) {
-        return projectile.getPersistentDataContainer().has(vanillaProjectileKey, PersistentDataType.BYTE);
-    }
-
-    private SpecialProjectile specialProjectile(Projectile projectile) {
-        for (Map.Entry<Class<? extends Projectile>, SpecialProjectile> entry : SPECIAL_PROJECTILES.entrySet()) {
-            if (entry.getKey().isInstance(projectile)) {
-                return entry.getValue();
-            }
-        }
-        return null;
-    }
-
-    private DamageSource projectileDamageSource(Projectile projectile, Player shooter, DamageType damageType) {
-        DamageSource.Builder builder = DamageSource.builder(damageType)
-            .withDirectEntity(projectile);
-        if (shooter != null) {
-            builder.withCausingEntity(shooter);
-        }
-        return builder.build();
     }
 
     private GamePlayer gamePlayer(Player player) {
@@ -537,9 +506,6 @@ public class GameItemComponentEvents implements Listener {
     }
 
     private record PendingAutoIgnite(UUID playerId, EntityType entityType, int fuse) {
-    }
-
-    private record SpecialProjectile(double damage, DamageType damageType) {
     }
 
     private record BlockKey(UUID worldId, int x, int y, int z) {
