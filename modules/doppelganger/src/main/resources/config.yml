@@ -4,8 +4,8 @@ name: Doppelganger
 maps:
   - orange_hollows
 npc:
-  appearances-per-player: 3
-  target-blocks:
+  npc_per_player: 3
+  target_blocks:
     - minecraft:crafting_table
     - minecraft:furnace
     - minecraft:blast_furnace
@@ -13,7 +13,7 @@ npc:
     - minecraft:barrel
     - minecraft:lectern
     - minecraft:composter
-  passage-blocks:
+  passage_blocks:
     - minecraft:oak_door
     - minecraft:spruce_door
     - minecraft:birch_door
@@ -47,19 +47,8 @@ npc:
     - minecraft:bamboo_trapdoor
     - minecraft:crimson_trapdoor
     - minecraft:warped_trapdoor
-  scan-radius: 32
-  scan-y-below: 5
-  scan-y-above: 6
-  walk-speed-multiplier: 1.0
-  idle-seconds:
-    min: 3
-    max: 9
-  wander-chance: 0.20
-  wander-radius: 12
-  max-path-distance: 32
-  max-expanded-nodes: 1200
-  debug:
-    destinations: true
-    pathfinding: true
-    movement: true
-    sample-ticks: 100
+  idle_chance: 0.15
+  min_idle_time: 3
+  max_idle_time: 3
+  wander_chance: 0.20
+  wander_radius: 12

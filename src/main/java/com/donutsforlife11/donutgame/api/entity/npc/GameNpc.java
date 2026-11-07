@@ -49,7 +49,7 @@ public final class GameNpc extends GameEntity {
         mannequin.setRemoveWhenFarAway(false);
         mannequin.setImmovable(false);
         mannequin.setDescription(null);
-        mannequin.getAttribute(Attribute.MOVEMENT_SPEED).setBaseValue(0.1);
+        mannequin.getAttribute(Attribute.MOVEMENT_SPEED).setBaseValue(0.10000000149011612d);
         mannequin.getAttribute(Attribute.STEP_HEIGHT).setBaseValue(0.6);
         if (mannequin.getAttribute(Attribute.SNEAKING_SPEED) == null) {
             mannequin.registerAttribute(Attribute.SNEAKING_SPEED);
