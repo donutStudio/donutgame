@@ -6,6 +6,7 @@ import java.util.function.Predicate;
 
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Entity;
 import org.bukkit.event.Cancellable;
 import org.bukkit.event.Event;
 import org.bukkit.event.block.BlockEvent;
@@ -21,6 +22,8 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 
 import com.donutsforlife11.donutgame.api.entity.GameEntityBase;
+import com.donutsforlife11.donutgame.api.entity.GameEntityHandle;
+import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.map.GameBlock;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameLocationHandle;
@@ -28,7 +31,7 @@ import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
 /** Scoped event view. Use it during its handler; unsupported properties throw. */
-public final class GameEvent<E extends Event> {
+public final class GameEvent<E extends Event> extends PaperEventMethods {
     private final E event;
     private final GameModule module;
     private boolean open = true;
@@ -60,7 +63,7 @@ public final class GameEvent<E extends Event> {
     }
 
     public GameEntityBase getEntity() {
-        return GameEventRegistrar.wrapEntity(module, require(EntityEvent.class).getEntity());
+        return wrapEntity(require(EntityEvent.class).getEntity());
     }
 
     public GamePlayer getKiller() {
@@ -74,11 +77,11 @@ public final class GameEvent<E extends Event> {
     }
 
     public GameBlock getBlock() {
-        return wrap(require(BlockEvent.class).getBlock());
+        return wrapBlock(require(BlockEvent.class).getBlock());
     }
 
     public GameBlock getBlockPlaced() {
-        return wrap(require(BlockPlaceEvent.class).getBlockPlaced());
+        return wrapBlock(require(BlockPlaceEvent.class).getBlockPlaced());
     }
 
     public GameLocation getFrom() {
@@ -129,7 +132,7 @@ public final class GameEvent<E extends Event> {
         if (blocks.stream().anyMatch(block -> !GameEventRegistrar.owns(module, block.getWorld()))) {
             throw new IllegalStateException("Explosion contains blocks from another world.");
         }
-        blocks.removeIf(block -> predicate.test(wrap(block)));
+        blocks.removeIf(block -> predicate.test(wrapBlock(block)));
     }
 
     public void setSpectatorLocation(GameLocation location) {
@@ -140,11 +143,23 @@ public final class GameEvent<E extends Event> {
         require(GamePlayerLateJoinEvent.class).setJoinAsSpectator(spectator);
     }
 
-    private GameBlock wrap(Block block) {
-        return module.world().blockAt(GameLocationHandle.create(module.world(), block.getLocation()));
+    @Override
+    GameBlock wrapBlock(Block block) {
+        return block == null ? null : module.world().blockAt(GameLocationHandle.create(module.world(), block.getLocation()));
     }
 
-    private <T> T require(Class<T> type) {
+    @Override
+    GameEntityBase wrapEntity(Entity entity) {
+        return GameEntityHandle.wrap(module.world(), entity);
+    }
+
+    @Override
+    GameWorld scopedWorld() {
+        return module.world();
+    }
+
+    @Override
+    <T> T require(Class<T> type) {
         checkOpen();
         if (!type.isInstance(event)) {
             throw unsupported(type);

@@ -3,6 +3,7 @@ package com.donutsforlife11.doppelganger;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.bukkit.attribute.Attribute;
 import org.bukkit.event.entity.EntityDeathEvent;
 
 import com.donutsforlife11.donutgame.api.entity.npc.GameNpc;
@@ -24,6 +25,9 @@ public class DoppelgangerNpcManager {
         DoppelgangerNpc npc = new DoppelgangerNpc(this, game.world().newNpc(location, player));
         npcs.put(npc.entity(), npc);
         npc.entity().controller().follow(player);
+        npc.entity().setAttributeBase(Attribute.MAX_HEALTH, 1);
+        npc.entity().setInvulnerable(false);
+        npc.entity().setAttributeBase(Attribute.FALL_DAMAGE_MULTIPLIER, 0);
         return npc;
     }
 

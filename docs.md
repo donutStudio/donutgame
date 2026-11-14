@@ -6,9 +6,9 @@ A worldless `GameLocation` resolves against the receiving operation's world. Onc
 
 `teleport(GameLocation)` validates scope and uses [Paper's asynchronous teleport](https://docs.papermc.io/paper/dev/entity-teleport/). Handle the returned future without blocking the server thread.
 
-Use `@GameEventHandler` on a method accepting `GameEvent<PaperEventType>`, and register external handler objects with `registerGameEventHandlers(target)`. Paper event classes are type tokens. The supported families and participant rules are in `GameEventRegistrar`; unlisted events do not dispatch. Event views are valid only during the handler. An unsupported event operation throws, and writes to locations must stay in the owning world. Death cleanup receives the owned victim; a foreign killer is omitted.
+Use `@GameEventHandler` on a method accepting `GameEvent<PaperEventType>`, and register external handler objects with `registerGameEventHandlers(target)`. Paper event classes are type tokens. The supported families and participant rules are in `GameEventRegistrar`; unlisted events do not dispatch. Event views are valid only during the handler. Generated event methods check the wrapped event at runtime. Java exposes the same methods on each GameEvent type, so a method called on an unsupported event throws. Location writes must stay in the owning world. Death cleanup receives the owned victim; a foreign killer is omitted.
 
-To add a Paper delegate, add its exact signature and adaptation to `PaperFacadeGenerateTask`. Copy mutable values, wrap owned handles, and keep player snapshot overrides and custom operations in the handwritten API. Gradle compiles the delegates against the pinned Paper API. Run the build with JDK 25; `checkModuleApiBoundary` validates examples and compilation fixtures.
+To add a Paper delegate, list its method name under the relevant Paper type in `PaperFacadeGenerateTask`. The build discovers supported signatures on pinned Paper, wraps entities, blocks, and locations, and maps supported lists to scoped snapshots. Use an explicit delegate body for custom behavior such as copying mutable vectors or keeping world updates quiet. Player state overrides stay in the handwritten API. Run with JDK 25. `checkModuleApiBoundary` validates examples and compilation fixtures.
 
 **GameModule**
 ```java

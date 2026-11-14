@@ -3,6 +3,8 @@ main_class: com.donutsforlife11.doppelganger.Doppelganger
 name: Doppelganger
 maps:
   - orange_hollows
+sheriff_count: 1
+sheriff_strikes: 3
 npc:
   npc_per_player: 3
   target_blocks:

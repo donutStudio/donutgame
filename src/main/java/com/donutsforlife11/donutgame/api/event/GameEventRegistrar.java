@@ -17,12 +17,9 @@ import org.bukkit.event.Cancellable;
 import org.bukkit.event.Event;
 import org.bukkit.event.Listener;
 import org.bukkit.event.HandlerList;
-import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.plugin.EventExecutor;
 
 import com.donutsforlife11.donutgame.Donutgame;
-import com.donutsforlife11.donutgame.api.entity.GameEntityBase;
-import com.donutsforlife11.donutgame.api.entity.GameEntityHandle;
 import com.donutsforlife11.donutgame.api.map.GameWorldHandle;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 import com.donutsforlife11.donutgame.internal.game.GameScope;
@@ -186,17 +183,6 @@ public class GameEventRegistrar {
 
     static boolean owns(GameModule module, World world) {
         return world != null && world == GameWorldHandle.bukkitWorld(module.world());
-    }
-
-    static GameEntityBase wrapEntity(GameModule module, Entity entity) {
-        if (!owns(module, entity.getWorld())) {
-            throw new IllegalArgumentException("Event entity is outside the game world.");
-        }
-        if (entity instanceof Player player) {
-            return module.playerManager().getPlayer(player.getUniqueId());
-        }
-        var npc = JavaPlugin.getPlugin(Donutgame.class).npcService().find(module.world(), entity);
-        return npc != null ? npc : GameEntityHandle.create(module.world(), entity);
     }
 
     private record HandlerKey(Object target, Method method) {

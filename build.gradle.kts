@@ -103,6 +103,7 @@ tasks {
     checkModuleApiBoundary { dependsOn(verifyModuleBoundaryFixtures) }
 
     val generatePaperFacades by registering(PaperFacadeGenerateTask::class) {
+        classpath.from(configurations.compileClasspath)
         outputDirectory.set(generatedPaperFacades)
     }
 
