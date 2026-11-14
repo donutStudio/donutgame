@@ -22,6 +22,7 @@ import io.papermc.paper.registry.RegistryKey;
 
 final class PlayerSnapshot {
     ItemStack[] inventory = new ItemStack[36];
+    int heldItemSlot;
     ItemStack[] armor = new ItemStack[4];
     ItemStack[] extra = new ItemStack[1];
     final Collection<PotionEffect> effects = new ArrayList<>();
@@ -53,6 +54,7 @@ final class PlayerSnapshot {
         PlayerAttributeDefaults.repairInvalidCameraDistance(player);
         PlayerInventory playerInventory = player.getInventory();
         inventory = cloneItems(playerInventory.getStorageContents());
+        heldItemSlot = playerInventory.getHeldItemSlot();
         armor = cloneItems(playerInventory.getArmorContents());
         extra = cloneItems(playerInventory.getExtraContents());
         effects.clear();
@@ -91,6 +93,7 @@ final class PlayerSnapshot {
         playerInventory.setStorageContents(cloneItems(inventory));
         playerInventory.setArmorContents(cloneItems(armor));
         playerInventory.setExtraContents(cloneItems(extra));
+        playerInventory.setHeldItemSlot(heldItemSlot);
 
         player.clearActivePotionEffects();
         player.addPotionEffects(effects);
@@ -112,6 +115,8 @@ final class PlayerSnapshot {
         player.setLevel(level);
         player.setExp(exp);
         player.setTotalExperience(totalExperience);
+        player.setNoDamageTicks(0);
+        player.setFallDistance(0.0f);
         AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
         player.setHealth(Math.min(Math.max(1.0, health), maxHealth == null ? 20.0 : maxHealth.getValue()));
         touchTimedValues();
@@ -123,6 +128,7 @@ final class PlayerSnapshot {
 
     void reset(GameMode gameMode) {
         clearInventory();
+        heldItemSlot = 0;
         effects.clear();
         attributeBases.clear();
         attributeModifiers.clear();
@@ -155,17 +161,6 @@ final class PlayerSnapshot {
         flying = false;
         flySpeed = 0.1f;
         walkSpeed = 0.2f;
-    }
-
-    void clearSpectatorProjection() {
-        if (gameMode == GameMode.SPECTATOR) {
-            gameMode = GameMode.SURVIVAL;
-        }
-        invulnerable = false;
-        invisible = false;
-        canPickupItems = true;
-        allowFlight = gameMode == GameMode.CREATIVE;
-        flying = false;
     }
 
     void ageTimedValues() {
@@ -234,7 +229,7 @@ final class PlayerSnapshot {
     void setItem(EquipmentSlot slot, ItemStack item) {
         ItemStack clone = item == null ? null : item.clone();
         switch (slot) {
-            case HAND -> inventory[0] = clone;
+            case HAND -> inventory[heldItemSlot] = clone;
             case OFF_HAND -> extra[0] = clone;
             case FEET -> armor[0] = clone;
             case LEGS -> armor[1] = clone;
@@ -247,7 +242,7 @@ final class PlayerSnapshot {
 
     ItemStack getItem(EquipmentSlot slot) {
         ItemStack item = switch (slot) {
-            case HAND -> inventory[0];
+            case HAND -> inventory[heldItemSlot];
             case OFF_HAND -> extra[0];
             case FEET -> armor[0];
             case LEGS -> armor[1];
@@ -267,6 +262,20 @@ final class PlayerSnapshot {
             clone[index] = items[index] == null ? null : items[index].clone();
         }
         return clone;
+    }
+
+    static double attributeValue(double base, List<AttributeModifier> modifiers) {
+        double additive = base;
+        double scalar = 0;
+        double multiplier = 1;
+        for (AttributeModifier modifier : modifiers) {
+            switch (modifier.getOperation()) {
+                case ADD_NUMBER -> additive += modifier.getAmount();
+                case ADD_SCALAR -> scalar += modifier.getAmount();
+                case MULTIPLY_SCALAR_1 -> multiplier *= 1 + modifier.getAmount();
+            }
+        }
+        return additive * (1 + scalar) * multiplier;
     }
 
     private void applyAttributes(org.bukkit.entity.Player player) {

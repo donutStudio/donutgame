@@ -1,11 +1,21 @@
-# Public Module Facing API
+# Donutgame module API
+
+A `GameModule` owns one `GameWorld` and its managers. Use Donutgame objects for live players, entities, blocks, worlds, and teams. Paper values such as `Material`, `Sound`, and `Vector` are available; `ItemStack` interoperability copies the stack. The module compiler check uses resolved Java types, including nested generics. It is an API boundary within this build, not a JVM sandbox.
+
+A worldless `GameLocation` resolves against the receiving operation's world. Once bound, it cannot be rebound to another world and becomes stale when the map is replaced. Reacquire points, regions, and blocks from `game.world()` after a reload. Registered players can carry their playing state through replacement; entity and NPC handles belong to a single world generation. Ordinary entity identity uses the world, generation, and UUID; events reuse the registered player or NPC when available.
+
+`teleport(GameLocation)` validates scope and uses [Paper's asynchronous teleport](https://docs.papermc.io/paper/dev/entity-teleport/). Handle the returned future without blocking the server thread.
+
+Use `@GameEventHandler` on a method accepting `GameEvent<PaperEventType>`, and register external handler objects with `registerGameEventHandlers(target)`. Paper event classes are type tokens. The supported families and participant rules are in `GameEventRegistrar`; unlisted events do not dispatch. Event views are valid only during the handler. An unsupported event operation throws, and writes to locations must stay in the owning world. Death cleanup receives the owned victim; a foreign killer is omitted.
+
+To add a Paper delegate, add its exact signature and adaptation to `PaperFacadeGenerateTask`. Copy mutable values, wrap owned handles, and keep player snapshot overrides and custom operations in the handwritten API. Gradle compiles the delegates against the pinned Paper API. Run the build with JDK 25; `checkModuleApiBoundary` validates examples and compilation fixtures.
 
 **GameModule**
 ```java
 void beforeLoad() // Runs before onLoad() is called. If not overridden, this just defaults to placing a map according to the game's config
 void onLoad() // Runs after the game is loaded
 void onStart() // Runs when the game first starts
-protected CompletableFuture<ModuleUnloadResult> unload() // Unloads the game module
+protected CompletableFuture<Void> unload() // Unloads the game module
 void onReload() // Runs after the map resets when the module reloads
 void onUnload() // Runs when the game unloads
 GameData data() // Returns the module's data
@@ -25,14 +35,11 @@ GameWorld world() // Returns this module's active world
 GameMap mapFromId(String id) // Reads a map object from a registered map id without loading it as the active world
 CompletableFuture<GameMap> load(String id) // Loads a copy of a world-based map from an id into the module's single active GameWorld
 CompletableFuture<GameMap> load(GameMap map) // Loads a copy of a world-based template GameMap into the module's single active GameWorld
-CompletableFuture<GameMap> place(String id, GameLocation location) // Places a copy of a schematic-based map from an id into the world, completes when loaded/ready
 CompletableFuture<GameMap> place(String id, GameLocation location, MapRotation rotation) // Places a copy of a schematic-based map from an id into the world at a rotation, completes when loaded/ready
-CompletableFuture<GameMap> place(GameMap map, GameLocation location) // Similar to above but takes in a GameMap instead, completes when loaded/ready
 CompletableFuture<GameMap> place(GameMap map, GameLocation location, MapRotation rotation) // Similar to above but can specify a rotation too
 CompletableFuture<GameMap> resetMap() // Reloads a fresh copy of the current map
 CompletableFuture<GameMap> whenReady() // Returns the pending map load, or the current map if ready
 GameMap map() // Returns the current active map
-GameWorld world() // Returns the module's active world
 ```
 **GameMap**
 ```java
@@ -55,8 +62,8 @@ GameRegion getRegion(String name) // Returns first transformed region under that
 ```
 **GameWorld**
 ```java
-GameLocation worldSpawn() // Returns the world spawn location (the default location where players respawn if they do not have a respawn point, and the default place they go to when getting teleported to the world for the first time)
-void setWorldSpawn(GameLocation spawn) // Sets the world spawn location
+GameLocation getSpawnLocation() // Returns the world spawn location (the default location where players respawn if they do not have a respawn point, and the default place they go to when getting teleported to the world for the first time)
+void setSpawnLocation(GameLocation spawn) // Sets the world spawn location
 Map<String, List<GameLocation>> getPoints() // Returns raw map point data
 Map<String, List<GameRegion>> getRegions() // Returns raw map region data
 List<GameLocation> getPoints(String name) // Returns all named world points under that specified point name
@@ -70,12 +77,12 @@ void removeRegion(String name, GameRegion region) // Removes a named region of s
 boolean regionContainsPos(String regionName, GameLocation location) // Returns whether or not specified location is within any region under specified name
 GameWorldGamerules gamerules() // Returns this GameWorld's gamerules object
 void setTime(long time) // Sets the time of the GameWorld
-long time() // Returns the current time of the GameWorld
+long getTime() // Returns the current time of the GameWorld
 enum GameWeather { CLEAR, RAIN, THUNDER } // Basic state for the GameWorld's weather
 void setWeather(GameWeather weather) // Sets the weather or the GameWorld
 GameWeather weather() // Returns the weather of the GameWorld
 void setDifficulty(Difficulty difficulty) // Sets the difficulty of the world
-Difficulty difficulty() // Returns the GameWorld's difficulty
+Difficulty getDifficulty() // Returns the GameWorld's difficulty
 void setHungerEnabled(boolean enabled) // Sets whether or not the mechanic of hunger and saturation is enabled in the GameWorld
 boolean hungerEnabled() // Returns whether or not hunger is enabled
 // Block management (more may be added in future)
@@ -90,17 +97,14 @@ void replace(GameRegion region, Material from, Material to) // Replaces blocks w
 void replace(GameRegion region, GameBlockType from, GameBlockType to) // Replaces blocks with exactly matching block data
 void replace(GameRegion region, BlockData from, BlockData to) // Replaces blocks with exactly matching block data
 // Entity management
-GameEntity spawn(GameLocation location, EntityType type) // Spawns an entity at a location
-GameEntity spawn(GameLocation location, GameEntityType type) // Similar to above but takes a generated entity type
-GameEntity spawn(GameLocation location, EntityType type, Consumer<? super GameEntity> configuration) // Spawns and configures an entity
-GameEntity spawn(GameLocation location, GameEntityType type, Consumer<? super GameEntity> configuration) // Similar to above but takes a generated entity type
+GameEntity summon(GameLocation location, GameEntityType type) // Spawns an entity in this game
 GameNpc newNpc(GameLocation location) // Spawns a new NPC at a location with a default profile/skin
 GameNpc newNpc(GameLocation location, PlayerProfile profile) // Spawns a new NPC but with a profile emulating that of a player
 GameNpc newNpc(GameLocation location, GamePlayer player) // Similar to above but automatically populates a profile based on a GamePlayer
 ```
 **GameWorldGamerules**
 ```java
-// Methods will dynamically be generated whenever the API builds, similar to the GameEvents. It will read the gamerules registry, convert the gamerule ids to camelCase.
+// Methods will dynamically be generated whenever the API builds, using Paper. It will read the gamerules registry, convert the gamerule ids to camelCase.
 // If a method returns void and takes in a parameter, like for example void testGamerule(boolean enabled), it is a setter and sets that gamerule
 // If a method does not return void and does not take in a parameter, like for example boolean testGamerule(), it is a getter and gets that gamerule's value
 ```
@@ -197,7 +201,6 @@ GameSound category(SoundCategory category) // Returns a copy using the specified
 GameSound location(GameLocation location) // Returns a copy using the specified location; null uses the receiving player's current location
 GameSound volume(float volume) // Returns a copy using the specified volume
 GameSound pitch(float pitch) // Returns a copy using the specified pitch
-GameSound minVolume(float minVolume) // Returns a copy using the specified cross-world fallback/minimum volume
 ```
 **GameSidebar**
 ```java
@@ -235,7 +238,6 @@ static SidebarEntry time(String label, int ticks) // Global time
 static SidebarEntry time(String label, IntSupplier ticks) // Global supplied time
 static SidebarEntry time(String label, Function<GamePlayer, Integer> time) // Player specific time
 static SidebarEntry component(String label, Component component) // Global component
-static SidebarEntry component(String label, Supplier<Component> component) // Global supplied component
 static SidebarEntry component(String label, Function<GamePlayer, Component> component) // Player specific component
 SidebarEntry setLabel(String label) // Sets (or adds if it doesn't exist) label on the sidebar entry
 SidebarEntry setLabel(Supplier<String> label) // Similar to above but supplies it
@@ -251,14 +253,12 @@ GameItem(Material material) // Wraps a new item of a material
 GameItem(ItemStack item) // Wraps a copy of a Bukkit item stack
 static GameItem of(Material material) // Creates a new GameItem
 static GameItem from(ItemStack item) // Wraps a Bukkit item stack, returning null for null
-Material material() // Returns the item's material
-int amount() // Returns the item amount
+Material getType() // Returns the item's material
+int getAmount() // Returns the item amount
 void setAmount(int amount) // Sets the item amount
-GameItem configure(Consumer<? super ItemStack> configuration) // Applies a low-level Bukkit configuration when needed
 boolean editMeta(Consumer<? super ItemMeta> editor) // Edits the item's metadata
 boolean isSimilar(GameItem other) // Checks whether two items are similar
 ItemStack copyBukkitItem() // Returns a cloned Bukkit item stack
-GameItemType type() // Returns the item's type wrapper
 void setType(Material type) // Changes the item's material
 ItemMeta getItemMeta() // Returns the item's metadata
 boolean setItemMeta(ItemMeta itemMeta) // Sets the item's metadata
@@ -282,44 +282,41 @@ void removeData(GameItemComponent<?> component) // Removes custom plugin-owned i
 ```
 **GameEntityBase**
 ```java
-// Most of these would have default implementations so not to make GameEntity and GamePlayer too big, but some that really really need overrides will have them
 CompletableFuture<Boolean> teleport(GameLocation location) // Teleports this entity to a game location
-boolean teleportNow(GameLocation location) // Teleports this entity synchronously
 void remove() // Removes the entity
-GameLocation location() // Returns the entity's location
+GameLocation getLocation() // Returns the entity's location
 GameWorld world() // Returns the entity's GameWorld
 void setRotation(float yaw, float pitch) // Immediately sets the NPC's rotation
 void setRotation(float yaw, float pitch, int ticks) // Sets the NPC's rotation over time
 void setRotationTowards(GameLocation location) // Immediately rotates the NPC immediately towards a location
 void setRotationTowards(GameLocation location, int ticks) // Rotates the NPC towards a location over time
 // Health and damage
-void setHealth(float health) // Sets the entity's health (clamped to its max health)
+void setHealth(double health) // Sets the entity's health (clamped to its max health)
 void heal() // Heals the entity to its max health
 void heal(float amount) // Heals the entity by a certain amount
-void damage(float amount) // Damages the entity by a certain amount with the generic damage type
-void damage(float amount, DamageSource source) // Damages the entity but with a DamageSource
-float health() // Returns the entity's current health
+void damage(double amount) // Damages the entity by a certain amount with the generic damage type
+double getHealth() // Returns the entity's current health
 void kill() // Kills the entity (of course death behaves a bit different for players and entities though)
 boolean isDead() // Returns whether or not the entity is dead
 // Common entity config
 void swingMainHand() // Swings the mainhand of the entity if applicable, behaving similar to vanilla /swing
-void swingOffhand() // Swings the offhand of the entity if applicable, behaving similar to vanilla /swing
+void swingOffHand() // Swings the offhand of the entity if applicable, behaving similar to vanilla /swing
 void setVelocity(Vector velocity) // Sets the entity's velocity
-Vector velocity() // Returns the entity's velocity
-void setCustomName(Component name) // Sets a custom name for the entity
+Vector getVelocity() // Returns the entity's velocity
+void customName(Component name) // Sets a custom name for the entity
 void setCustomNameVisible(boolean visible) // Sets if the custom name is visible or not
 Component customName() // Returns the entity's custom name
-boolean customNameVisible() // Returns whether or not the entity's custom name is visible
+boolean isCustomNameVisible() // Returns whether or not the entity's custom name is visible
 void setInvulnerable(boolean invulnerable) // Sets if the entity is invulnerable or not
 boolean isInvulnerable() // Returns whether or not the entity is invulnerable
 void setInvisible(boolean invisible) // Sets if the entity is invisible or not
 boolean isInvisible() // Returns whether or not the entity is invisible
-void setNoGravity(boolean noGravity) // Sets whether or not the entity has no gravity
-boolean hasNoGravity() // Returns whether or not the entity has no gravity
+void setGravity(boolean gravity) // Sets whether the entity has gravity
+boolean hasGravity() // Returns whether the entity has gravity
 void setSilent(boolean silent) // Sets whether or not the entity is silent
 boolean isSilent() // Returns whether or not the entity is silent
 void setFireTicks(int ticks) // Sets the fire ticks of the entity
-int fireTicks() // Returns the fire ticks on the entity
+int getFireTicks() // Returns the fire ticks on the entity
 // Glowing
 boolean setGlowing(boolean glowing) // Sets whether or not the entity is glowing (just plain old glowing, visible to everyone)
 boolean setGlowing(boolean glowing, Collection<GamePlayer> viewers) // Sets whether or not the entity is glowing and who can see the glow
@@ -328,13 +325,11 @@ void setGlowColor(NamedTextColor color) // Normal glowing syncs to the team colo
 // Effects
 void addEffect(PotionEffectType effect, int ticks, int amplifier) // Adds a potion effect to an entity with an amplifier
 void addEffect(PotionEffectType effect, int ticks, int amplifier, boolean hideParticles) // Similar to above but hides particles, similar to the the true/false at the end of vanilla /effect
-void addEffect(PotionEffect effect) // Adds a potion effect you have to construct to the entity
-void clearEffects() // Clears all effects of the entity
-void clearEffect(PotionEffectType effect) // Clears instances of this specific potion effect type on the entity
-void clearEffect(PotionEffect effect) // Similar to above but takes in a PotionEffect and not just a PotionEffectType
-boolean hasEffect(PotionEffectType effect) // Returns whether or not the entity has this effect type
-boolean hasEffect(PotionEffect effect) // Similar to above but takes in a PotionEffect
-List<PotionEffect> effects() // Returns all active effects on the entity
+boolean addPotionEffect(PotionEffect effect) // Adds a potion effect you have to construct to the entity
+void clearActivePotionEffects() // Clears all effects of the entity
+void removePotionEffect(PotionEffectType effect) // Clears instances of this specific potion effect type on the entity
+boolean hasPotionEffect(PotionEffectType effect) // Returns whether or not the entity has this effect type
+List<PotionEffect> getActivePotionEffects() // Returns all active effects on the entity
 // Attributes
 void setAttributeBase(Attribute attribute, double value) // Sets the attribute base of an entity
 void resetAttributeBase(Attribute attribute) // Resets the base value of that attribute to its default for that entity
@@ -357,7 +352,6 @@ UUID uuid() // Returns the entity's UUID
 ```
 **GameNpc** (has all the same applicable methods as GameEntity and GameEntityBase)
 ```java
-GameEntity entity() // Returns the underlying mannequin GameEntity (NPCs are by default). Creating a mannequin by default adjusts default fields of GameEntities to better suit NPC purposes (for example NPCs will be invulnerable by default)
 void setProfile(PlayerProfile profile) // Sets the entity's profile from a player profile
 PlayerProfile profile() // Returns the NPC's profile
 void setDescription(Component description) // Sets the mannequin's description
@@ -451,9 +445,7 @@ void setSpectator(boolean spectator) // Sets the player to a spectator or not at
 void setSpectator(boolean spectator, GameLocation location) // Sets the player to a spectator at the specified location (as in immediately teleporting them to that location once they change from a non spectator to a spectator or vice versa)
 boolean isSpectator() // Returns whether or not the player is a spectator; If a player is a spectator they will have a completely separate raw paper/bukkit inventory snapshot and other data while in spectator (like effects, attributes, etc). For example, if a player is in spectator, and an item is given to them, it will be stored in their inventory but they will not see it- but if they are not a spectator they will see it
 void respawn() // Respawns the player instantly at their spawnpoint; respawning a player is defined as changing them from a spectator to a non spectator at their spawnpoint or whatever other location specified
-void respawn(int ticks) // Respawns the player after a specified amount of ticks at their spawnpoint (respawn(0) is the same as just respawn())
 void respawn(GameLocation location) // Respawns the player instantly at a specified custom location instead of just merely the player's spawnpoint
-void respawn(int ticks, GameLocation location) // Respawns the palyer after a time delay at a specified location
 void respawn(int ticks, Supplier<GameLocation> location) // Respawns the player after a time delay at a supplied location
 void cancelRespawn() // Cancels any active respawns and their timers on this player; Calling one of the respawn(...) methods on a player that has an active respawn timer also calls this to cancel prior timers before resetting a new one
 GameTimer respawnTimer() // Returns the active respawn timer on the player if it exists
@@ -467,13 +459,13 @@ PlayerProfile playerProfile() // Returns the player's profile, the same thing th
 GameLocation spawnPoint() // Returns the player's spawnpoint
 GameTeam getTeam() // Returns the player's team (or null if they aren't in one)
 void setGameMode(GameMode gameMode) // Sets the player's gamemode
-GameMode gameMode() // Returns the player's gamemode
-void setHunger(int hunger) // Sets the player's hunger/foodLevel
-int hunger() // Returns the player's hunger
+GameMode getGameMode() // Returns the player's gamemode
+void setFoodLevel(int hunger) // Sets the player's hunger/foodLevel
+int getFoodLevel() // Returns the player's hunger
 void setSaturation(float saturation) // Sets the player's saturation
-float saturation() // Returns the player's saturation
+float getSaturation() // Returns the player's saturation
 void setArrowsInBody(int arrows) // Sets the arrows in a player's body
-int arrowsInBody() // Returns the arrows in a player's body
+int getArrowsInBody() // Returns the arrows in a player's body
 void reset() // Resets the player to the default state, including gamemode, inventory, health, attributes, effects, arrows in body, fire ticks, everything
 // Items (more may be added in future)
 void giveItem(GameItemType item) // Gives an item to a player

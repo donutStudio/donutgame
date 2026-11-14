@@ -13,7 +13,7 @@ public class DoppelgangerNpc {
     }
 
     public void kill() {
-        npcManager.game().world().spawn(entity.location(), GameEntities.LIGHTNING_BOLT);
+        npcManager.game().world().summon(entity.getLocation(), GameEntities.LIGHTNING_BOLT);
         npcManager.removeNpc(this);
     }
 

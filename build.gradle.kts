@@ -1,5 +1,6 @@
 import org.gradle.api.GradleException
 import org.gradle.jvm.tasks.Jar
+import org.gradle.api.tasks.SourceSetContainer
 
 plugins {
     java
@@ -9,6 +10,12 @@ plugins {
 group = "com.donutsforlife11"
 version = "1.0.0"
 val paperVersion = "26.2.build.127-stable"
+
+providers.gradleProperty("verificationBuildDir").orNull?.let { directory ->
+    allprojects {
+        layout.buildDirectory.set(rootProject.layout.projectDirectory.dir(directory).dir(path.removePrefix(":").replace(':', '/').ifEmpty { "framework" }))
+    }
+}
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:$paperVersion")
@@ -27,16 +34,32 @@ java {
     }
 }
 
-val generatedGameEventApi = layout.buildDirectory.dir("generated/sources/game-events/java/main")
+val generatedPaperFacades = layout.buildDirectory.dir("generated/sources/paper-facades/java/main")
 val generatedGameWorldGamerulesApi = layout.buildDirectory.dir("generated/sources/game-world-gamerules/java/main")
 val generatedGameObjectSpecsApi = layout.buildDirectory.dir("generated/sources/game-object-specs/java/main")
 
 sourceSets {
     main {
-        java.srcDir(generatedGameEventApi)
+        java.srcDir(generatedPaperFacades)
         java.srcDir(generatedGameWorldGamerulesApi)
         java.srcDir(generatedGameObjectSpecsApi)
     }
+}
+
+dependencies {
+    testImplementation("io.papermc.paper:paper-api:$paperVersion")
+}
+
+val verifyScopedState by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Exercise value ownership and virtual attribute math without a running server."
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.donutsforlife11.donutgame.api.player.ScopedStateChecks")
+}
+tasks.test {
+    // The small state suite uses a Java main; no test engine or server is needed.
+    failOnNoDiscoveredTests.set(false)
+    dependsOn(verifyScopedState)
 }
 
 val paperApiSources by configurations.creating {
@@ -68,68 +91,19 @@ allprojects {
 tasks {
     val checkModuleApiBoundary by registering {
         group = "verification"
-        description = "Reject game module imports of raw live Bukkit handles."
-
-        val forbiddenExactImports = setOf(
-            "org.bukkit.Bukkit",
-            "org.bukkit.Location",
-            "org.bukkit.World",
-            "org.bukkit.block.Block",
-            "org.bukkit.block.BlockState",
-            "org.bukkit.block.Chest",
-            "org.bukkit.block.Container",
-            "org.bukkit.entity.Entity",
-            "org.bukkit.entity.Player",
-            "org.bukkit.inventory.Inventory",
-            "org.bukkit.scoreboard.Scoreboard",
-            "org.bukkit.scoreboard.Team"
-        )
-        val forbiddenWildcardPackages = setOf(
-            "org.bukkit",
-            "org.bukkit.block",
-            "org.bukkit.entity",
-            "org.bukkit.inventory",
-            "org.bukkit.scoreboard"
-        )
-        val importPattern = Regex("^\\s*import\\s+(?:static\\s+)?([\\w.]+)(\\.\\*)?\\s*;")
-
-        doLast {
-            val moduleDirectory = layout.projectDirectory.dir("modules").asFile
-            if (!moduleDirectory.isDirectory) {
-                return@doLast
-            }
-
-            val violations = moduleDirectory.walkTopDown()
-                .filter { it.isFile && it.extension == "java" && it.invariantSeparatorsPath.contains("/src/main/java/") }
-                .flatMap { sourceFile ->
-                    sourceFile.readLines().mapIndexedNotNull { index, line ->
-                        val match = importPattern.find(line) ?: return@mapIndexedNotNull null
-                        val imported = match.groupValues[1]
-                        val wildcard = match.groupValues[2].isNotEmpty()
-                        val forbidden = forbiddenExactImports.any { imported == it || imported.startsWith("$it.") }
-                            || (wildcard && imported in forbiddenWildcardPackages)
-                        if (forbidden) {
-                            "${sourceFile.relativeTo(projectDir).invariantSeparatorsPath}:${index + 1}: $line"
-                        } else {
-                            null
-                        }
-                    }
-                }
-                .toList()
-
-            if (violations.isNotEmpty()) {
-                throw GradleException(
-                    "Game modules must use Donutgame scoped APIs instead of raw live Bukkit handles:\n" +
-                        violations.joinToString("\n")
-                )
-            }
-        }
+        description = "Verify the compiler-enforced game module boundary and its fixtures."
     }
 
-    val generateGameEventApi by registering(GameEventApiGenerateTask::class) {
-        classpath.from(configurations.compileClasspath)
-        adapterRegistrySource.set(layout.projectDirectory.file("src/main/java/com/donutsforlife11/donutgame/api/event/GameEventAdapterRegistry.java"))
-        outputDirectory.set(generatedGameEventApi)
+    val verifyModuleBoundaryFixtures by registering(ModuleApiBoundaryTask::class) {
+        group = "verification"
+        classpath.from(sourceSets.main.get().output.classesDirs, configurations.compileClasspath)
+        dependsOn(compileJava)
+        fixtures.set(layout.projectDirectory.dir("src/test/module-boundary"))
+    }
+    checkModuleApiBoundary { dependsOn(verifyModuleBoundaryFixtures) }
+
+    val generatePaperFacades by registering(PaperFacadeGenerateTask::class) {
+        outputDirectory.set(generatedPaperFacades)
     }
 
     val generateGameWorldGamerulesApi by registering(GameWorldGamerulesGenerateTask::class) {
@@ -144,7 +118,7 @@ tasks {
     }
 
     compileJava {
-        dependsOn(generateGameEventApi, generateGameWorldGamerulesApi, generateGameObjectSpecsApi)
+        dependsOn(generatePaperFacades, generateGameWorldGamerulesApi, generateGameObjectSpecsApi)
         options.encoding = "UTF-8"
         options.release.set(25)
         options.compilerArgs.add("-Xlint:deprecation")
@@ -188,8 +162,18 @@ tasks {
 
 subprojects {
     plugins.withId("java") {
-        tasks.named("compileJava") {
-            dependsOn(rootProject.tasks.named("checkModuleApiBoundary"))
+        val main = extensions.getByType<SourceSetContainer>().named("main")
+        val frameworkClasses = rootProject.extensions.getByType<SourceSetContainer>().named("main").map { it.output.classesDirs }
+        val verifyModuleApi by tasks.registering(ModuleApiBoundaryTask::class) {
+            group = "verification"
+            description = "Reject unscoped types using javac's resolved Java types."
+            sources.from(main.map { it.allJava })
+            classpath.from(frameworkClasses, main.map { source ->
+                source.compileClasspath.filter { it.name != "donutgame-${rootProject.version}.jar" }
+            })
+            dependsOn(rootProject.tasks.named("compileJava"))
         }
+        tasks.named("compileJava") { dependsOn(verifyModuleApi) }
+        rootProject.tasks.named("checkModuleApiBoundary") { dependsOn(verifyModuleApi) }
     }
 }

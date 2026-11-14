@@ -5,8 +5,11 @@ import java.util.Objects;
 import org.bukkit.Location;
 import org.bukkit.World;
 
-public class GameLocation {
+import com.donutsforlife11.donutgame.internal.game.GameScope;
+
+public final class GameLocation {
     private final GameWorld world;
+    private final long generation;
     private final double x;
     private final double y;
     private final double z;
@@ -42,6 +45,7 @@ public class GameLocation {
 
     public GameLocation(GameWorld world, double x, double y, double z, float yaw, float pitch) {
         this.world = world;
+        this.generation = world == null ? 0 : world.generation();
         this.x = x;
         this.y = y;
         this.z = z;
@@ -57,7 +61,7 @@ public class GameLocation {
         if (world == null) {
             throw new IllegalStateException("Location is not bound to a GameWorld.");
         }
-        return toBukkit(GameWorldHandle.requireBukkitWorld(world));
+        return world.toBukkit(this);
     }
 
     Location toBukkit(World world) {
@@ -66,7 +70,12 @@ public class GameLocation {
     }
 
     public GameLocation inWorld(GameWorld world) {
-        return new GameLocation(Objects.requireNonNull(world, "world"), x, y, z, yaw, pitch);
+        GameScope.requireLocation(Objects.requireNonNull(world, "world"), this);
+        return this.world == world ? this : new GameLocation(world, x, y, z, yaw, pitch);
+    }
+
+    long generation() {
+        return generation;
     }
 
     public double x() {
@@ -105,7 +114,7 @@ public class GameLocation {
         Objects.requireNonNull(location, "location");
         World bukkitWorld = GameWorldHandle.bukkitWorld(world);
         if (world != null && bukkitWorld != null && location.getWorld() != null && !bukkitWorld.equals(location.getWorld())) {
-            throw new IllegalArgumentException("Bukkit location belongs to " + location.getWorld().getName() + ", not GameWorld " + world.id() + ".");
+            throw new IllegalArgumentException("Bukkit location belongs to " + location.getWorld().getName() + ", not GameWorld " + world.name() + ".");
         }
         return world;
     }

@@ -15,18 +15,17 @@ public class Doppelganger extends GameModule {
     @Override
     public void onLoad() {
         npcs = new DoppelgangerNpcManager(this);
+        registerGameEventHandlers(npcs);
 
         List<GameLocation> spawns = world().getPoints(SPAWN);
-        world().setWorldSpawn(spawns.get(0));
+        world().setSpawnLocation(spawns.get(0));
         int spawnCount = 0;
         for (GamePlayer player : playerManager().getPlayers()) {
             GameLocation spawn = spawns.get(spawnCount);
             player.teleport(spawn);
             player.setSpawnPoint(spawn);
             npcs.newNpc(spawn, player);
-            if (spawnCount++ >= spawns.size()) {
-                spawnCount = 0;
-            }
+            spawnCount = (spawnCount + 1) % spawns.size();
         }
     }
 

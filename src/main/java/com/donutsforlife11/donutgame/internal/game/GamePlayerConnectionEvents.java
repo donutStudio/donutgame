@@ -19,6 +19,7 @@ import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameLocationHandle;
 import com.donutsforlife11.donutgame.api.map.GameWorldHandle;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
+import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
 import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
 import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 
@@ -97,7 +98,7 @@ public class GamePlayerConnectionEvents implements Listener {
         }
         GamePlayer player = PlayerManagerHandle.getPlayer(game.playerManager(), event.getPlayer());
         if (player != null) {
-            player.rememberVanillaDeath();
+            GamePlayerHandle.rememberVanillaDeath(player);
         }
         pendingSpectatorRespawns.put(
             event.getPlayer().getUniqueId(),
@@ -116,10 +117,11 @@ public class GamePlayerConnectionEvents implements Listener {
             return;
         }
         GamePlayer player = PlayerManagerHandle.getPlayer(game.playerManager(), event.getPlayer());
-        GameLocation respawnLocation = player == null ? deathLocation : player.postDeathRespawnLocation(deathLocation);
+        GameLocation fallback = GameLocationHandle.isCurrent(deathLocation) ? deathLocation : game.world().getSpawnLocation();
+        GameLocation respawnLocation = player == null ? fallback : GamePlayerHandle.postDeathRespawnLocation(player, fallback);
         org.bukkit.World bukkitWorld = GameWorldHandle.bukkitWorld(game.world());
         if (bukkitWorld != null) {
-            event.setRespawnLocation(GameLocationHandle.toBukkit(respawnLocation, bukkitWorld));
+            event.setRespawnLocation(GameLocationHandle.toBukkit(respawnLocation, game.world()));
         }
     }
 
@@ -135,14 +137,14 @@ public class GamePlayerConnectionEvents implements Listener {
         }
         GamePlayer player = PlayerManagerHandle.getPlayer(game.playerManager(), event.getPlayer());
         if (player != null) {
-            player.enterPostDeathSpectator(deathLocation);
+            GamePlayerHandle.enterPostDeathSpectator(player, GameLocationHandle.isCurrent(deathLocation) ? deathLocation : player.spawnPoint());
         }
     }
 
     private GameLocation spectatorRespawnLocation(GameModule game, Player bukkitPlayer, GamePlayer gamePlayer) {
         org.bukkit.World bukkitWorld = GameWorldHandle.bukkitWorld(game.world());
         if (bukkitWorld != null && bukkitPlayer.getLocation().getY() < bukkitWorld.getMinHeight()) {
-            return gamePlayer == null ? game.world().worldSpawn() : gamePlayer.spawnPoint();
+            return gamePlayer == null ? game.world().getSpawnLocation() : gamePlayer.spawnPoint();
         }
         return GameLocationHandle.create(game.world(), bukkitPlayer.getLocation());
     }

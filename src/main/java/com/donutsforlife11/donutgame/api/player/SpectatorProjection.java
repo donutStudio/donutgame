@@ -29,23 +29,6 @@ final class SpectatorProjection {
         player.setFallDistance(0.0f);
     }
 
-    static void clearPhysical(Player player) {
-        if (player == null) {
-            return;
-        }
-        if (player.getGameMode() == GameMode.SPECTATOR) {
-            player.setGameMode(GameMode.SURVIVAL);
-        }
-        player.setInvulnerable(false);
-        player.setInvisible(false);
-        player.setCanPickupItems(true);
-        player.setAllowFlight(player.getGameMode() == GameMode.CREATIVE);
-        player.setFlying(false);
-        player.setNoDamageTicks(0);
-        player.setFallDistance(0.0f);
-        player.updateInventory();
-    }
-
     static boolean matches(Player player, PlayerSnapshot playingState) {
         if (player == null) {
             return true;
@@ -54,8 +37,6 @@ final class SpectatorProjection {
         boolean effectiveAllowFlight = playingState.allowsFlight();
 
         return player.getGameMode() == playingMode(playingState)
-            && player.isInvulnerable() == playingState.invulnerable
-            && player.isInvisible() == playingState.invisible
             && player.getCanPickupItems() == playingState.canPickupItems
             && player.getAllowFlight() == effectiveAllowFlight
             && player.isFlying() == (effectiveAllowFlight && playingState.flying);
@@ -70,8 +51,6 @@ final class SpectatorProjection {
         boolean expectedFlying = expectedAllowFlight && playingState.flying;
 
         addDifference(differences, "gameMode", player.getGameMode(), playingMode(playingState));
-        addDifference(differences, "invulnerable", player.isInvulnerable(), playingState.invulnerable);
-        addDifference(differences, "invisible", player.isInvisible(), playingState.invisible);
         addDifference(differences, "canPickupItems", player.getCanPickupItems(), playingState.canPickupItems);
         addDifference(differences, "allowFlight", player.getAllowFlight(), expectedAllowFlight);
         addDifference(differences, "flying", player.isFlying(), expectedFlying);

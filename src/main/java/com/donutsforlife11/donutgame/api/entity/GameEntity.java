@@ -1,83 +1,72 @@
 package com.donutsforlife11.donutgame.api.entity;
 
+import java.lang.ref.WeakReference;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.function.Consumer;
 
+import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.map.GameWorldHandle;
-import com.donutsforlife11.donutgame.api.object.GameEntityType;
 
 public class GameEntity implements GameEntityBase {
     private final GameWorld world;
     private final long generation;
     private final UUID uuid;
     private final EntityType type;
+    private WeakReference<Entity> entityRef;
 
     GameEntity(GameWorld world, Entity entity) {
         this(world, GameWorldHandle.generation(world), entity);
     }
 
-    GameEntity(GameWorld world, long generation, Entity entity) {
-        this(world, generation, entity.getUniqueId(), entity.getType());
-    }
-
-    public GameEntity(GameWorld world, UUID uuid, EntityType type) {
-        this(world, GameWorldHandle.generation(world), uuid, type);
-    }
-
-    GameEntity(GameWorld world, long generation, UUID uuid, EntityType type) {
+    protected GameEntity(GameWorld world, long generation, Entity entity) {
         this.world = Objects.requireNonNull(world, "world");
         this.generation = generation;
-        this.uuid = Objects.requireNonNull(uuid, "uuid");
-        this.type = Objects.requireNonNull(type, "type");
+        this.uuid = entity.getUniqueId();
+        this.type = entity.getType();
+        this.entityRef = new WeakReference<>(entity);
     }
 
-    public GameWorld world() {
+    public final GameWorld world() {
         return world;
     }
 
-    public UUID uuid() {
+    public final UUID uuid() {
         return uuid;
     }
 
-    public EntityType type() {
+    public EntityType getType() {
         return type;
     }
 
     Entity bukkitEntity() {
-        org.bukkit.World bukkitWorld = GameWorldHandle.requireBukkitWorld(world, generation);
-        if (bukkitWorld == null) {
+        World bukkitWorld = GameWorldHandle.bukkitWorld(world);
+        if (bukkitWorld == null || !world.owner().acceptsLiveOperations() || GameWorldHandle.generation(world) != generation) {
             return null;
         }
-        Entity entity = bukkitWorld.getEntity(uuid);
-        return entity != null && entity.getType() == type ? entity : null;
-    }
-
-    public boolean is(Class<? extends Entity> entityClass) {
-        Entity entity = bukkitEntity();
-        return entityClass != null && entityClass.isInstance(entity);
-    }
-
-    public boolean is(EntityType entityType) {
-        return entityType != null && type == entityType;
-    }
-
-    public boolean is(GameEntityType entityType) {
-        return entityType != null && is(entityType.entityType());
-    }
-
-    public <E extends Entity> boolean editEntity(Class<E> entityClass, Consumer<? super E> editor) {
-        Objects.requireNonNull(entityClass, "entityClass");
-        Objects.requireNonNull(editor, "editor");
-        Entity entity = bukkitEntity();
-        if (!entityClass.isInstance(entity)) {
-            return false;
+        Entity cached = entityRef.get();
+        if (cached != null && cached.isValid() && cached.getWorld() == bukkitWorld) {
+            return cached;
         }
-        editor.accept(entityClass.cast(entity));
-        return true;
+        Entity entity = bukkitWorld.getEntity(uuid);
+        if (entity == null || entity.getWorld() != bukkitWorld || entity.getType() != type) {
+            return null;
+        }
+        entityRef = new WeakReference<>(entity);
+        return entity;
+    }
+
+    @Override
+    public final boolean equals(Object other) {
+        return other instanceof GameEntity entity
+            && world == entity.world && generation == entity.generation && uuid.equals(entity.uuid);
+    }
+
+    @Override
+    public final int hashCode() {
+        return Objects.hash(world, generation, uuid);
     }
 }

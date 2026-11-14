@@ -15,7 +15,7 @@ public class SidebarEntry {
     private Function<GamePlayer, String> label;
     private String fallbackLabel;
     private final boolean playerSpecific;
-    private Function<GamePlayer, RenderedEntry> renderer;
+    private final Function<GamePlayer, RenderedEntry> renderer;
 
     private SidebarEntry(Function<GamePlayer, String> label, boolean playerSpecific, Function<GamePlayer, RenderedEntry> renderer) {
         this.label = label;
@@ -92,12 +92,7 @@ public class SidebarEntry {
     }
 
     public static SidebarEntry component(String label, Component component) {
-        return component(label, () -> component);
-    }
-
-    public static SidebarEntry component(String label, Supplier<Component> component) {
-        Objects.requireNonNull(component);
-        return labeled(label, false, player -> component.get());
+        return labeled(label, false, player -> component);
     }
 
     public static SidebarEntry component(String label, Function<GamePlayer, Component> component) {

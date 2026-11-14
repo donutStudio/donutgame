@@ -179,10 +179,10 @@ public class SpectatorMenuEvents implements Listener {
     }
 
     private void teleportTo(GamePlayer viewer, GamePlayer target) {
-        if (target == null || target.isSpectator() || target.location() == null) {
+        if (target == null || target.isSpectator() || target.getLocation() == null) {
             return;
         }
-        viewer.teleport(target.location());
+        viewer.teleport(target.getLocation());
         Player player = GamePlayerHandle.bukkitPlayer(viewer);
         if (player != null) {
             player.closeInventory();

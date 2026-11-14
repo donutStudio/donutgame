@@ -33,7 +33,7 @@ public class GameBorder {
     GameBorder(BorderManager manager, BorderShape shape, GameLocation center, Vector dimensions) {
         this.manager = Objects.requireNonNull(manager, "manager");
         this.shape = Objects.requireNonNull(shape, "shape");
-        this.center = requireLocation(center);
+        this.center = center;
         this.dimensions = requireDimensions(dimensions);
     }
 
@@ -48,7 +48,8 @@ public class GameBorder {
     }
 
     public GameBorder setCenter(GameLocation target, int ticks) {
-        GameLocation end = requireLocation(target);
+        manager.scopeCenter(center);
+        GameLocation end = manager.scopeCenter(target);
         centerTimer = cancel(centerTimer);
         if (ticks <= 0) {
             center = end;
@@ -71,6 +72,7 @@ public class GameBorder {
     }
 
     public GameBorder setDimensions(Vector target, int ticks) {
+        manager.scopeCenter(center);
         Vector end = requireDimensions(target);
         dimensionsTimer = cancel(dimensionsTimer);
         if (ticks <= 0) {
@@ -129,7 +131,7 @@ public class GameBorder {
     }
 
     void drawParticles(Collection<Player> onlinePlayers) {
-        World world = resolveWorld();
+        World world = GameWorldHandle.bukkitWorld(center.world());
         if (world == null) {
             return;
         }
@@ -144,7 +146,7 @@ public class GameBorder {
             return;
         }
 
-        Location centerLocation = GameLocationHandle.toBukkit(center, world);
+        Location centerLocation = GameLocationHandle.bukkitLocation(center);
         Particle particle = isMoving() ? manager.movingParticle() : manager.defaultParticle();
         double viewDistanceSquared = squared(manager.particleViewDistance());
         List<Vector> points = particlePoints();
@@ -235,23 +237,6 @@ public class GameBorder {
             }
         }
         return direction.clone().multiply(insideDistance);
-    }
-
-    private World resolveWorld() {
-        if (center.world() != null) {
-            return GameWorldHandle.bukkitWorld(center.world());
-        }
-        return GameWorldHandle.bukkitWorld(manager.module().world());
-    }
-
-    private GameLocation requireLocation(GameLocation location) {
-        if (location == null) {
-            throw new IllegalArgumentException("location cannot be null");
-        }
-        if (center != null && center.world() != null && location.world() != null && center.world() != location.world()) {
-            throw new IllegalArgumentException("Border center cannot move between GameWorlds.");
-        }
-        return location;
     }
 
     private Vector requireDimensions(Vector dimensions) {

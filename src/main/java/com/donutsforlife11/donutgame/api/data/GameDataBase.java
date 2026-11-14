@@ -16,6 +16,7 @@ import org.bukkit.loot.LootTable;
 
 import com.donutsforlife11.donutgame.api.item.GameItem;
 import com.donutsforlife11.donutgame.api.item.GameItems;
+import com.donutsforlife11.donutgame.api.item.GameLootTable;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
 import io.papermc.paper.registry.RegistryAccess;
@@ -50,26 +51,22 @@ public abstract class GameDataBase {
         return new GameDataResource(moduleJar, namespace(), relativePath);
     }
 
-    public final LootTable lootTable(NamespacedKey key) {
+    public final GameLootTable lootTable(NamespacedKey key) {
         NamespacedKey owned = ownedKey(key);
         requireResource(dataFile("loot_table", owned, ".json"), "loot table", owned);
         LootTable value = Bukkit.getLootTable(owned);
         if (value == null) {
             throw missingLoaded("loot table", owned);
         }
-        return value;
+        return new GameLootTable(module, value);
     }
 
-    public final LootTable lootTable(String key) {
+    public final GameLootTable lootTable(String key) {
         return lootTable(ownedKey(key));
     }
 
-    public final LootTable lootPool(String item) {
-        return GameItems.lootTable(item);
-    }
-
-    public final LootTable lootPool(Collection<?> items) {
-        return GameItems.lootTable(items);
+    public final GameLootTable lootPool(Collection<?> items) {
+        return GameItems.lootPool(module, items);
     }
 
     public final GameItem item(String shorthand) {

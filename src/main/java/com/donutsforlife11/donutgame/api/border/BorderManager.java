@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.Objects;
 
 import org.bukkit.GameMode;
 import org.bukkit.Particle;
@@ -19,6 +20,7 @@ import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
 import com.donutsforlife11.donutgame.api.time.GameTimer;
 import com.donutsforlife11.donutgame.api.time.TimeManager;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
+import com.donutsforlife11.donutgame.internal.game.GameScope;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -55,10 +57,15 @@ public class BorderManager {
     }
 
     public GameBorder newBorder(BorderShape shape, GameLocation center, Vector dimensions) {
-        GameBorder border = new GameBorder(this, shape, center, dimensions);
+        GameBorder border = new GameBorder(this, shape, scopeCenter(center), dimensions);
         borders.add(border);
         ensureTimers();
         return border;
+    }
+
+    GameLocation scopeCenter(GameLocation center) {
+        GameScope.requireActive(module);
+        return Objects.requireNonNull(center, "center").inWorld(module.world());
     }
 
     public void setDamage(double damage) {
@@ -190,7 +197,7 @@ public class BorderManager {
         }
         for (var gamePlayer : module.playerManager().getNonSpectators()) {
             Player player = GamePlayerHandle.bukkitPlayer(gamePlayer);
-            GameLocation location = gamePlayer.location();
+            GameLocation location = gamePlayer.getLocation();
             if (player == null || location == null || insideAnyBorder(location) || !canTakeBorderDamage(player)) {
                 continue;
             }

@@ -1,5 +1,8 @@
 package com.donutsforlife11.donutgame.api.player;
 
+import com.donutsforlife11.donutgame.Donutgame;
+import org.bukkit.plugin.java.JavaPlugin;
+
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -19,7 +22,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
  * spectating; this object only projects that in-memory state onto an attached
  * Bukkit Player while the player is online.
  */
-final class SpectatorSession implements AutoCloseable {
+final class SpectatorSession {
     private static final int MENU_SLOT = 0;
 
     private final GamePlayer owner;
@@ -33,11 +36,6 @@ final class SpectatorSession implements AutoCloseable {
         SpectatorSession session = new SpectatorSession(owner);
         session.apply(player);
         return session;
-    }
-
-    @Override
-    public void close() {
-        close(GamePlayerHandle.bukkitPlayer(owner));
     }
 
     void close(Player player) {
@@ -58,9 +56,8 @@ final class SpectatorSession implements AutoCloseable {
         if (player == null) {
             return;
         }
-        owner.module().plugin().spectatorService().hideSpectator(owner);
+        JavaPlugin.getPlugin(Donutgame.class).spectatorService().hideSpectator(player);
         removeMenuItem(player);
-        owner.module().log("[spectator-debug] Cleared spectator visibility/list projection for " + player.getName() + " (" + owner.uuid() + ").");
     }
 
     void apply(Player player) {
@@ -80,12 +77,7 @@ final class SpectatorSession implements AutoCloseable {
         inventory.setHeldItemSlot(MENU_SLOT);
         inventory.setItem(MENU_SLOT, menuItem());
         player.updateInventory();
-        owner.module().plugin().spectatorService().showSpectator(owner);
-        owner.module().log(
-            "[spectator-debug] Applied spectator projection for " + player.getName() + " (" + owner.uuid() + ")"
-                + "; allowFlight=" + player.getAllowFlight() + "; flying=" + player.isFlying()
-                + "; invulnerable=" + player.isInvulnerable() + "; invisible=" + player.isInvisible()
-        );
+        JavaPlugin.getPlugin(Donutgame.class).spectatorService().showSpectator(owner);
     }
 
     private void removeMenuItem(Player player) {
@@ -98,7 +90,7 @@ final class SpectatorSession implements AutoCloseable {
         player.updateInventory();
     }
 
-    private ItemStack menuItem() {
+    private static ItemStack menuItem() {
         ItemStack item = new ItemStack(Material.COMPASS);
         item.setData(DataComponentTypes.ITEM_NAME, Component.text("Spectator Menu", NamedTextColor.AQUA));
         item.editPersistentDataContainer(pdc ->

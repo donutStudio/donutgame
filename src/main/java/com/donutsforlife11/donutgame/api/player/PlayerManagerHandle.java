@@ -15,7 +15,7 @@ public final class PlayerManagerHandle {
     }
 
     public static CompletableFuture<Integer> join(PlayerManager manager, Collection<Player> players) {
-        return manager.join(players);
+        return manager.join(players, true);
     }
 
     public static CompletableFuture<Integer> joinInitial(PlayerManager manager, Collection<Player> players) {
@@ -44,6 +44,14 @@ public final class PlayerManagerHandle {
 
     public static GamePlayer getPlayer(PlayerManager manager, Player player) {
         return manager.getPlayer(player);
+    }
+
+    public static void captureBeforeWorldSwap(PlayerManager manager) {
+        manager.captureBeforeWorldSwap();
+    }
+
+    public static void reattachAfterWorldSwap(PlayerManager manager) {
+        manager.reattachAfterWorldSwap();
     }
 
     public static void markOffline(PlayerManager manager, Player player) {

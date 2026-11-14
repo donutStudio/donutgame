@@ -13,6 +13,7 @@ import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
 import com.donutsforlife11.donutgame.api.time.GameTimer;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
+import com.donutsforlife11.donutgame.internal.game.GameScope;
 
 import fr.mrmicky.fastboard.adventure.FastBoard;
 import net.kyori.adventure.text.Component;
@@ -227,6 +228,7 @@ public class GameSidebar {
             return currentViewers;
         }
         for (GamePlayer viewer : supplied) {
+            GameScope.requirePlayer(module, viewer);
             if (GamePlayerHandle.bukkitPlayer(viewer) != null) {
                 currentViewers.put(viewer.uuid(), viewer);
             }

@@ -11,29 +11,30 @@ import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
-import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.attribute.AttributeModifier;
-import org.bukkit.damage.DamageSource;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 
 import com.destroystokyo.paper.profile.PlayerProfile;
 
+import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.entity.GameEntityBase;
+import com.donutsforlife11.donutgame.internal.game.GameScope;
+import com.donutsforlife11.donutgame.api.map.GameWorldHandle;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameLocationHandle;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.item.GameItem;
 import com.donutsforlife11.donutgame.api.item.GameItemComponents;
-import com.donutsforlife11.donutgame.api.item.GameItemHandle;
 import com.donutsforlife11.donutgame.api.item.GameItemType;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
 import com.donutsforlife11.donutgame.api.time.GameTimer;
@@ -42,16 +43,18 @@ import com.donutsforlife11.donutgame.internal.game.GameModule;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
-public class GamePlayer implements GameEntityBase {
+public final class GamePlayer implements GameEntityBase {
     private final GameModule module;
     private final long generation;
     private final UUID uuid;
     private final PlayerSnapshot playingState = PlayerSnapshot.empty();
     private SpectatorSession spectatorSession;
     private PlayerState state;
-    private String lastWorldName;
+    private long attachedWorldGeneration;
+    private String name;
     private Location lastLocation;
     private GameLocation spawnPoint;
+    private long spawnPointGeneration;
     private GameTimer respawnTimer;
     private GameLocation pendingDeathSpectatorLocation;
     private GameLocation pendingVanillaRespawnLocation;
@@ -74,8 +77,7 @@ public class GamePlayer implements GameEntityBase {
     }
 
     public String name() {
-        Player player = bukkitPlayer();
-        return player == null ? uuid.toString() : player.getName();
+        return name == null ? uuid.toString() : name;
     }
 
     public PlayerProfile playerProfile() {
@@ -87,7 +89,15 @@ public class GamePlayer implements GameEntityBase {
         if (!module.isHandleGenerationActive(generation)) {
             return null;
         }
-        return Bukkit.getPlayer(uuid);
+        return playerInCurrentWorld();
+    }
+
+    Player playerInCurrentWorld() {
+        if (module.playerManager() == null || module.playerManager().getPlayer(uuid) != this) {
+            return null;
+        }
+        Player player = Bukkit.getPlayer(uuid);
+        return player != null && player.isConnected() && player.getWorld() == GameWorldHandle.bukkitWorld(world()) ? player : null;
     }
 
     Entity bukkitEntity() {
@@ -95,12 +105,12 @@ public class GamePlayer implements GameEntityBase {
     }
 
     @Override
-    public GameLocation location() {
+    public GameLocation getLocation() {
         Player player = attachedPlayer();
         if (player != null) {
             return GameLocationHandle.create(world(), player.getLocation());
         }
-        return lastLocation == null ? null : GameLocationHandle.create(world(), lastLocation);
+        return lastGameLocation();
     }
 
     public GameModule module() {
@@ -109,10 +119,6 @@ public class GamePlayer implements GameEntityBase {
 
     public GameWorld world() {
         return module().world();
-    }
-
-    public PlayerState state() {
-        return state;
     }
 
     public boolean isOnline() {
@@ -124,6 +130,11 @@ public class GamePlayer implements GameEntityBase {
     }
 
     public void setSpectator(boolean spectator, GameLocation location) {
+        GameScope.requireActive(module);
+        GameScope.requirePlayer(module, this);
+        if (location != null) {
+            GameScope.requireLocation(world(), location);
+        }
         if (spectator) {
             enterSpectator(location);
             return;
@@ -145,19 +156,16 @@ public class GamePlayer implements GameEntityBase {
         respawn(0, () -> spawnPoint());
     }
 
-    public void respawn(int ticks) {
-        respawn(ticks, () -> spawnPoint());
-    }
-
     public void respawn(GameLocation location) {
-        respawn(0, location);
-    }
-
-    public void respawn(int ticks, GameLocation location) {
-        respawn(ticks, () -> location);
+        if (location != null) {
+            GameScope.requireLocation(world(), location);
+        }
+        respawn(0, () -> location);
     }
 
     public void respawn(int ticks, Supplier<GameLocation> location) {
+        GameScope.requireActive(module);
+        GameScope.requirePlayer(module, this);
         if (ticks < 0) {
             throw new IllegalArgumentException("ticks cannot be negative");
         }
@@ -173,7 +181,7 @@ public class GamePlayer implements GameEntityBase {
                 }
                 pendingVanillaRespawnLocation = pendingDeathSpectatorLocation;
             } else {
-                pendingVanillaRespawnLocation = location.get();
+                pendingVanillaRespawnLocation = checkedRespawnLocation(location.get());
             }
             pendingPostRespawnTimerTicks = ticks;
             pendingPostRespawnTimerLocation = location;
@@ -210,18 +218,18 @@ public class GamePlayer implements GameEntityBase {
     }
 
     public void setSpawnPoint(GameLocation location) {
-        spawnPoint = location;
+        spawnPoint = checkedRespawnLocation(location);
+        spawnPointGeneration = GameWorldHandle.generation(world());
     }
     public void clearSpawnPoint() {
-        spawnPoint = world().worldSpawn();
+        setSpawnPoint(world().getSpawnLocation());
     }
 
     public GameLocation spawnPoint() {
-        if (spawnPoint != null) {
+        if (spawnPoint != null && spawnPointGeneration == GameWorldHandle.generation(world())) {
             return spawnPoint;
         }
-        GameWorld world = world();
-        return world == null ? null : world.worldSpawn();
+        return defaultSpawnPoint();
     }
 
     public GameTimer respawnTimer() {
@@ -239,7 +247,9 @@ public class GamePlayer implements GameEntityBase {
 
     public Collection<GamePlayer> spectatablePlayers() {
         Collection<GamePlayer> players = spectatablePlayers.get();
-        return players == null ? List.of() : List.copyOf(players);
+        return players == null ? List.of() : players.stream()
+            .filter(player -> player.module() == module && module.playerManager().getPlayer(player.uuid()) == player)
+            .toList();
     }
 
     public void setSpectatableTeams(Collection<GameTeam> teams) {
@@ -253,7 +263,7 @@ public class GamePlayer implements GameEntityBase {
 
     public Collection<GameTeam> spectatableTeams() {
         Collection<GameTeam> teams = spectatableTeams.get();
-        return teams == null ? List.of() : List.copyOf(teams);
+        return teams == null ? List.of() : teams.stream().filter(module.teamManager().getTeams()::contains).toList();
     }
 
     public GameTeam getTeam() {
@@ -287,11 +297,11 @@ public class GamePlayer implements GameEntityBase {
         applyVisiblePlayer(player -> player.setGameMode(playingState.gameMode));
     }
 
-    public GameMode gameMode() {
+    public GameMode getGameMode() {
         return playingState.gameMode;
     }
 
-    public void setHunger(int hunger) {
+    public void setFoodLevel(int hunger) {
         playingState.foodLevel = Math.max(0, Math.min(20, hunger));
         applyVisiblePlayer(player -> player.setFoodLevel(playingState.foodLevel));
     }
@@ -299,11 +309,8 @@ public class GamePlayer implements GameEntityBase {
     public void setSprinting(boolean sprinting) {
         applyVisiblePlayer(player -> player.setSprinting(sprinting));
     }
-    boolean isSprinting() {
-        return bukkitPlayer().isSprinting();
-    }
 
-    public int hunger() {
+    public int getFoodLevel() {
         return playingState.foodLevel;
     }
 
@@ -312,7 +319,7 @@ public class GamePlayer implements GameEntityBase {
         applyVisiblePlayer(player -> player.setSaturation(playingState.saturation));
     }
 
-    public float saturation() {
+    public float getSaturation() {
         return playingState.saturation;
     }
 
@@ -321,7 +328,7 @@ public class GamePlayer implements GameEntityBase {
         applyVisiblePlayer(player -> player.setArrowsInBody(playingState.arrowsInBody));
     }
 
-    public int arrowsInBody() {
+    public int getArrowsInBody() {
         return playingState.arrowsInBody;
     }
 
@@ -341,7 +348,7 @@ public class GamePlayer implements GameEntityBase {
         applyVisiblePlayer(player -> player.setLevel(playingState.level));
     }
 
-    public int level() {
+    public int getLevel() {
         return playingState.level;
     }
 
@@ -350,27 +357,19 @@ public class GamePlayer implements GameEntityBase {
         applyVisiblePlayer(player -> player.setExp(playingState.exp));
     }
 
-    public float exp() {
+    public float getExp() {
         return playingState.exp;
     }
 
     public void reset() {
         cancelRespawn();
         playingState.reset(GameMode.SURVIVAL);
-        forcePlayingState("reset");
+        restorePlayingState(attachedPlayer());
     }
 
-    public String lastWorldName() {
-        return lastWorldName;
-    }
-
-    Location lastLocation() {
-        return lastLocation == null ? null : lastLocation.clone();
-    }
-
-    public GameLocation lastGameLocation() {
-        Location location = lastLocation();
-        return location == null ? null : GameLocationHandle.create(world(), location);
+    private GameLocation lastGameLocation() {
+        return lastLocation == null || lastLocation.getWorld() != GameWorldHandle.bukkitWorld(world())
+            ? null : GameLocationHandle.create(world(), lastLocation);
     }
 
     public void giveItem(GameItemType item) {
@@ -431,7 +430,7 @@ public class GamePlayer implements GameEntityBase {
     }
 
     @Override
-    public void setHealth(float health) {
+    public void setHealth(double health) {
         playingState.health = Math.max(0.0, Math.min(health, maxHealth()));
         applyVisiblePlayer(player -> {
             AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
@@ -442,16 +441,16 @@ public class GamePlayer implements GameEntityBase {
 
     @Override
     public void heal() {
-        setHealth((float) maxHealth());
+        setHealth(maxHealth());
     }
 
     @Override
     public void heal(float amount) {
-        setHealth((float) (playingState.health + Math.max(0.0f, amount)));
+        setHealth(getHealth() + Math.max(0.0f, amount));
     }
 
     @Override
-    public void damage(float amount) {
+    public void damage(double amount) {
         if (isSpectator()) {
             return;
         }
@@ -460,17 +459,9 @@ public class GamePlayer implements GameEntityBase {
     }
 
     @Override
-    public void damage(float amount, DamageSource source) {
-        if (isSpectator()) {
-            return;
-        }
-        GameEntityBase.super.damage(amount, source);
-        captureVisiblePlayingState();
-    }
-
-    @Override
-    public float health() {
-        return (float) playingState.health;
+    public double getHealth() {
+        Player player = visiblePlayer();
+        return player == null ? playingState.health : player.getHealth();
     }
 
     @Override
@@ -487,8 +478,8 @@ public class GamePlayer implements GameEntityBase {
     }
 
     @Override
-    public Vector velocity() {
-        Player player = bukkitPlayer();
+    public Vector getVelocity() {
+        Player player = attachedPlayer();
         return player == null ? new Vector() : player.getVelocity().clone();
     }
 
@@ -521,31 +512,33 @@ public class GamePlayer implements GameEntityBase {
     }
 
     @Override
-    public int fireTicks() {
+    public int getFireTicks() {
         return playingState.fireTicks;
     }
 
     @Override
-    public void addEffect(PotionEffect effect) {
+    public boolean addPotionEffect(PotionEffect effect) {
         if (effect == null) {
             throw new IllegalArgumentException("effect cannot be null");
         }
         playingState.effects.removeIf(current -> current.getType().equals(effect.getType()));
         playingState.effects.add(effect);
-        applyVisiblePlayer(player -> {
-            player.removePotionEffect(effect.getType());
-            player.addPotionEffect(effect);
-        });
+        Player player = visiblePlayer();
+        if (player == null) {
+            return true;
+        }
+        player.removePotionEffect(effect.getType());
+        return player.addPotionEffect(effect);
     }
 
     @Override
-    public void clearEffects() {
+    public void clearActivePotionEffects() {
         playingState.effects.clear();
         applyVisiblePlayer(Player::clearActivePotionEffects);
     }
 
     @Override
-    public void clearEffect(PotionEffectType effect) {
+    public void removePotionEffect(PotionEffectType effect) {
         if (effect == null) {
             return;
         }
@@ -554,12 +547,12 @@ public class GamePlayer implements GameEntityBase {
     }
 
     @Override
-    public boolean hasEffect(PotionEffectType effect) {
+    public boolean hasPotionEffect(PotionEffectType effect) {
         return effect != null && playingState.effects.stream().anyMatch(current -> current.getType().equals(effect));
     }
 
     @Override
-    public List<PotionEffect> effects() {
+    public List<PotionEffect> getActivePotionEffects() {
         return List.copyOf(playingState.effects);
     }
 
@@ -643,18 +636,10 @@ public class GamePlayer implements GameEntityBase {
 
     @Override
     public double attributeValue(Attribute attribute) {
-        double value = attributeBase(attribute);
-        for (AttributeModifier modifier : playingState.attributeModifiers.getOrDefault(attribute, List.of())) {
-            String operation = modifier.getOperation().name();
-            if ("ADD_NUMBER".equals(operation)) {
-                value += modifier.getAmount();
-            } else if ("ADD_SCALAR".equals(operation)) {
-                value += attributeBase(attribute) * modifier.getAmount();
-            } else if ("MULTIPLY_SCALAR_1".equals(operation)) {
-                value *= 1.0 + modifier.getAmount();
-            }
-        }
-        return value;
+        Player player = visiblePlayer();
+        AttributeInstance live = player == null ? null : player.getAttribute(attribute);
+        return live != null ? live.getValue() : PlayerSnapshot.attributeValue(
+            attributeBase(attribute), playingState.attributeModifiers.getOrDefault(attribute, List.of()));
     }
 
     @Override
@@ -668,11 +653,13 @@ public class GamePlayer implements GameEntityBase {
             throw new IllegalArgumentException("slot cannot be null");
         }
         ItemStack stack = item == null ? null : GameItemComponents.normalize(this, item.copyBukkitItem());
-        playingState.setItem(slot, stack);
-        applyVisiblePlayer(player -> {
-            setPlayerInventorySlot(player, slot, stack == null ? null : stack.clone());
+        Player player = visiblePlayer();
+        if (player != null) {
+            playingState.heldItemSlot = player.getInventory().getHeldItemSlot();
+            player.getInventory().setItem(slot, stack);
             player.updateInventory();
-        });
+        }
+        playingState.setItem(slot, stack);
     }
 
     @Override
@@ -680,7 +667,8 @@ public class GamePlayer implements GameEntityBase {
         if (slot == null) {
             throw new IllegalArgumentException("slot cannot be null");
         }
-        return GameItem.from(playingState.getItem(slot));
+        Player player = visiblePlayer();
+        return GameItem.from(player == null ? playingState.getItem(slot) : player.getInventory().getItem(slot));
     }
 
     @Override
@@ -700,41 +688,36 @@ public class GamePlayer implements GameEntityBase {
             clearItems();
             return;
         }
-        ItemStack bukkitItem = GameItemHandle.bukkitItem(item);
+        ItemStack bukkitItem = item.copyBukkitItem();
         clearItems(stack -> stack != null && stack.isSimilar(bukkitItem));
     }
 
-    void remember(Player player) {
+    void reattach(Player player) {
         if (player == null) {
             state = PlayerState.OFFLINE;
             return;
         }
         PlayerAttributeDefaults.repairInvalidCameraDistance(player);
         player.setCollidable(world().playerCollisionsEnabled());
+        name = player.getName();
         state = PlayerState.ONLINE;
-        World world = player.getWorld();
-        lastWorldName = world == null ? null : world.getName();
+        long currentGeneration = GameWorldHandle.generation(world());
+        boolean replaced = attachedWorldGeneration != currentGeneration;
+        attachedWorldGeneration = currentGeneration;
         lastLocation = player.getLocation().clone();
-        if (spawnPoint == null) {
-            spawnPoint = defaultSpawnPoint();
+        if (spawnPoint == null || replaced) {
+            setSpawnPoint(defaultSpawnPoint());
         }
-        if (!isSpectator()) {
-            capturePlayingState(player);
-        } else if (spectatorSession != null) {
+        if (spectatorSession != null) {
             spectatorSession.apply(player);
         } else if (pendingDeathSpectatorLocation != null && !player.isDead()) {
-            // A disconnect can happen between death and the post-respawn callback.
-            // On reconnect the Bukkit player is alive again, so promote the pending
-            // in-memory death state into a real spectator session instead of leaving
-            // an invisible logical-spectator flag that only the damage guards see.
-            GameLocation spectatorLocation = pendingDeathSpectatorLocation;
-            pendingDeathSpectatorLocation = null;
-            spectatorSession = SpectatorSession.open(this, player);
-            if (spectatorLocation != null) {
-                teleport(spectatorLocation);
+            // Reconnect can replace the vanilla post-respawn callback.
+            if (replaced) {
+                pendingDeathSpectatorLocation = spawnPoint;
             }
+            enterPostDeathSpectator(spawnPoint());
         } else {
-            playingState.ageTimedValues();
+            applyPlayingStateIfVisible();
         }
     }
 
@@ -747,18 +730,16 @@ public class GamePlayer implements GameEntityBase {
         pendingDeathSpectatorLocation = null;
         closeSpectatorSession(player);
         resetPlayingStateForGame();
-        playingState.clearSpectatorProjection();
         player.setCollidable(world().playerCollisionsEnabled());
+        name = player.getName();
         state = PlayerState.ONLINE;
-        World world = player.getWorld();
-        lastWorldName = world == null ? null : world.getName();
+        attachedWorldGeneration = GameWorldHandle.generation(world());
         lastLocation = player.getLocation().clone();
-        spawnPoint = defaultSpawnPoint();
+        setSpawnPoint(defaultSpawnPoint());
         applyPlayingStateIfVisible();
     }
 
-    void markOffline() {
-        Player player = bukkitPlayer();
+    void markOffline(Player player) {
         if (player == null) {
             state = PlayerState.OFFLINE;
             return;
@@ -769,6 +750,7 @@ public class GamePlayer implements GameEntityBase {
             capturePlayingState(player);
         }
 
+        lastLocation = player.getLocation().clone();
         // Detach first. From this point onward, game/module code may still run
         // during PlayerQuitEvent, but attachedPlayer() will return null and no
         // spectator overlay can be written back onto the disconnecting entity.
@@ -784,13 +766,13 @@ public class GamePlayer implements GameEntityBase {
             if (!player.isDead()) {
                 playingState.apply(player);
             }
-            applyNonSpectatorOverlayState(player);
+            SpectatorProjection.applyNonSpectatorOverlay(player, playingState);
             assertPhysicalPlayingOverlay(player, "disconnect");
             player.updateInventory();
         }
     }
 
-    public void enterPostDeathSpectator(GameLocation location) {
+    void enterPostDeathSpectator(GameLocation location) {
         GameLocation spectatorLocation = pendingDeathSpectatorLocation == null ? location : pendingDeathSpectatorLocation;
         pendingDeathSpectatorLocation = null;
         enterSpectator(spectatorLocation);
@@ -814,11 +796,11 @@ public class GamePlayer implements GameEntityBase {
         }
     }
 
-    public void rememberVanillaDeath() {
+    void rememberVanillaDeath() {
         playingState.ageTimedValues();
     }
 
-    public GameLocation postDeathRespawnLocation(GameLocation fallback) {
+    GameLocation postDeathRespawnLocation(GameLocation fallback) {
         if (pendingVanillaRespawnLocation != null) {
             return pendingVanillaRespawnLocation;
         }
@@ -828,33 +810,39 @@ public class GamePlayer implements GameEntityBase {
         return fallback;
     }
 
-    void prepareForRemoval() {
+    void captureBeforeWorldSwap(Player player) {
+        capturePlayingState(player);
+        cancelRespawn();
+    }
+
+    void detachAfterWorldExit(Player player) {
         cancelRespawn();
         pendingDeathSpectatorLocation = null;
-        forcePlayingState("removal");
+        closeSpectatorSession(player);
+        restoreExternalScoreboard(player);
+        state = PlayerState.OFFLINE;
     }
 
     void prepareForWorldExit() {
         cancelRespawn();
-        pendingDeathSpectatorLocation = null;
-        forcePlayingState("world exit");
+        restorePlayingState(state == PlayerState.ONLINE ? playerInCurrentWorld() : null);
     }
 
-    void clearSpectatorStateAfterWorldExit(Player player) {
-        pendingDeathSpectatorLocation = null;
-        closeSpectatorSession(player);
-        playingState.clearSpectatorProjection();
-        clearPhysicalSpectatorProjection(player);
+    private GameLocation checkedRespawnLocation(GameLocation location) {
+        if (location != null) {
+            GameScope.requireLocation(world(), location);
+        }
+        return location;
     }
 
     private void respawnNow(GameLocation location) {
+        checkedRespawnLocation(location);
         Player player = attachedPlayer();
         if (player != null && player.isDead()) {
             pendingVanillaRespawnLocation = location == null ? spawnPoint() : location;
             return;
         }
         pendingDeathSpectatorLocation = null;
-        playingState.clearSpectatorProjection();
         GameLocation target = location == null ? spawnPoint() : location;
         if (target != null) {
             setSpawnPoint(target);
@@ -890,7 +878,7 @@ public class GamePlayer implements GameEntityBase {
         Player player = attachedPlayer();
         if (player != null && !isSpectator()) {
             if (player.isDead()) {
-                applyNonSpectatorOverlayState(player);
+                SpectatorProjection.applyNonSpectatorOverlay(player, playingState);
                 player.updateInventory();
                 return;
             }
@@ -913,23 +901,19 @@ public class GamePlayer implements GameEntityBase {
         Player player = attachedPlayer();
         if (player != null && player.isDead()) {
             pendingDeathSpectatorLocation = location == null ? locationOrSpawn() : location;
-            debugSpectator("queued post-death spectator", player, null);
+
             return;
         }
         pendingDeathSpectatorLocation = null;
         if (spectatorSession == null) {
             if (player != null) {
-                // Repair any stale spectator projection before snapshotting. This
-                // prevents leaked spectator flags from becoming the next round's
-                // authoritative playing state.
-                repairPhysicalPlayingOverlay(player, "before spectator snapshot");
-                capturePlayingStateWithoutSpectatorProjection(player);
+                capturePlayingState(player);
             }
             spectatorSession = SpectatorSession.open(this, player);
-            debugSpectator("entered spectator", player, null);
+
         } else if (player != null) {
             spectatorSession.apply(player);
-            debugSpectator("refreshed spectator projection", player, null);
+
         }
         if (player != null && location != null) {
             teleport(location);
@@ -938,25 +922,23 @@ public class GamePlayer implements GameEntityBase {
 
     private void exitSpectator(GameLocation location) {
         Player player = attachedPlayer();
-        String before = player == null ? null : describePhysicalState(player);
-        pendingDeathSpectatorLocation = null;
-        closeSpectatorSession(player);
-        playingState.clearSpectatorProjection();
-
-        if (player != null) {
-            if (player.isDead()) {
-                applyNonSpectatorOverlayState(player);
-            } else {
-                playingState.apply(player);
-                applyNonSpectatorOverlayState(player);
-            }
-            player.updateInventory();
-        }
-
-        assertNoSpectatorOverlay(player);
-        debugSpectator("exited spectator", player, before);
+        restorePlayingState(player);
         if (player != null && location != null) {
             teleport(location);
+        }
+    }
+
+    private void restorePlayingState(Player player) {
+        pendingDeathSpectatorLocation = null;
+        closeSpectatorSession(player);
+        if (player != null) {
+            if (!player.isDead()) {
+                playingState.apply(player);
+            } else {
+                SpectatorProjection.applyNonSpectatorOverlay(player, playingState);
+            }
+            assertPhysicalPlayingOverlay(player, "playing state restore");
+            player.updateInventory();
         }
     }
 
@@ -968,42 +950,28 @@ public class GamePlayer implements GameEntityBase {
         }
     }
 
-    private void assertNoSpectatorOverlay(Player player) {
-        if (spectatorSession != null || pendingDeathSpectatorLocation != null) {
-            throw new IllegalStateException("Player " + uuid + " still has an active in-memory spectator session after spectator exit.");
-        }
-        assertPhysicalPlayingOverlay(player, "spectator exit");
-    }
-
     private void assertPhysicalPlayingOverlay(Player player, String transition) {
         if (player == null) {
             return;
         }
-        repairPhysicalPlayingOverlay(player, transition);
-        if (!matchesPlayingOverlay(player)) {
-            String differences = describeOverlayMismatch(player);
+        repairPhysicalPlayingOverlay(player);
+        if (!SpectatorProjection.matches(player, playingState)) {
+            String differences = SpectatorProjection.describeMismatch(player, playingState);
             module.logError(
                 "Spectator cleanup failed for " + player.getName() + " (" + uuid + ") during " + transition
                     + ". Remaining mismatch: " + differences
-                    + "; physical={" + describePhysicalState(player) + "}"
-                    + "; expected={" + describeExpectedPlayingState() + "}",
+                    + "; physical={" + SpectatorProjection.describePhysical(player) + "}"
+                    + "; expected={" + SpectatorProjection.describeExpected(playingState) + "}",
                 new IllegalStateException("Spectator projection could not be fully cleared")
             );
             scheduleSpectatorOverlayRepair(transition);
         }
     }
 
-    private void repairPhysicalPlayingOverlay(Player player, String transition) {
-        if (player == null || matchesPlayingOverlay(player)) {
-            return;
+    private void repairPhysicalPlayingOverlay(Player player) {
+        if (!SpectatorProjection.matches(player, playingState)) {
+            SpectatorProjection.applyNonSpectatorOverlay(player, playingState);
         }
-        String before = describePhysicalState(player);
-        String mismatch = describeOverlayMismatch(player);
-        applyNonSpectatorOverlayState(player);
-        module.log(
-            "[spectator-debug] Repaired stale spectator projection for " + player.getName() + " (" + uuid + ") during "
-                + transition + ": " + mismatch + "; before={" + before + "}; after={" + describePhysicalState(player) + "}"
-        );
     }
 
     private void resetPlayingStateForGame() {
@@ -1012,29 +980,6 @@ public class GamePlayer implements GameEntityBase {
         playingState.allowFlight = false;
         playingState.flying = false;
         playingState.restoreAliveDefaults(maxHealth());
-    }
-
-    private void forcePlayingState(String transition) {
-        Player player = attachedPlayer();
-        String before = player == null ? null : describePhysicalState(player);
-        pendingDeathSpectatorLocation = null;
-        closeSpectatorSession(player);
-        playingState.clearSpectatorProjection();
-        if (player == null) {
-            return;
-        }
-        if (player.isDead()) {
-            applyNonSpectatorOverlayState(player);
-            player.updateInventory();
-            assertNoSpectatorOverlay(player);
-            debugSpectator("forced playing state during " + transition, player, before);
-            return;
-        }
-        playingState.apply(player);
-        applyNonSpectatorOverlayState(player);
-        assertNoSpectatorOverlay(player);
-        player.updateInventory();
-        debugSpectator("forced playing state during " + transition, player, before);
     }
 
     private void capturePlayingState(Player player) {
@@ -1048,70 +993,25 @@ public class GamePlayer implements GameEntityBase {
         playingState.capture(player);
     }
 
-    private void capturePlayingStateWithoutSpectatorProjection(Player player) {
-        capturePlayingState(player);
-        playingState.clearSpectatorProjection();
-    }
-
     private void scheduleSpectatorOverlayRepair(String transition) {
-        Bukkit.getScheduler().runTask(module.plugin(), () -> {
+        Bukkit.getScheduler().runTask(JavaPlugin.getPlugin(Donutgame.class), () -> {
             Player player = attachedPlayer();
-            if (player == null) {
+            if (player == null || isSpectator()) {
                 return;
             }
-            applyNonSpectatorOverlayState(player);
+            SpectatorProjection.applyNonSpectatorOverlay(player, playingState);
             player.setNoDamageTicks(0);
             player.updateInventory();
-            if (!matchesPlayingOverlay(player)) {
+            if (!SpectatorProjection.matches(player, playingState)) {
                 module.logError(
                     "Spectator cleanup still has a physical mismatch for " + player.getName() + " (" + uuid + ") after deferred "
-                        + transition + " repair. Remaining mismatch: " + describeOverlayMismatch(player)
-                        + "; physical={" + describePhysicalState(player) + "}"
-                        + "; expected={" + describeExpectedPlayingState() + "}",
+                        + transition + " repair. Remaining mismatch: " + SpectatorProjection.describeMismatch(player, playingState)
+                        + "; physical={" + SpectatorProjection.describePhysical(player) + "}"
+                        + "; expected={" + SpectatorProjection.describeExpected(playingState) + "}",
                     new IllegalStateException("Deferred spectator projection repair did not fully clear")
                 );
             }
         });
-    }
-
-    private void applyNonSpectatorOverlayState(Player player) {
-        SpectatorProjection.applyNonSpectatorOverlay(player, playingState);
-    }
-
-    private void clearPhysicalSpectatorProjection(Player player) {
-        SpectatorProjection.clearPhysical(player);
-    }
-
-    private boolean matchesPlayingOverlay(Player player) {
-        return SpectatorProjection.matches(player, playingState);
-    }
-
-    private String describeOverlayMismatch(Player player) {
-        return SpectatorProjection.describeMismatch(player, playingState);
-    }
-
-    private String describePhysicalState(Player player) {
-        return SpectatorProjection.describePhysical(player);
-    }
-
-    private String describeExpectedPlayingState() {
-        return SpectatorProjection.describeExpected(playingState);
-    }
-
-    private void debugSpectator(String action, Player player, String before) {
-        StringBuilder message = new StringBuilder("[spectator-debug] ")
-            .append(action)
-            .append(" for ")
-            .append(player == null ? uuid : player.getName() + " (" + uuid + ")")
-            .append("; logicalSpectator=").append(isSpectator())
-            .append("; spectatorSession=").append(spectatorSession != null)
-            .append("; pendingDeathSpectator=").append(pendingDeathSpectatorLocation != null)
-            .append("; physical={").append(describePhysicalState(player)).append("}")
-            .append("; expected={").append(describeExpectedPlayingState()).append("}");
-        if (before != null) {
-            message.append("; before={").append(before).append("}");
-        }
-        module.log(message.toString());
     }
 
     private Player attachedPlayer() {
@@ -1139,19 +1039,6 @@ public class GamePlayer implements GameEntityBase {
         });
     }
 
-    private void setPlayerInventorySlot(Player player, EquipmentSlot slot, ItemStack item) {
-        switch (slot) {
-            case HAND -> player.getInventory().setItemInMainHand(item);
-            case OFF_HAND -> player.getInventory().setItemInOffHand(item);
-            case FEET -> player.getInventory().setBoots(item);
-            case LEGS -> player.getInventory().setLeggings(item);
-            case CHEST -> player.getInventory().setChestplate(item);
-            case HEAD -> player.getInventory().setHelmet(item);
-            default -> {
-            }
-        }
-    }
-
     private void clearInventoryItems(
         ItemStack[] items,
         java.util.function.Predicate<ItemStack> matcher,
@@ -1166,17 +1053,14 @@ public class GamePlayer implements GameEntityBase {
     }
 
     private GameLocation locationOrSpawn() {
-        GameLocation location = location();
+        GameLocation location = getLocation();
         return location == null ? spawnPoint() : location;
     }
 
     private GameLocation defaultSpawnPoint() {
         GameWorld world = world();
-        if (world == null) {
-            return null;
-        }
         GameLocation point = world.getPoint("spawn");
-        return point == null ? world.worldSpawn() : point;
+        return point == null ? world.getSpawnLocation() : point;
     }
 
     private double maxHealth() {

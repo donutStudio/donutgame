@@ -26,7 +26,7 @@ final class SpeedZoneBuildProtection {
     public void onBlockPlace(GameEvent<BlockPlaceEvent> event) {
         GamePlayer player = event.getPlayer();
         GameBlock block = event.getBlockPlaced();
-        if (player != null && player.gameMode() == GameMode.SURVIVAL) {
+        if (player != null && player.getGameMode() == GameMode.SURVIVAL) {
             playerPlacedBlocks.add(BlockKey.of(block));
         }
     }
@@ -35,7 +35,7 @@ final class SpeedZoneBuildProtection {
     public void onBlockBreak(GameEvent<BlockBreakEvent> event) {
         GamePlayer player = event.getPlayer();
         GameBlock block = event.getBlock();
-        if (player == null || player.gameMode() != GameMode.SURVIVAL) {
+        if (player == null || player.getGameMode() != GameMode.SURVIVAL) {
             return;
         }
         if (!playerPlacedBlocks.remove(BlockKey.of(block))) {
@@ -58,13 +58,13 @@ final class SpeedZoneBuildProtection {
         }
     }
 
-    private record BlockKey(String worldId, int x, int y, int z) {
+    private record BlockKey(int x, int y, int z) {
         private static BlockKey of(GameBlock block) {
             if (block == null) {
                 return null;
             }
-            GameLocation location = block.location();
-            return new BlockKey(block.world().id(), location.blockX(), location.blockY(), location.blockZ());
+            GameLocation location = block.getLocation();
+            return new BlockKey(location.blockX(), location.blockY(), location.blockZ());
         }
     }
 }

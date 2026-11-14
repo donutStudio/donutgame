@@ -13,13 +13,11 @@ import java.util.concurrent.ThreadLocalRandom;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.loot.LootTable;
 import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.api.border.GameBorder;
 import com.donutsforlife11.donutgame.api.item.GameItem;
-import com.donutsforlife11.donutgame.api.item.GameItems;
+import com.donutsforlife11.donutgame.api.item.GameLootTable;
 import com.donutsforlife11.donutgame.api.map.GameBlock;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameRegion;
@@ -125,7 +123,7 @@ final class VoidWarsEvents {
         return YamlConfiguration.loadConfiguration(new InputStreamReader(input, StandardCharsets.UTF_8));
     }
 
-    private LootTable loot(Map<?, ?> entry) {
+    private GameLootTable loot(Map<?, ?> entry) {
         Object table = entry.get("loot_table");
         if (table instanceof String key && !key.isBlank()) {
             return game.data().lootTable(key);
@@ -167,7 +165,7 @@ final class VoidWarsEvents {
         }
     }
 
-    private void fillChests(LootTable lootTable) {
+    private void fillChests(GameLootTable lootTable) {
         for (GameLocation location : chests) {
             GameBlock block = game.world().blockAt(location);
             if (!block.is(Material.CHEST)) {
@@ -185,17 +183,17 @@ final class VoidWarsEvents {
         }
     }
 
-    private void dropItems(LootTable lootTable) {
-        Collection<ItemStack> items = GameItems.fromLootTable(lootTable);
+    private void dropItems(GameLootTable lootTable) {
+        Collection<GameItem> items = lootTable.roll();
         for (GamePlayer player : game.playerManager().getPlayers()) {
-            for (ItemStack item : items) {
-                player.giveItem(GameItem.from(item));
+            for (GameItem item : items) {
+                player.giveItem(item);
             }
         }
         if (game.roundTimer() != null && game.roundTimer().elapsedTicks() > 0 && !items.isEmpty()) {
-            for (ItemStack item : items) {
+            for (GameItem item : items) {
                 game.uiManager().gameMessage(game.playerManager().getPlayers(), Component.text("Gave players ")
-                    .append(displayName(item))
+                    .append(item.displayName())
                     .append(Component.text(" x" + item.getAmount()))
                 );
             }
@@ -233,11 +231,7 @@ final class VoidWarsEvents {
         return ticks;
     }
 
-    private Component displayName(ItemStack item) {
-        return GameItem.from(item).displayName();
-    }
-
-    private record TimedLoot(int ticks, LootTable lootTable) {
+    private record TimedLoot(int ticks, GameLootTable lootTable) {
     }
 
     private record BorderShrink(int ticks, double scale) {

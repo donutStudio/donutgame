@@ -70,7 +70,7 @@ final class SpeedZoneModifiers {
         });
 
         register("jump_boost", "minecraft:items", "item/rabbit_foot", player ->
-            player.addEffect(new PotionEffect(PotionEffectType.JUMP_BOOST, PotionEffect.INFINITE_DURATION, 4, false, false, false)));
+            player.addPotionEffect(new PotionEffect(PotionEffectType.JUMP_BOOST, PotionEffect.INFINITE_DURATION, 4, false, false, false)));
 
         register("boat", "minecraft:items", "item/oak_boat", player -> {
             GameItem boat = GameItem.of(Material.OAK_BOAT);
@@ -111,7 +111,7 @@ final class SpeedZoneModifiers {
 
     void clear(GamePlayer player) {
         player.clearItems();
-        player.clearEffect(PotionEffectType.JUMP_BOOST);
+        player.removePotionEffect(PotionEffectType.JUMP_BOOST);
     }
 
     void apply(GamePlayer player, List<String> keys) {

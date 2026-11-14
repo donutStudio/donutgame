@@ -172,7 +172,7 @@ public class SpectatorGuardEvents implements Listener {
             return;
         }
         GameLocation spawnPoint = spectator.spawnPoint();
-        Location destination = spawnPoint == null ? world.getSpawnLocation() : GameLocationHandle.toBukkit(spawnPoint, world);
+        Location destination = spawnPoint == null ? world.getSpawnLocation() : GameLocationHandle.toBukkit(spawnPoint, spectator.world());
         player.teleport(destination);
     }
 

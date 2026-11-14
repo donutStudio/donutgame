@@ -9,7 +9,7 @@ import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
-public class GamePlayerLateJoinEvent extends PlayerEvent {
+public final class GamePlayerLateJoinEvent extends PlayerEvent {
     private static final HandlerList HANDLER_LIST = new HandlerList();
 
     private final GameModule module;
@@ -45,7 +45,7 @@ public class GamePlayerLateJoinEvent extends PlayerEvent {
     }
 
     public void setSpectatorLocation(GameLocation spectatorLocation) {
-        this.spectatorLocation = spectatorLocation;
+        this.spectatorLocation = spectatorLocation == null ? null : spectatorLocation.inWorld(module.world());
     }
 
     @Override

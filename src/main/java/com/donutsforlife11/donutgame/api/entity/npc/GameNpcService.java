@@ -9,6 +9,10 @@ import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Mannequin;
+
+import com.destroystokyo.paper.profile.PlayerProfile;
+import com.donutsforlife11.donutgame.api.map.GameWorld;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -42,9 +46,8 @@ public final class GameNpcService implements Listener {
         ticker = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             int now = Bukkit.getCurrentTick();
             for (GameNpc npc : List.copyOf(npcs.values())) {
-                if (!npc.mannequin.isValid() || GameWorldHandle.generation(npc.world()) != npc.worldGeneration
-                    || GameWorldHandle.bukkitWorld(npc.world()) != npc.mannequin.getWorld()) {
-                    npc.remove();
+                if (npc.isDead()) {
+                    npc.discard();
                     continue;
                 }
                 // Jump requests are one-shot, rather than continuous bunny hopping.
@@ -63,7 +66,8 @@ public final class GameNpcService implements Listener {
             }
             for (Rotation rotation : List.copyOf(rotations.values())) {
                 Entity entity = rotation.entity();
-                if (!entity.isValid() || !entity.getWorld().equals(rotation.world())) {
+                if (!entity.isValid() || GameEntityHandle.bukkitEntity(rotation.handle()) == null
+                    || !entity.getWorld().equals(rotation.world())) {
                     rotations.remove(entity.getUniqueId(), rotation);
                     continue;
                 }
@@ -86,13 +90,20 @@ public final class GameNpcService implements Listener {
             ticker = null;
         }
         for (GameNpc npc : List.copyOf(npcs.values())) {
-            npc.remove();
+            npc.discard();
         }
         rotations.clear();
     }
 
-    public void register(GameNpc npc) {
+    public GameNpc register(GameWorld world, Mannequin mannequin, PlayerProfile profile) {
+        GameNpc npc = new GameNpc(world, GameWorldHandle.generation(world), mannequin, profile);
         npcs.put(npc.uuid(), npc);
+        return npc;
+    }
+
+    public GameNpc find(GameWorld world, Entity entity) {
+        GameNpc npc = npcs.get(entity.getUniqueId());
+        return npc != null && npc.world() == world && npc.isInCurrentWorld() && npc.mannequin.equals(entity) ? npc : null;
     }
 
     public void rotate(GameEntityBase handle, float yaw, float pitch, int ticks) {
@@ -109,7 +120,7 @@ public final class GameNpcService implements Listener {
         } else {
             org.bukkit.Location start = entity.getLocation();
             float delta = (float) (yaw - start.getYaw() - 360.0 * Math.floor((yaw - start.getYaw() + 180.0) / 360.0));
-            rotations.put(entity.getUniqueId(), new Rotation(entity, entity.getWorld(), start.getYaw(), start.getPitch(),
+            rotations.put(entity.getUniqueId(), new Rotation(handle, entity, entity.getWorld(), start.getYaw(), start.getPitch(),
                 delta, pitch - start.getPitch(), Bukkit.getCurrentTick(), ticks));
         }
     }
@@ -140,7 +151,7 @@ public final class GameNpcService implements Listener {
 
     private void interact(GameNpc npc, org.bukkit.entity.Player player, boolean attack) {
         GameModule module = plugin.moduleService().getGameOfPlayer(player);
-        if (module == null || module.world() != npc.world()) {
+        if (!npc.isInCurrentWorld() || module == null || module.world() != npc.world()) {
             return;
         }
         GamePlayer gamePlayer = module.playerManager().getPlayer(player.getUniqueId());
@@ -162,7 +173,7 @@ public final class GameNpcService implements Listener {
         }
     }
 
-    private record Rotation(Entity entity, org.bukkit.World world, float yaw, float pitch,
+    private record Rotation(GameEntityBase handle, Entity entity, org.bukkit.World world, float yaw, float pitch,
                             float deltaYaw, float deltaPitch, int started, int ticks) {
     }
 }

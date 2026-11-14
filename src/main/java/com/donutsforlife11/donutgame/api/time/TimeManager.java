@@ -5,14 +5,16 @@ import java.util.List;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
 
 import org.bukkit.Bukkit;
 import org.bukkit.scheduler.BukkitTask;
 
+import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
+import com.donutsforlife11.donutgame.internal.game.GameScope;
 
 public class TimeManager {
+    private final Donutgame plugin;
     private final GameModule module;
     private final Set<GameTimer> timers = ConcurrentHashMap.newKeySet();
     private final PriorityQueue<ScheduledTimer> scheduledTimers = new PriorityQueue<>();
@@ -20,7 +22,8 @@ public class TimeManager {
     private BukkitTask tickerTask;
     private long tickerWakeTick = Long.MAX_VALUE;
 
-    public TimeManager(GameModule module) {
+    public TimeManager(GameModule module, Donutgame plugin) {
+        this.plugin = plugin;
         this.module = module;
     }
 
@@ -63,6 +66,7 @@ public class TimeManager {
     }
 
     void register(GameTimer timer) {
+        GameScope.requireActive(module);
         timers.add(timer);
         schedule(timer);
     }
@@ -76,7 +80,7 @@ public class TimeManager {
     }
 
     void logTimerException(Throwable throwable) {
-        module.plugin().getLogger().log(Level.SEVERE, "Game timer action failed in module " + module.id() + ":" + module.index() + ".", throwable);
+        module.logError("Game timer action failed.", throwable);
     }
 
     private void tickTimers() {
@@ -134,7 +138,7 @@ public class TimeManager {
 
         tickerWakeTick = wakeTick;
         long delay = Math.max(1L, wakeTick - now);
-        tickerTask = module.plugin().getServer().getScheduler().runTaskLater(module.plugin(), this::tickTimers, delay);
+        tickerTask = plugin.getServer().getScheduler().runTaskLater(plugin, this::tickTimers, delay);
     }
 
     private record ScheduledTimer(GameTimer timer, long wakeTick, long version) implements Comparable<ScheduledTimer> {

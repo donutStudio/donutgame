@@ -60,11 +60,7 @@ public class SpectatorService {
         }
     }
 
-    public void hideSpectator(GamePlayer spectator) {
-        Player player = GamePlayerHandle.bukkitPlayer(spectator);
-        if (player == null) {
-            return;
-        }
+    public void hideSpectator(Player player) {
         for (Player viewer : Bukkit.getOnlinePlayers()) {
             viewer.showPlayer(plugin, player);
             listPlayer(viewer, player, false);

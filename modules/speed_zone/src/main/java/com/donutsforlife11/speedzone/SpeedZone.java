@@ -247,7 +247,7 @@ public final class SpeedZone extends GameModule {
     }
 
     private void configureWorld() {
-        world().setWorldSpawn(checkpoints.get(0));
+        world().setSpawnLocation(checkpoints.get(0));
         world().setHungerEnabled(false);
         world().gamerules().fallDamage(false);
         world().gamerules().keepInventory(true);

@@ -7,15 +7,16 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
-import com.donutsforlife11.donutgame.api.map.GameWorld;
-import com.donutsforlife11.donutgame.api.map.GameWorldHandle;
+import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
 final class PlayerTeleporter {
     private final GameModule module;
+    private final Donutgame plugin;
 
-    PlayerTeleporter(GameModule module) {
+    PlayerTeleporter(GameModule module, Donutgame plugin) {
         this.module = module;
+        this.plugin = plugin;
     }
 
     CompletableFuture<Boolean> teleport(Player player, Location destination) {
@@ -24,7 +25,7 @@ final class PlayerTeleporter {
             try {
                 player.closeInventory();
                 player.teleportAsync(destination).whenComplete((teleported, throwable) ->
-                    Bukkit.getScheduler().runTask(module.plugin(), () -> {
+                    Bukkit.getScheduler().runTask(plugin, () -> {
                         if (throwable != null) {
                             result.completeExceptionally(throwable);
                             return;
@@ -39,23 +40,14 @@ final class PlayerTeleporter {
         if (Bukkit.isPrimaryThread()) {
             task.run();
         } else {
-            Bukkit.getScheduler().runTask(module.plugin(), task);
+            Bukkit.getScheduler().runTask(plugin, task);
         }
         return result;
     }
 
-    World defaultWorld() {
-        GameWorld gameWorld = module.defaultWorld();
-        World world = GameWorldHandle.bukkitWorld(gameWorld);
-        if (world == null) {
-            throw new IllegalStateException("Game " + module.index() + " does not have a loaded default world.");
-        }
-        return world;
-    }
-
     Location fallbackLocation(World currentWorld) {
         for (World world : Bukkit.getWorlds()) {
-            if (!world.equals(currentWorld) && !module.playerManager().ownsWorld(world)) {
+            if (!world.equals(currentWorld) && !plugin.worldService().owns(world)) {
                 return world.getSpawnLocation();
             }
         }

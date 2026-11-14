@@ -5,7 +5,6 @@ import java.util.function.Consumer;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -15,7 +14,7 @@ import net.kyori.adventure.text.Component;
 import io.papermc.paper.datacomponent.DataComponentBuilder;
 import io.papermc.paper.datacomponent.DataComponentType;
 
-public final class GameItem {
+public final class GameItem extends PaperItemMethods {
     private ItemStack item;
 
     public GameItem(Material material) {
@@ -39,20 +38,8 @@ public final class GameItem {
         return item == null ? null : new GameItem(item);
     }
 
-    public Material material() {
-        return item.getType();
-    }
-
-    public GameItemType type() {
-        return GameItemType.of(material());
-    }
-
     public void setType(Material type) {
         item = item.withType(Objects.requireNonNull(type, "type"));
-    }
-
-    public int amount() {
-        return item.getAmount();
     }
 
     public void setAmount(int amount) {
@@ -61,22 +48,6 @@ public final class GameItem {
 
     public boolean isSimilar(GameItem other) {
         return other != null && item.isSimilar(other.item);
-    }
-
-    public void addEnchantment(Enchantment enchantment, int level) {
-        item.addEnchantment(enchantment, level);
-    }
-
-    public void addUnsafeEnchantment(Enchantment enchantment, int level) {
-        item.addUnsafeEnchantment(enchantment, level);
-    }
-
-    public ItemMeta getItemMeta() {
-        return item.getItemMeta();
-    }
-
-    public boolean setItemMeta(ItemMeta itemMeta) {
-        return item.setItemMeta(itemMeta);
     }
 
     public boolean editMeta(Consumer<? super ItemMeta> editor) {
@@ -128,12 +99,6 @@ public final class GameItem {
     public void removeData(GameItemComponent<?> component) {
         Objects.requireNonNull(component, "component");
         item.editPersistentDataContainer(pdc -> pdc.remove(component.key()));
-    }
-
-    public GameItem configure(Consumer<? super ItemStack> configuration) {
-        Objects.requireNonNull(configuration, "configuration");
-        configuration.accept(item);
-        return this;
     }
 
     ItemStack bukkitItem() {

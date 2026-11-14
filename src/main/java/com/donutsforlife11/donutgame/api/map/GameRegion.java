@@ -2,7 +2,7 @@ package com.donutsforlife11.donutgame.api.map;
 
 import java.util.Objects;
 
-public class GameRegion {
+public final class GameRegion {
     private final GameWorld world;
     private final GameLocation min;
     private final GameLocation max;
@@ -10,6 +10,8 @@ public class GameRegion {
     public GameRegion(GameLocation first, GameLocation second) {
         Objects.requireNonNull(first, "first");
         Objects.requireNonNull(second, "second");
+        GameLocationHandle.requireCurrent(first);
+        GameLocationHandle.requireCurrent(second);
         world = regionWorld(first, second);
         min = new GameLocation(
             world,
@@ -38,6 +40,7 @@ public class GameRegion {
     }
 
     public GameLocation center() {
+        GameLocationHandle.requireCurrent(min);
         return new GameLocation(
             world,
             (min.x() + max.x()) / 2.0,

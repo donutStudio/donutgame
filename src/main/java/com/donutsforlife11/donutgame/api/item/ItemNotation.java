@@ -3,19 +3,14 @@ package com.donutsforlife11.donutgame.api.item;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
-import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
-import org.bukkit.World;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.loot.LootContext;
 import org.bukkit.loot.LootTable;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
@@ -57,10 +52,6 @@ final class ItemNotation {
         return List.copyOf(items);
     }
 
-    public static LootTable lootTable(String shorthand) {
-        return lootTable(List.of(shorthand));
-    }
-
     public static LootTable lootTable(Collection<?> entries) {
         if (entries == null) {
             return new TemporaryLootTable(List.of());
@@ -78,20 +69,6 @@ final class ItemNotation {
             }
         }
         return new TemporaryLootTable(stacks);
-    }
-
-    public static Collection<ItemStack> fromLootTable(LootTable lootTable) {
-        return fromLootTable(lootTable, ThreadLocalRandom.current().nextLong());
-    }
-
-    public static Collection<ItemStack> fromLootTable(LootTable lootTable, long seed) {
-        Objects.requireNonNull(lootTable, "lootTable");
-        World world = Bukkit.getWorlds().isEmpty() ? null : Bukkit.getWorlds().getFirst();
-        if (world == null) {
-            throw new IllegalStateException("Cannot generate loot without a loaded world.");
-        }
-        LootContext context = new LootContext.Builder(new Location(world, 0, 0, 0)).build();
-        return lootTable.populateLoot(new Random(seed), context);
     }
 
     private static ParsedItem parse(String input) {

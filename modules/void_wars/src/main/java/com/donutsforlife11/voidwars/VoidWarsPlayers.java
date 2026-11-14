@@ -65,7 +65,7 @@ final class VoidWarsPlayers {
 
     void setupPlayer(GamePlayer player, boolean clearItems, boolean preserveLocation) {
         GameLocation spawn = game.world().getPoint(VoidWars.SPAWN);
-        GameLocation startLocation = preserveLocation && player.location() != null ? player.location() : spawn;
+        GameLocation startLocation = preserveLocation && player.getLocation() != null ? player.getLocation() : spawn;
         player.setSpawnPoint(startLocation);
         player.setSpectatablePlayers(game.teamSize <= 1 ? () -> game.playerManager().getPlayers() : List::of);
         player.setSpectatableTeams(game.teamSize <= 1 ? List::of : () -> game.teamManager().getTeams());
@@ -76,10 +76,10 @@ final class VoidWarsPlayers {
         player.setSpectator(false, startLocation);
         player.setGameMode(GameMode.SURVIVAL);
         player.heal();
-        player.setHunger(20);
+        player.setFoodLevel(20);
         player.setSaturation(20);
         player.setArrowsInBody(0);
-        player.clearEffects();
+        player.clearActivePotionEffects();
         player.clearExperience();
         player.setLevel(99);
         player.setExp(0.99f);
@@ -104,7 +104,7 @@ final class VoidWarsPlayers {
         int respawnTicks = game.baseRespawnTicks * Math.max(0, team.getPlayers().size() - 1);
         player.respawn(respawnTicks, () -> {
             GamePlayer teammate = livingTeammate(player);
-            return teammate == null ? player.spawnPoint() : teammate.location();
+            return teammate == null ? player.spawnPoint() : teammate.getLocation();
         });
         return true;
     }
@@ -129,12 +129,12 @@ final class VoidWarsPlayers {
         }
         GamePlayer nearest = null;
         double nearestDistance = Double.MAX_VALUE;
-        GameLocation location = player.location();
+        GameLocation location = player.getLocation();
         for (GamePlayer teammate : team.getNonSpectators()) {
             if (teammate == player) {
                 continue;
             }
-            double distance = location == null || teammate.location() == null ? 0.0 : distanceSquared(location, teammate.location());
+            double distance = location == null || teammate.getLocation() == null ? 0.0 : distanceSquared(location, teammate.getLocation());
             if (distance < nearestDistance) {
                 nearest = teammate;
                 nearestDistance = distance;
@@ -199,8 +199,8 @@ final class VoidWarsPlayers {
             event.setDroppedExp(0);
             event.clearDrops();
         }
-        GameLocation spectatorLocation = game.border() != null && player.location() != null && game.border().containsLocation(player.location())
-            ? player.location()
+        GameLocation spectatorLocation = game.border() != null && player.getLocation() != null && game.border().containsLocation(player.getLocation())
+            ? player.getLocation()
             : game.world().getRegion(VoidWars.BORDER).center();
         player.setSpectator(true, spectatorLocation);
         if (canRespawn) {

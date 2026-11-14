@@ -7,17 +7,14 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Location;
-import org.bukkit.World;
 import org.bukkit.entity.Player;
 
-import com.donutsforlife11.donutgame.api.map.GameLocation;
 import com.donutsforlife11.donutgame.api.map.GameLocationHandle;
-import com.donutsforlife11.donutgame.api.map.GameWorld;
-import com.donutsforlife11.donutgame.api.map.GameWorldHandle;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
 import com.donutsforlife11.donutgame.api.ui.title.TitlePacketTracker;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
+import com.donutsforlife11.donutgame.internal.game.GameScope;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -101,14 +98,11 @@ public class UIManager {
         if (sound == null || sound.sound() == null) {
             return;
         }
+        if (sound.location() != null) {
+            GameScope.requireLocation(module.world(), sound.location());
+        }
         for (Player player : resolvePlayers(gamePlayers)) {
-            Location source = resolveLocation(player, sound.location());
-            if (!player.getWorld().equals(source.getWorld())) {
-                if (sound.minVolume() > 0) {
-                    player.playSound(player.getLocation(), sound.sound(), sound.category(), sound.minVolume(), sound.pitch());
-                }
-                continue;
-            }
+            Location source = sound.location() == null ? player.getLocation() : GameLocationHandle.toBukkit(sound.location(), module.world());
             player.playSound(source, sound.sound(), sound.category(), sound.volume(), sound.pitch());
         }
     }
@@ -143,6 +137,10 @@ public class UIManager {
     }
 
     private Player resolvePlayer(GamePlayer gamePlayer) {
+        if (gamePlayer == null) {
+            return null;
+        }
+        GameScope.requirePlayer(module, gamePlayer);
         return GamePlayerHandle.bukkitPlayer(gamePlayer);
     }
 
@@ -162,19 +160,6 @@ public class UIManager {
             }
         }
         return players;
-    }
-
-    private Location resolveLocation(Player player, GameLocation location) {
-        if (location == null) {
-            return player.getLocation();
-        }
-        GameWorld locationWorld = location.world();
-        if (locationWorld != null) {
-            return GameLocationHandle.bukkitLocation(location);
-        }
-        GameWorld moduleWorld = module.world();
-        World world = GameWorldHandle.bukkitWorld(moduleWorld);
-        return GameLocationHandle.toBukkit(location, world == null ? player.getWorld() : world);
     }
 
     private Component component(Component component) {

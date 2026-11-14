@@ -1,7 +1,6 @@
 package com.donutsforlife11.donutgame.api.map;
 
 import org.bukkit.Location;
-import org.bukkit.World;
 
 /**
  * Internal bridge for framework code that must interoperate with Paper.
@@ -19,10 +18,19 @@ public final class GameLocationHandle {
         return location == null ? null : new GameLocation(world, location);
     }
 
-    public static Location toBukkit(GameLocation location, World world) {
-        if (location == null) {
-            throw new IllegalArgumentException("location cannot be null");
-        }
-        return location.toBukkit(world);
+    public static boolean isCurrent(GameLocation location) {
+        return location.world() == null || location.generation() == location.world().generation();
     }
+
+    public static void requireCurrent(GameLocation location) {
+        if (!isCurrent(location)) {
+            location.world().requireCurrentGeneration(location.generation(), "GameLocation");
+        }
+    }
+
+    public static Location toBukkit(GameLocation location, GameWorld world) {
+        return world.toBukkit(location);
+    }
+
+
 }

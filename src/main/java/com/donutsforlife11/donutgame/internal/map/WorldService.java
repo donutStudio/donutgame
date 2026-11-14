@@ -99,16 +99,18 @@ public class WorldService {
         moduleIndexesByWorldName.put(world.getName(), module.index());
     }
 
-    public CompletableFuture<Void> unloadModuleWorlds(GameModule module) {
-        CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
-        for (GameWorld gameWorld : module.worlds().values()) {
-            World world = GameWorldHandle.bukkitWorld(gameWorld);
-            if (world == null) {
-                continue;
-            }
-            result = result.thenCompose(ignored -> unloadWorld(world.getName()).thenRun(() -> GameWorldHandle.setBukkitWorld(gameWorld, null)));
+    public boolean owns(World world) {
+        return world != null && ownedWorldNames.contains(world.getName());
+    }
+
+    public CompletableFuture<Void> unloadModuleWorld(GameModule module) {
+        GameWorld gameWorld = module.world();
+        World world = GameWorldHandle.bukkitWorld(gameWorld);
+        if (world == null) {
+            return CompletableFuture.completedFuture(null);
         }
-        return result;
+        GameWorldHandle.setBukkitWorld(gameWorld, null);
+        return unloadWorld(world.getName());
     }
 
     public CompletableFuture<Void> unloadWorld(String worldName) {

@@ -1,30 +1,19 @@
 package com.donutsforlife11.donutgame.internal.game;
 
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.function.Supplier;
 
 import org.bukkit.Sound;
-import org.bukkit.event.Event;
-import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
-import org.bukkit.event.Listener;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.plugin.EventExecutor;
 
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.border.BorderManager;
 import com.donutsforlife11.donutgame.api.data.GameData;
-import com.donutsforlife11.donutgame.api.event.GameEventAdapterRegistry;
 import com.donutsforlife11.donutgame.api.event.GameEventRegistrar;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.map.MapManager;
@@ -39,7 +28,6 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 
 public abstract class GameModule {
-    public static final String DEFAULT_WORLD_ID = "default";
     private static final NamedTextColor[] COUNTDOWN_COLORS = {
         NamedTextColor.DARK_RED,
         NamedTextColor.RED,
@@ -64,14 +52,10 @@ public abstract class GameModule {
     private volatile boolean started;
     private volatile ModuleLifecycleState lifecycleState = ModuleLifecycleState.NEW;
     private final long handleGeneration = System.nanoTime();
-    private final Map<String, GameWorld> worlds = new LinkedHashMap<>();
-    private final Set<Listener> registeredListeners = new LinkedHashSet<>();
+    private CompletableFuture<Void> shutdownFuture;
+    private final GameWorld world = new GameWorld(this);
 
-    protected GameModule() {
-        worlds.put(DEFAULT_WORLD_ID, new GameWorld(DEFAULT_WORLD_ID));
-    }
-
-    protected final void initialize(
+    final void initialize(
         Donutgame plugin,
         GameModuleDescriptor descriptor,
         int index,
@@ -95,7 +79,7 @@ public abstract class GameModule {
         this.uiManager = uiManager;
         this.borderManager = borderManager;
         this.data = new GameData(this, descriptor.file());
-        this.eventRegistrar = new GameEventRegistrar(this);
+        this.eventRegistrar = new GameEventRegistrar(this, plugin);
     }
 
     public void beforeLoad() {
@@ -123,11 +107,7 @@ public abstract class GameModule {
     public void onUnload() {
     }
 
-    protected final CompletableFuture<GameModule> startLoadSequence() {
-        return startLoadSequence(() -> CompletableFuture.completedFuture(null));
-    }
-
-    protected final CompletableFuture<GameModule> startLoadSequence(Supplier<CompletableFuture<?>> beforeCountdown) {
+    final CompletableFuture<GameModule> startLoadSequence(Supplier<CompletableFuture<?>> beforeCountdown) {
         try {
             requireState(ModuleLifecycleState.NEW);
             setLifecycleState(ModuleLifecycleState.LOADING);
@@ -135,10 +115,8 @@ public abstract class GameModule {
             beforeLoad();
             return mapManager.whenReady()
                 .thenCompose(ignored -> {
-                    CompletableFuture<?> beforeCountdownFuture = beforeCountdown == null
-                        ? CompletableFuture.completedFuture(null)
-                        : beforeCountdown.get();
-                    return beforeCountdownFuture;
+                    GameScope.requireActive(this);
+                    return beforeCountdown.get();
                 })
                 .thenApply(ignored -> {
                     return enterCountdown(() -> {
@@ -148,7 +126,7 @@ public abstract class GameModule {
                     }, "load");
                 })
                 .whenComplete((ignored, throwable) -> {
-                    if (throwable != null) {
+                    if (throwable != null && acceptsLiveOperations()) {
                         setLifecycleState(ModuleLifecycleState.FAILED);
                     }
                 });
@@ -158,20 +136,25 @@ public abstract class GameModule {
         }
     }
 
-    protected final CompletableFuture<Void> shutdown() {
+    final CompletableFuture<Void> shutdown() {
+        if (shutdownFuture != null) {
+            return shutdownFuture;
+        }
+        shutdownFuture = new CompletableFuture<>();
         setLifecycleState(ModuleLifecycleState.UNLOADING);
         borderManager.clear();
         timeManager.cancelAll();
-        unregisterDynamicEvents();
+        eventRegistrar.unregisterAll();
+        HandlerList.unregisterAll(teamManager);
         playerManager.cleanupRuntimeState();
-        return playerManager.clear()
+        playerManager.clear()
             .exceptionally(throwable -> {
                 logError("Player cleanup failed while unloading. Continuing shutdown.", throwable);
                 return null;
             })
             .thenCompose(ignored -> {
                 teamManager.clear();
-                return mapManager.unloadWorlds();
+                return mapManager.unloadWorld();
             })
             .exceptionally(throwable -> {
                 logError("World cleanup failed while unloading.", throwable);
@@ -182,7 +165,14 @@ public abstract class GameModule {
                 teamManager.clear();
                 playerManager.cleanupRuntimeState();
                 setLifecycleState(ModuleLifecycleState.UNLOADED);
+            }).whenComplete((ignored, throwable) -> {
+                if (throwable == null) {
+                    shutdownFuture.complete(null);
+                } else {
+                    shutdownFuture.completeExceptionally(throwable);
+                }
             });
+        return shutdownFuture;
     }
 
     protected final CompletableFuture<GameModule> reload() {
@@ -195,7 +185,7 @@ public abstract class GameModule {
                     return enterCountdown(this::onReload, "reload");
                 })
                 .whenComplete((ignored, throwable) -> {
-                    if (throwable != null) {
+                    if (throwable != null && acceptsLiveOperations()) {
                         setLifecycleState(ModuleLifecycleState.FAILED);
                     }
                 });
@@ -205,12 +195,8 @@ public abstract class GameModule {
         }
     }
 
-    protected final CompletableFuture<ModuleUnloadResult> unload() {
-        return plugin.moduleService().unloadModule(index);
-    }
-
-    public final Donutgame plugin() {
-        return plugin;
+    protected final CompletableFuture<Void> unload() {
+        return plugin.moduleService().unloadModule(index).thenAccept(ignored -> {});
     }
 
     public String id() {
@@ -237,8 +223,8 @@ public abstract class GameModule {
         return mapManager;
     }
 
-    public GameWorld world() {
-        return defaultWorld();
+    public final GameWorld world() {
+        return world;
     }
 
     public PlayerManager playerManager() {
@@ -261,47 +247,8 @@ public abstract class GameModule {
         return borderManager;
     }
 
-    public final Map<String, GameWorld> worlds() {
-        return Collections.unmodifiableMap(worlds);
-    }
-
-    public final GameWorld defaultWorld() {
-        return worlds.get(DEFAULT_WORLD_ID);
-    }
-
-    protected final void putWorld(GameWorld world) {
-        if (world == null) {
-            throw new IllegalArgumentException("world cannot be null");
-        }
-        // Implement later: Multi-world modules: remove this guard once a module can intentionally own
-        // multiple GameWorlds and expose a public API for selecting between them.
-        if (!DEFAULT_WORLD_ID.equals(world.id())) {
-            throw new UnsupportedOperationException("Modules are limited to one GameWorld for now.");
-        }
-        worlds.put(world.id(), world);
-    }
-
     protected final void registerGameEventHandlers(Object target) {
         eventRegistrar.registerAnnotated(target);
-    }
-
-    protected final GameEventAdapterRegistry gameEventAdapters() {
-        return eventRegistrar.adapterRegistry();
-    }
-
-    public final void registerDynamicEvent(
-        Listener listener,
-        Class<? extends Event> eventType,
-        EventExecutor executor,
-        EventPriority priority,
-        boolean ignoreCancelled
-    ) {
-        if (listener == null || eventType == null || executor == null) {
-            throw new IllegalArgumentException("listener, eventType, and executor cannot be null");
-        }
-        if (registeredListeners.add(listener)) {
-            plugin.getServer().getPluginManager().registerEvent(eventType, listener, priority, executor, plugin, ignoreCancelled);
-        }
     }
 
     public final ModuleLifecycleState lifecycleState() {
@@ -313,7 +260,14 @@ public abstract class GameModule {
     }
 
     public final boolean isHandleGenerationActive(long generation) {
-        return generation == handleGeneration && lifecycleState != ModuleLifecycleState.UNLOADED;
+        return generation == handleGeneration && acceptsLiveOperations();
+    }
+
+    public final boolean acceptsLiveOperations() {
+        return switch (lifecycleState) {
+            case UNLOADING, UNLOADED, FAILED -> false;
+            default -> true;
+        };
     }
 
     public final boolean hasStarted() {
@@ -349,38 +303,35 @@ public abstract class GameModule {
 
     private GameModule enterCountdown(ThrowingRunnable beforeCountdown, String transition) {
         try {
+            if (!acceptsLiveOperations()) {
+                throw new IllegalStateException("Module stopped before countdown.");
+            }
             beforeCountdown.run();
             setLifecycleState(ModuleLifecycleState.COUNTDOWN);
-            startCountdownSequence().whenComplete((startedModule, throwable) -> {
-                if (throwable != null) {
-                    logError("Failed while starting module after " + transition + ".", throwable);
-                }
-            });
+            startCountdownSequence(transition);
             return this;
         } catch (Throwable throwable) {
-            setLifecycleState(ModuleLifecycleState.FAILED);
+            if (acceptsLiveOperations()) {
+                setLifecycleState(ModuleLifecycleState.FAILED);
+            }
             throw new CompletionException(throwable);
         }
     }
 
-    private CompletableFuture<GameModule> startCountdownSequence() {
-        CompletableFuture<GameModule> future = new CompletableFuture<>();
-        AtomicBoolean completed = new AtomicBoolean();
+    private void startCountdownSequence(String transition) {
         startCountdown(config.getInt("countdown_ticks", 200), () -> {
-            if (!completed.compareAndSet(false, true)) {
+            if (lifecycleState != ModuleLifecycleState.COUNTDOWN) {
                 return;
             }
             try {
                 onStart();
                 started = true;
                 setLifecycleState(ModuleLifecycleState.STARTED);
-                future.complete(this);
             } catch (Throwable throwable) {
                 setLifecycleState(ModuleLifecycleState.FAILED);
-                future.completeExceptionally(throwable);
+                logError("Failed while starting module after " + transition + ".", throwable);
             }
         });
-        return future;
     }
 
     private void startCountdown(int countdownTicks, Runnable action) {
@@ -422,13 +373,6 @@ public abstract class GameModule {
             colorIndex = 1 + ((elapsedSeconds - (baseBandLength + extraSeconds)) / baseBandLength);
         }
         return COUNTDOWN_COLORS[Math.min(colorIndex, COUNTDOWN_COLORS.length - 1)];
-    }
-
-    private void unregisterDynamicEvents() {
-        for (Listener listener : List.copyOf(registeredListeners)) {
-            HandlerList.unregisterAll(listener);
-        }
-        registeredListeners.clear();
     }
 
     @FunctionalInterface

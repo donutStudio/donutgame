@@ -9,7 +9,7 @@ import java.util.Objects;
 import com.donutsforlife11.donutgame.internal.map.GameMapDescriptor.BackingType;
 import com.donutsforlife11.donutgame.internal.map.WorldService;
 
-public class GameMap {
+public final class GameMap {
     private final String id;
     private final String name;
     private final List<String> tags;
@@ -121,12 +121,8 @@ public class GameMap {
         return submaps;
     }
 
-    private GameMap submap(String id) {
-        return submaps.get(id);
-    }
-
     public GameMap getSubmap(String id) {
-        return submap(id);
+        return submaps.get(id);
     }
 
     BackingType backingType() {
@@ -190,7 +186,11 @@ public class GameMap {
     }
 
     private GameLocation bind(GameLocation location) {
-        return world == null ? location : location.inWorld(world);
+        if (world == null) {
+            return location;
+        }
+        GameLocationHandle.requireCurrent(origin);
+        return location.inWorld(world);
     }
 
     private GameLocation transformPoint(GameLocation origin, MapPoint point, MapRotation rotation, WorldService.SchematicMetadata schematicMetadata) {

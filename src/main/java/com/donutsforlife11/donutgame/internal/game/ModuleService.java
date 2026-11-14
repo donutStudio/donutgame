@@ -55,9 +55,9 @@ public class ModuleService {
 
         try {
             MapManager mapManager = new MapManager(module, plugin.mapService(), plugin.worldService());
-            PlayerManager playerManager = new PlayerManager(module);
-            TeamManager teamManager = new TeamManager(playerManager);
-            TimeManager timeManager = new TimeManager(module);
+            PlayerManager playerManager = new PlayerManager(module, plugin);
+            TeamManager teamManager = new TeamManager(playerManager, plugin);
+            TimeManager timeManager = new TimeManager(module, plugin);
             UIManager uiManager = new UIManager(module);
             BorderManager borderManager = new BorderManager(module);
             module.initialize(plugin, descriptor, index, config, 
@@ -101,6 +101,9 @@ public class ModuleService {
             return CompletableFuture.completedFuture(ModuleUnloadResult.missing());
         }
 
+        if (module.lifecycleState() == ModuleLifecycleState.UNLOADING) {
+            return module.shutdown().thenApply(ignored -> ModuleUnloadResult.unloaded(false));
+        }
         boolean[] hadErrors = new boolean[1];
         try {
             module.onUnload();
@@ -115,11 +118,7 @@ public class ModuleService {
                     hadErrors[0] = true;
                     plugin.getLogger().log(Level.SEVERE, "Module " + module.id() + " had errors during shutdown. Removing it from active games anyway.", throwable);
                 }
-                activeGames.remove(index, module);
-                if (lockedGameIndex != null && lockedGameIndex == index) {
-                    lockedGameIndex = null;
-                }
-                freeIndexes.offer(index);
+                releaseModule(index, module);
                 return ModuleUnloadResult.unloaded(hadErrors[0]);
             });
     }
@@ -242,14 +241,16 @@ public class ModuleService {
     }
 
     private CompletableFuture<Void> cleanupFailedLoad(GameModule module, int index) {
-        return module.shutdown().whenComplete((ignored, throwable) -> {
-            activeGames.remove(index, module);
-            if (lockedGameIndex != null && lockedGameIndex == index) {
-                lockedGameIndex = null;
-            }
-            if (!freeIndexes.contains(index)) {
-                freeIndexes.offer(index);
-            }
-        });
+        return module.shutdown().whenComplete((ignored, throwable) -> releaseModule(index, module));
+    }
+
+    private void releaseModule(int index, GameModule module) {
+        if (!activeGames.remove(index, module)) {
+            return;
+        }
+        if (lockedGameIndex != null && lockedGameIndex == index) {
+            lockedGameIndex = null;
+        }
+        freeIndexes.offer(index);
     }
 }

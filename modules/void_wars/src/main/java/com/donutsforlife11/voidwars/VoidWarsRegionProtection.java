@@ -54,7 +54,7 @@ final class VoidWarsRegionProtection {
     }
 
     private boolean protectedLocation(GameBlock block) {
-        return block != null && protectedLocation(block.location());
+        return block != null && protectedLocation(block.getLocation());
     }
 
     private boolean protectedLocation(GameLocation location) {

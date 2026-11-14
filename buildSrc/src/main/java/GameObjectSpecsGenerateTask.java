@@ -195,18 +195,9 @@ public abstract class GameObjectSpecsGenerateTask extends DefaultTask {
         source.append("    public static java.util.List<GameItem> items(java.util.Collection<String> notation) {\n");
         source.append("        return ItemNotation.items(notation);\n");
         source.append("    }\n\n");
-        source.append("    public static org.bukkit.loot.LootTable lootTable(String notation) {\n");
-        source.append("        return ItemNotation.lootTable(notation);\n");
-        source.append("    }\n\n");
-        source.append("    public static org.bukkit.loot.LootTable lootTable(java.util.Collection<?> items) {\n");
-        source.append("        return ItemNotation.lootTable(items);\n");
-        source.append("    }\n\n");
-        source.append("    public static java.util.Collection<org.bukkit.inventory.ItemStack> fromLootTable(org.bukkit.loot.LootTable lootTable) {\n");
-        source.append("        return ItemNotation.fromLootTable(lootTable);\n");
-        source.append("    }\n\n");
-        source.append("    public static java.util.Collection<org.bukkit.inventory.ItemStack> fromLootTable(org.bukkit.loot.LootTable lootTable, long seed) {\n");
-        source.append("        return ItemNotation.fromLootTable(lootTable, seed);\n");
-        source.append("    }\n\n");
+        source.append("    public static GameLootTable lootPool(com.donutsforlife11.donutgame.internal.game.GameModule owner, java.util.Collection<?> items) {\n");
+        source.append("        return new GameLootTable(owner, ItemNotation.lootTable(items));\n");
+        source.append("    }\n");
         source.append("}\n");
         writeJava(outputDirectory, ITEM_PACKAGE_NAME, "GameItems", source.toString());
     }

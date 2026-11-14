@@ -82,7 +82,7 @@ public class VoidWars extends GameModule {
         world().setHungerEnabled(false);
         world().gamerules().fallDamage(false);
         world().gamerules().pvp(false);
-        world().setWorldSpawn(world().getPoint(SPAWN));
+        world().setSpawnLocation(world().getPoint(SPAWN));
         border = borderManager().newBorder(world().getRegion(BORDER));
         events.prepareRound();
         if (teamNewPlayers) {
@@ -91,7 +91,7 @@ public class VoidWars extends GameModule {
 
         for (GamePlayer player : playerManager().getPlayers()) {
             players.setupPlayer(player, true, preservePlayerLocations);
-            player.addEffect(new PotionEffect(PotionEffectType.INVISIBILITY, PotionEffect.INFINITE_DURATION, 0, false, false));
+            player.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, PotionEffect.INFINITE_DURATION, 0, false, false));
         }
     }
 
@@ -100,7 +100,7 @@ public class VoidWars extends GameModule {
         world().gamerules().fallDamage(true);
         world().setHungerEnabled(true);
         for (GamePlayer player : playerManager().getPlayers()) {
-            player.clearEffect(PotionEffectType.INVISIBILITY);
+            player.removePotionEffect(PotionEffectType.INVISIBILITY);
         }
         roundTimer = timeManager().newTimer()
             .onTick(20, timer -> events.tickRound(timer.elapsedTicks()))
@@ -131,7 +131,7 @@ public class VoidWars extends GameModule {
                 uiManager().subtitle(playerManager().getPlayers(), winnerSubtitle(winners));
             }
             for (GamePlayer winner : winners) {
-                winner.setSpectator(true, winner.location());
+                winner.setSpectator(true, winner.getLocation());
             }
             if (round >= maxRounds) {
                 timeManager().newTimer(100).onFinish(ignored -> {

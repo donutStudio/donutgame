@@ -8,11 +8,12 @@ import org.bukkit.Location;
 import org.bukkit.World;
 
 import com.donutsforlife11.donutgame.internal.game.GameModule;
+import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
 import com.donutsforlife11.donutgame.internal.map.GameMapDescriptor.BackingType;
 import com.donutsforlife11.donutgame.internal.map.MapService;
 import com.donutsforlife11.donutgame.internal.map.WorldService;
 
-public class MapManager {
+public final class MapManager {
     private final GameModule module;
     private final MapService mapService;
     private final WorldService worldService;
@@ -38,6 +39,12 @@ public class MapManager {
 
     public CompletableFuture<GameMap> load(GameMap map) {
         Objects.requireNonNull(map, "map");
+        if (!module.acceptsLiveOperations()) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Module is no longer active."));
+        }
+        if (pendingMapLoad != null && !pendingMapLoad.isDone()) {
+            return CompletableFuture.failedFuture(new IllegalStateException("A world load is already in progress."));
+        }
         CompletableFuture<GameMap> future = loadMap(map);
         pendingMapLoad = future;
         return future;
@@ -51,17 +58,9 @@ public class MapManager {
         return load(map);
     }
 
-    public CompletableFuture<GameMap> place(String id, GameLocation location) {
-        return place(id, location, MapRotation.DEG_0);
-    }
-
     public CompletableFuture<GameMap> place(String id, GameLocation location, MapRotation rotation) {
         Objects.requireNonNull(id, "id");
         return place(mapFromId(id), location, rotation);
-    }
-
-    public CompletableFuture<GameMap> place(GameMap map, GameLocation location) {
-        return place(map, location, MapRotation.DEG_0);
     }
 
     public CompletableFuture<GameMap> place(GameMap map, GameLocation location, MapRotation rotation) {
@@ -71,11 +70,9 @@ public class MapManager {
         if (map.backingType() == BackingType.WORLD) {
             return CompletableFuture.failedFuture(new IllegalArgumentException("World-backed maps cannot be placed into an existing world."));
         }
-        GameWorld world = world();
-        World bukkitWorld = GameWorldHandle.bukkitWorld(world);
-        if (bukkitWorld == null) {
-            return CompletableFuture.failedFuture(new IllegalStateException("Module does not have a loaded world."));
-        }
+        GameWorld world = module.world();
+        World bukkitWorld = world.requireBukkitWorld();
+        long generation = world.generation();
 
         GameLocation origin = location.inWorld(world);
         if (map.backingType() == BackingType.NONE) {
@@ -91,6 +88,7 @@ public class MapManager {
         Location bukkitLocation = origin.toBukkit(bukkitWorld);
         return worldService.pasteSchematic(map.assetPath(), bukkitWorld, bukkitLocation, rotation)
             .thenApply(metadata -> {
+                world.requireBukkitWorld(generation);
                 GameMap placement = map.placed(world, origin, rotation, metadata);
                 registerMapData(world, placement);
                 return placement;
@@ -108,20 +106,19 @@ public class MapManager {
             : CompletableFuture.completedFuture(map);
     }
 
-    public CompletableFuture<Void> unloadWorlds() {
-        return worldService.unloadModuleWorlds(module).thenRun(() -> {
+    public CompletableFuture<Void> unloadWorld() {
+        CompletableFuture<GameMap> loading = pendingMapLoad;
+        CompletableFuture<Void> settled = loading == null ? CompletableFuture.completedFuture(null)
+            : loading.handle((ignored, failure) -> null);
+        return settled.thenCompose(ignored -> worldService.unloadModuleWorld(module)).thenRun(() -> {
             currentMap = null;
             pendingMapLoad = null;
-            world().clearMapData();
+            module.world().clearMapData();
         });
     }
 
     public GameMap map() {
         return currentMap;
-    }
-
-    public GameWorld world() {
-        return module.defaultWorld();
     }
 
     private CompletableFuture<GameMap> loadMap(GameMap map) {
@@ -132,14 +129,22 @@ public class MapManager {
             return CompletableFuture.failedFuture(new IllegalStateException("Map " + map.id() + " does not have an extracted world asset."));
         }
 
-        GameWorld gameWorld = module.defaultWorld();
+        GameWorld gameWorld = module.world();
         World oldWorld = GameWorldHandle.bukkitWorld(gameWorld);
         String worldName = oldWorld == null ? worldName() : reloadWorldName();
         module.log("Loading map " + map.id() + " into world " + worldName + ".");
         return worldService.loadSlimeWorld(map.assetPath(), worldName)
             .thenCompose(newWorld -> {
-                GameMap placed = map.placed(gameWorld, new GameLocation(gameWorld, 0, 0, 0), MapRotation.DEG_0, null);
+                if (!module.acceptsLiveOperations()) {
+                    return worldService.unloadWorld(newWorld.getName()).thenCompose(ignored ->
+                        CompletableFuture.failedFuture(new IllegalStateException("Module stopped during world load.")));
+                }
+                module.borderManager().clear();
+                if (oldWorld != null) {
+                    PlayerManagerHandle.captureBeforeWorldSwap(module.playerManager());
+                }
                 GameWorldHandle.setBukkitWorld(gameWorld, newWorld);
+                GameMap placed = map.placed(gameWorld, new GameLocation(gameWorld, 0, 0, 0), MapRotation.DEG_0, null);
                 worldService.markWorldOwnedBy(module, newWorld);
                 gameWorld.clearMapData();
                 registerMapData(gameWorld, placed);
@@ -148,8 +153,28 @@ public class MapManager {
                     ? CompletableFuture.completedFuture(null)
                     : worldService.movePlayers(oldWorld, newWorld);
                 return swapPlayers
-                    .thenCompose(ignored -> oldWorld == null ? CompletableFuture.completedFuture(null) : worldService.unloadWorld(oldWorld.getName()))
+                    .handle((ignored, failure) -> failure)
+                    .thenCompose(moveFailure -> {
+                        CompletableFuture<Void> cleanup = oldWorld == null ? CompletableFuture.completedFuture(null)
+                            : worldService.unloadWorld(oldWorld.getName());
+                        return cleanup.handle((ignored, cleanupFailure) -> {
+                            if (moveFailure != null) {
+                                if (cleanupFailure != null) {
+                                    moveFailure.addSuppressed(cleanupFailure);
+                                }
+                                throw new java.util.concurrent.CompletionException(moveFailure);
+                            }
+                            if (cleanupFailure != null) {
+                                throw new java.util.concurrent.CompletionException(cleanupFailure);
+                            }
+                            return null;
+                        });
+                    })
                     .thenApply(ignored -> {
+                        gameWorld.requireBukkitWorld();
+                        if (oldWorld != null) {
+                            PlayerManagerHandle.reattachAfterWorldSwap(module.playerManager());
+                        }
                         module.log("Loaded map " + map.id() + " into world " + newWorld.getName() + ".");
                         return placed;
                     });

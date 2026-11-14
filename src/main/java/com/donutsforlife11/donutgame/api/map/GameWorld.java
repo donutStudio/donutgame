@@ -7,13 +7,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-import org.bukkit.Difficulty;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Mannequin;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -26,11 +24,13 @@ import com.donutsforlife11.donutgame.api.entity.GameEntity;
 import com.donutsforlife11.donutgame.api.entity.GameEntityHandle;
 import com.donutsforlife11.donutgame.api.object.GameBlockType;
 import com.donutsforlife11.donutgame.api.object.GameEntityType;
+import com.donutsforlife11.donutgame.internal.game.GameModule;
+import com.donutsforlife11.donutgame.internal.game.GameScope;
 
-public class GameWorld {
+public final class GameWorld extends PaperWorldMethods {
     public static final long DEFAULT_WORLD_EDIT_BLOCK_LIMIT = 262_144L;
 
-    private final String id;
+    private final GameModule owner;
     private final Map<String, List<GameLocation>> points = new LinkedHashMap<>();
     private final Map<String, List<GameRegion>> regions = new LinkedHashMap<>();
     private final List<Consumer<Boolean>> playerCollisionListeners = new ArrayList<>();
@@ -41,20 +41,17 @@ public class GameWorld {
     private boolean playerCollisionsEnabled;
     private long worldEditBlockLimit = DEFAULT_WORLD_EDIT_BLOCK_LIMIT;
 
-    public GameWorld(String id) {
-        if (id == null || id.isBlank()) {
-            throw new IllegalArgumentException("id cannot be blank");
-        }
-        this.id = id;
+    public GameWorld(GameModule owner) {
+        this.owner = Objects.requireNonNull(owner, "owner");
     }
 
-    public String id() {
-        return id;
+    public GameModule owner() {
+        return owner;
     }
 
     public String name() {
         World world = bukkitWorld;
-        return world == null ? id : world.getName();
+        return world == null ? owner.id() : world.getName();
     }
 
     World bukkitWorld() {
@@ -72,17 +69,16 @@ public class GameWorld {
         return generation;
     }
 
-    public GameLocation worldSpawn() {
+    public GameLocation getSpawnLocation() {
         return new GameLocation(this, requireWorld().getSpawnLocation());
     }
 
-    public void setWorldSpawn(GameLocation spawn) {
-        requireLocation(spawn);
-        requireWorld().setSpawnLocation(toBukkit(spawn));
+    public void setSpawnLocation(GameLocation spawn) {
+        Location target = toBukkit(spawn);
+        target.getWorld().setSpawnLocation(target);
     }
 
     public void setBlock(GameLocation location, Material material) {
-        requireLocation(location);
         toBukkit(location).getBlock().setType(Objects.requireNonNull(material, "material"), false);
     }
 
@@ -92,14 +88,13 @@ public class GameWorld {
     }
 
     public void setBlock(GameLocation location, BlockData blockData) {
-        requireLocation(location);
         toBukkit(location).getBlock().setBlockData(Objects.requireNonNull(blockData, "blockData").clone(), false);
     }
 
     public GameBlock blockAt(GameLocation location) {
         requireLocation(location);
-        GameLocation scoped = location.world() == null ? location.inWorld(this) : location;
-        return new GameBlock(this, generation, scoped.blockX(), scoped.blockY(), scoped.blockZ());
+        requireWorld();
+        return new GameBlock(this, generation, location.blockX(), location.blockY(), location.blockZ());
     }
 
     public void fill(GameRegion region, Material material) {
@@ -151,11 +146,10 @@ public class GameWorld {
         }
     }
 
-    public GameEntity spawn(GameLocation location, EntityType type) {
-        requireLocation(location);
-        EntityType entityType = Objects.requireNonNull(type, "type");
-        Entity bukkitEntity = requireWorld().spawnEntity(toBukkit(location), entityType);
-        return GameEntityHandle.create(this, generation, bukkitEntity);
+    public GameEntity summon(GameLocation location, GameEntityType type) {
+        Location target = toBukkit(location);
+        Entity entity = target.getWorld().spawnEntity(target, Objects.requireNonNull(type, "type").entityType());
+        return GameEntityHandle.create(this, entity);
     }
 
     public GameNpc newNpc(GameLocation location) {
@@ -163,12 +157,10 @@ public class GameWorld {
     }
 
     public GameNpc newNpc(GameLocation location, PlayerProfile profile) {
-        requireLocation(location);
-        Mannequin mannequin = requireWorld().spawn(toBukkit(location), Mannequin.class);
+        Location target = toBukkit(location);
+        Mannequin mannequin = target.getWorld().spawn(target, Mannequin.class);
         try {
-            GameNpc npc = new GameNpc(this, generation, mannequin, profile);
-            JavaPlugin.getPlugin(Donutgame.class).npcService().register(npc);
-            return npc;
+            return JavaPlugin.getPlugin(Donutgame.class).npcService().register(this, mannequin, profile);
         } catch (RuntimeException exception) {
             mannequin.remove();
             throw exception;
@@ -176,28 +168,8 @@ public class GameWorld {
     }
 
     public GameNpc newNpc(GameLocation location, GamePlayer player) {
-        return newNpc(location, Objects.requireNonNull(Objects.requireNonNull(player, "player").playerProfile(), "Player must be online"));
-    }
-
-    public GameEntity spawn(GameLocation location, EntityType type, Consumer<? super GameEntity> configuration) {
-        GameEntity entity = spawn(location, type);
-        if (configuration != null) {
-            configuration.accept(entity);
-        }
-        return entity;
-    }
-
-    public GameEntity spawn(GameLocation location, GameEntityType type) {
-        Objects.requireNonNull(type, "type");
-        return spawn(location, type.entityType());
-    }
-
-    public GameEntity spawn(GameLocation location, GameEntityType type, Consumer<? super GameEntity> configuration) {
-        GameEntity entity = spawn(location, type);
-        if (configuration != null) {
-            configuration.accept(entity);
-        }
-        return entity;
+        GameScope.requirePlayer(owner, Objects.requireNonNull(player, "player"));
+        return newNpc(location, Objects.requireNonNull(player.playerProfile(), "Player must be online"));
     }
 
     public void addPoint(String name, GameLocation location) {
@@ -217,12 +189,12 @@ public class GameWorld {
 
     public List<GameLocation> getPoints(String name) {
         requireName(name);
-        return points.getOrDefault(name, List.of()).stream().map(location -> location.inWorld(this)).toList();
+        return List.copyOf(points.getOrDefault(name, List.of()));
     }
 
     public Map<String, List<GameLocation>> getPoints() {
         Map<String, List<GameLocation>> copy = new LinkedHashMap<>();
-        points.forEach((name, entries) -> copy.put(name, entries.stream().map(location -> location.inWorld(this)).toList()));
+        points.forEach((name, entries) -> copy.put(name, List.copyOf(entries)));
         return Map.copyOf(copy);
     }
 
@@ -234,7 +206,7 @@ public class GameWorld {
     public void addRegion(String name, GameRegion region) {
         requireName(name);
         requireRegion(region);
-        regions.computeIfAbsent(name, ignored -> new ArrayList<>()).add(region);
+        regions.computeIfAbsent(name, ignored -> new ArrayList<>()).add(new GameRegion(region.min().inWorld(this), region.max().inWorld(this)));
     }
 
     public void removeRegion(String name, GameRegion region) {
@@ -272,24 +244,8 @@ public class GameWorld {
         return world.isChunkLoaded(blockX >> 4, blockZ >> 4);
     }
 
-    public int minHeight() {
-        return requireWorld().getMinHeight();
-    }
-
-    public int maxHeight() {
-        return requireWorld().getMaxHeight();
-    }
-
     public GameWorldGamerules gamerules() {
         return gamerules;
-    }
-
-    public void setTime(long time) {
-        requireWorld().setTime(time);
-    }
-
-    public long time() {
-        return requireWorld().getTime();
     }
 
     public void setWeather(GameWeather weather) {
@@ -321,17 +277,6 @@ public class GameWorld {
         return world.hasStorm() ? GameWeather.RAIN : GameWeather.CLEAR;
     }
 
-    public void setDifficulty(Difficulty difficulty) {
-        if (difficulty == null) {
-            throw new IllegalArgumentException("difficulty cannot be null");
-        }
-        requireWorld().setDifficulty(difficulty);
-    }
-
-    public Difficulty difficulty() {
-        return requireWorld().getDifficulty();
-    }
-
     public void setHungerEnabled(boolean enabled) {
         hungerEnabled = enabled;
     }
@@ -352,6 +297,7 @@ public class GameWorld {
     }
 
     public void setPlayerCollisionsEnabled(boolean enabled) {
+        GameScope.requireActive(owner);
         playerCollisionsEnabled = enabled;
         World world = bukkitWorld;
         if (world != null) {
@@ -380,6 +326,7 @@ public class GameWorld {
     }
 
     Location toBukkit(GameLocation location) {
+        requireLocation(location);
         return location.toBukkit(requireWorld());
     }
 
@@ -394,30 +341,27 @@ public class GameWorld {
 
     void requireCurrentGeneration(long handleGeneration, String handleType) {
         if (handleGeneration != generation) {
-            throw new IllegalStateException(handleType + " handle for GameWorld " + id + " is stale.");
+            throw new IllegalStateException(handleType + " handle for GameWorld " + name() + " is stale.");
         }
     }
 
-    private World requireWorld() {
-        if (bukkitWorld == null) {
-            throw new IllegalStateException("GameWorld " + id + " is not loaded.");
+    World requireWorld() {
+        if (bukkitWorld == null || !owner.acceptsLiveOperations()) {
+            throw new IllegalStateException("GameWorld " + name() + " is not loaded.");
         }
         return bukkitWorld;
     }
 
     private void requireLocation(GameLocation location) {
-        if (location == null || (location.world() != null && location.world() != this)) {
-            throw new IllegalArgumentException("Location must be in GameWorld " + id + ".");
-        }
+        GameScope.requireLocation(this, location);
     }
 
     private void requireRegion(GameRegion region) {
         if (region == null) {
             throw new IllegalArgumentException("region cannot be null");
         }
-        if (region.world() != null && region.world() != this) {
-            throw new IllegalArgumentException("Region must be in GameWorld " + id + ".");
-        }
+        requireLocation(region.min());
+        requireLocation(region.max());
     }
 
     private RegionBounds requireEditableRegion(GameRegion region) {

@@ -130,10 +130,10 @@ final class SpeedZonePlayers {
 
     private void resetPlayerState(GamePlayer player) {
         player.heal();
-        player.setHunger(20);
+        player.setFoodLevel(20);
         player.setSaturation(20);
         player.setArrowsInBody(0);
-        player.clearEffects();
+        player.clearActivePotionEffects();
         player.clearExperience();
         player.clearItems();
         applySpeed(player);
@@ -141,7 +141,7 @@ final class SpeedZonePlayers {
 
     void tickCheckpoints() {
         for (GamePlayer player : game.playerManager().getNonSpectators()) {
-            GameLocation location = player.location();
+            GameLocation location = player.getLocation();
             if (location == null) {
                 continue;
             }
@@ -193,13 +193,13 @@ final class SpeedZonePlayers {
         double leading = -1.0;
         for (GamePlayer player : game.playerManager().getNonSpectators()) {
             PlayerData state = data.get(player.uuid());
-            GameLocation location = player.location();
+            GameLocation location = player.getLocation();
             if (state != null && location != null && state.progress() > leading) {
                 leading = state.progress();
                 leadingPlayer = player;
             }
         }
-        return leadingPlayer == null ? Optional.empty() : Optional.ofNullable(leadingPlayer.location());
+        return leadingPlayer == null ? Optional.empty() : Optional.ofNullable(leadingPlayer.getLocation());
     }
 
     void checkGameOver() {
@@ -234,7 +234,7 @@ final class SpeedZonePlayers {
     }
 
     private void applySpeed(GamePlayer player) {
-        player.addEffect(new PotionEffect(PotionEffectType.SPEED, PotionEffect.INFINITE_DURATION, SPEED_AMPLIFIER, false, false, false));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, PotionEffect.INFINITE_DURATION, SPEED_AMPLIFIER, false, false, false));
         applyPlayerVisibilityItem(player);
     }
 
@@ -275,9 +275,9 @@ final class SpeedZonePlayers {
         event.setDroppedExp(0);
         event.clearDrops();
 
-        GameLocation location = player.location();
+        GameLocation location = player.getLocation();
         if (game.border() != null && location != null && !game.border().containsLocation(location)) {
-            player.setSpectator(true, player.location());
+            player.setSpectator(true, player.getLocation());
             game.uiManager().title(player, Component.text("Eliminated!", NamedTextColor.RED, TextDecoration.BOLD));
             game.uiManager().playSound(player, GameSound.of(Sound.ENTITY_WITHER_DEATH).volume(0.65f).pitch(1.7f));
             GameTeam team = player.getTeam();

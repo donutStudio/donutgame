@@ -3,6 +3,7 @@ package com.donutsforlife11.donutgame.api.entity;
 import org.bukkit.entity.Entity;
 
 import com.donutsforlife11.donutgame.api.map.GameWorld;
+import com.donutsforlife11.donutgame.api.map.GameWorldHandle;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
 
@@ -32,11 +33,10 @@ public final class GameEntityHandle {
         return bukkitEntity;
     }
 
-    public static GameEntity create(GameWorld world, long generation, Entity entity) {
-        return new GameEntity(world, generation, entity);
-    }
-
     public static GameEntity create(GameWorld world, Entity entity) {
+        if (GameWorldHandle.bukkitWorld(world) != entity.getWorld()) {
+            throw new IllegalArgumentException("Entity is outside the game world.");
+        }
         return new GameEntity(world, entity);
     }
 }

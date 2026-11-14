@@ -20,6 +20,7 @@ import com.donutsforlife11.donutgame.api.player.GamePlayerHandle;
 import com.donutsforlife11.donutgame.api.entity.GameEntityHandle;
 import com.donutsforlife11.donutgame.internal.ui.GlowService;
 
+import com.donutsforlife11.donutgame.internal.game.GameScope;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
@@ -28,16 +29,11 @@ public class GameTeam {
     private final Team team;
     private final Set<UUID> players = new LinkedHashSet<>();
     private final int index;
-    private NamedTextColor color = NamedTextColor.WHITE;
-    private Component displayName;
     private boolean defaultDisplayName = true;
     private ItemStack item;
     private boolean teamGlow = true;
-    private boolean friendlyFire;
     private boolean friendlyFireKillCredit;
     private Set<DamageType> friendlyFireDamageTypes = new LinkedHashSet<>(Set.of(DamageType.EXPLOSION, DamageType.PLAYER_EXPLOSION));
-    private boolean seeFriendlyInvisibles = true;
-    private Team.OptionStatus nametagVisibility = Team.OptionStatus.ALWAYS;
     private Team.OptionStatus collisionRule = Team.OptionStatus.FOR_OWN_TEAM;
     private boolean removed;
 
@@ -45,12 +41,20 @@ public class GameTeam {
         this.manager = manager;
         this.index = index;
         this.team = scoreboard.registerNewTeam("team_" + Integer.toUnsignedString(System.identityHashCode(this), 36));
-        this.displayName = defaultDisplayName();
-        applyProperties();
+        team.color(NamedTextColor.WHITE);
+        team.displayName(defaultDisplayName());
+        team.setAllowFriendlyFire(false);
+        team.setCanSeeFriendlyInvisibles(true);
+        team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.ALWAYS);
+        team.setOption(Team.Option.COLLISION_RULE, effectiveCollisionRule());
     }
 
     public GameTeam addPlayer(GamePlayer player) {
-        if (removed || player == null || !players.add(player.uuid())) {
+        requireActive();
+        if (player != null) {
+            GameScope.requirePlayer(manager.playerManager().module(), player);
+        }
+        if (player == null || !players.add(player.uuid())) {
             return this;
         }
         manager.assign(this, player);
@@ -60,14 +64,19 @@ public class GameTeam {
     }
 
     public GameTeam removePlayer(GamePlayer player) {
+        if (player != null) {
+            GameScope.requirePlayer(manager.playerManager().module(), player);
+        }
         if (player == null || !players.remove(player.uuid())) {
             return this;
         }
         manager.unassign(this, player);
         clearGlow(player);
         Player bukkitPlayer = GamePlayerHandle.bukkitPlayer(player);
+        if (!removed) {
+            team.removeEntry(player.name());
+        }
         if (!removed && bukkitPlayer != null) {
-            team.removeEntry(bukkitPlayer.getName());
             GamePlayerHandle.restoreExternalScoreboard(player, bukkitPlayer);
         }
         refreshTeamGlow();
@@ -116,27 +125,27 @@ public class GameTeam {
     }
 
     public GameTeam setColor(NamedTextColor color) {
-        this.color = color == null ? NamedTextColor.WHITE : color;
+        requireActive();
+        team.color(color == null ? NamedTextColor.WHITE : color);
         if (defaultDisplayName) {
-            displayName = defaultDisplayName();
+            team.displayName(defaultDisplayName());
         }
-        applyProperties();
         return this;
     }
 
     public NamedTextColor color() {
-        return team.color() instanceof NamedTextColor named ? named : color;
+        return team.color() instanceof NamedTextColor named ? named : NamedTextColor.WHITE;
     }
 
     public GameTeam setDisplayName(Component displayName) {
-        this.displayName = displayName == null ? defaultDisplayName() : displayName;
+        requireActive();
         this.defaultDisplayName = displayName == null;
-        team.displayName(this.displayName);
+        team.displayName(defaultDisplayName ? defaultDisplayName() : displayName);
         return this;
     }
 
     public Component displayName() {
-        return displayName;
+        return team.displayName();
     }
 
     public GameTeam setItem(GameItemType item) {
@@ -144,6 +153,7 @@ public class GameTeam {
     }
 
     public GameTeam setItem(GameItem item) {
+        requireActive();
         this.item = item == null ? null : item.copyBukkitItem();
         return this;
     }
@@ -153,6 +163,7 @@ public class GameTeam {
     }
 
     public GameTeam setTeamGlow(boolean glow) {
+        requireActive();
         teamGlow = glow;
         refreshTeamGlow();
         return this;
@@ -163,6 +174,7 @@ public class GameTeam {
     }
 
     public GameTeam setPrefix(Component prefix) {
+        requireActive();
         team.prefix(prefix == null ? Component.empty() : prefix);
         return this;
     }
@@ -172,6 +184,7 @@ public class GameTeam {
     }
 
     public GameTeam setSuffix(Component suffix) {
+        requireActive();
         team.suffix(suffix == null ? Component.empty() : suffix);
         return this;
     }
@@ -181,12 +194,13 @@ public class GameTeam {
     }
 
     public GameTeam setFriendlyFire(boolean friendlyFire) {
-        this.friendlyFire = friendlyFire;
+        requireActive();
         team.setAllowFriendlyFire(friendlyFire);
         return this;
     }
 
     public GameTeam setFriendlyFireDamageTypes(Collection<DamageType> damageTypes) {
+        requireActive();
         friendlyFireDamageTypes = new LinkedHashSet<>();
         if (damageTypes != null) {
             for (DamageType damageType : damageTypes) {
@@ -199,12 +213,13 @@ public class GameTeam {
     }
 
     public GameTeam setFriendlyFireKillCredit(boolean friendlyFireKillCredit) {
+        requireActive();
         this.friendlyFireKillCredit = friendlyFireKillCredit;
         return this;
     }
 
     public boolean friendlyFire() {
-        return friendlyFire;
+        return team.allowFriendlyFire();
     }
 
     public Collection<DamageType> friendlyFireDamageTypes() {
@@ -216,11 +231,11 @@ public class GameTeam {
     }
 
     public boolean allowsFriendlyFireDamage(DamageType damageType) {
-        return friendlyFire || friendlyFireDamageTypes.contains(damageType);
+        return friendlyFire() || friendlyFireDamageTypes.contains(damageType);
     }
 
     public GameTeam setSeeFriendlyInvisibles(boolean seeFriendlyInvisibles) {
-        this.seeFriendlyInvisibles = seeFriendlyInvisibles;
+        requireActive();
         team.setCanSeeFriendlyInvisibles(seeFriendlyInvisibles);
         return this;
     }
@@ -230,8 +245,8 @@ public class GameTeam {
     }
 
     public GameTeam setNametagVisibility(Team.OptionStatus nametagVisibility) {
-        this.nametagVisibility = nametagVisibility == null ? Team.OptionStatus.ALWAYS : nametagVisibility;
-        team.setOption(Team.Option.NAME_TAG_VISIBILITY, this.nametagVisibility);
+        requireActive();
+        team.setOption(Team.Option.NAME_TAG_VISIBILITY, nametagVisibility == null ? Team.OptionStatus.ALWAYS : nametagVisibility);
         return this;
     }
 
@@ -240,6 +255,7 @@ public class GameTeam {
     }
 
     public GameTeam setCollisionRule(Team.OptionStatus collisionRule) {
+        requireActive();
         this.collisionRule = collisionRule == null ? Team.OptionStatus.FOR_OWN_TEAM : collisionRule;
         team.setOption(Team.Option.COLLISION_RULE, effectiveCollisionRule());
         return this;
@@ -253,8 +269,11 @@ public class GameTeam {
         return team.getOption(Team.Option.COLLISION_RULE);
     }
 
-    Team bukkitTeam() {
-        return team;
+    private void requireActive() {
+        GameScope.requireActive(manager.playerManager().module());
+        if (removed) {
+            throw new IllegalStateException("Team has been removed.");
+        }
     }
 
     void syncPlayer(GamePlayer player) {
@@ -266,18 +285,6 @@ public class GameTeam {
         bukkitPlayer.setScoreboard(team.getScoreboard());
         team.addEntry(bukkitPlayer.getName());
         syncGlow(player);
-    }
-
-    private void applyProperties() {
-        team.color(color);
-        team.displayName(displayName);
-        team.setAllowFriendlyFire(friendlyFire);
-        team.setCanSeeFriendlyInvisibles(seeFriendlyInvisibles);
-        team.setOption(Team.Option.NAME_TAG_VISIBILITY, nametagVisibility);
-        team.setOption(Team.Option.COLLISION_RULE, effectiveCollisionRule());
-        for (GamePlayer player : getPlayers()) {
-            syncPlayer(player);
-        }
     }
 
     private void refreshTeamGlow() {
@@ -294,14 +301,14 @@ public class GameTeam {
             clearGlow(player);
             return;
         }
-        GlowService glowService = manager.playerManager().module().plugin().glowService();
+        GlowService glowService = manager.implementationPlugin().glowService();
         if (glowService == null || !glowService.setPacketGlowing(GameEntityHandle.bukkitEntity(player), true, () -> glowViewers(player), null)) {
             clearGlow(player);
         }
     }
 
     private void clearGlow(GamePlayer player) {
-        GlowService glowService = manager.playerManager().module().plugin().glowService();
+        GlowService glowService = manager.implementationPlugin().glowService();
         if (glowService != null && player != null) {
             glowService.setPacketGlowing(GameEntityHandle.bukkitEntity(player), false, Set::of, null);
         }
@@ -318,7 +325,7 @@ public class GameTeam {
     }
 
     private boolean teamGlowAvailable() {
-        GlowService glowService = manager.playerManager().module().plugin().glowService();
+        GlowService glowService = manager.implementationPlugin().glowService();
         return glowService != null && glowService.packetGlowAvailable();
     }
 
@@ -334,7 +341,7 @@ public class GameTeam {
     }
 
     private Component defaultDisplayName() {
-        return Component.text("Team " + (index + 1), color);
+        return Component.text("Team " + (index + 1), color());
     }
 
     private Team.OptionStatus effectiveCollisionRule() {

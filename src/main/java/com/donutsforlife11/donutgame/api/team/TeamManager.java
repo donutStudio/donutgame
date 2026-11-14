@@ -16,21 +16,24 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventPriority;
+import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.scoreboard.Scoreboard;
 
+import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.item.GameItem;
 import com.donutsforlife11.donutgame.api.item.GameItemComponents;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.player.PlayerManager;
 import com.donutsforlife11.donutgame.api.player.PlayerManagerHandle;
 
+import com.donutsforlife11.donutgame.internal.game.GameScope;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 
-public class TeamManager {
+public final class TeamManager implements Listener {
     private static final List<ColoredTeamPreset> COLORED_TEAM_PRESETS = List.of(
         new ColoredTeamPreset(NamedTextColor.RED, "Red"),
         new ColoredTeamPreset(NamedTextColor.BLUE, "Blue"),
@@ -50,22 +53,29 @@ public class TeamManager {
         new ColoredTeamPreset(NamedTextColor.WHITE, "White")
     );
 
+    private final Donutgame plugin;
     private final PlayerManager playerManager;
     private final Scoreboard scoreboard = Objects.requireNonNull(Bukkit.getScoreboardManager()).getNewScoreboard();
     private final Set<GameTeam> teams = new LinkedHashSet<>();
     private final Map<UUID, GameTeam> teamsByPlayer = new LinkedHashMap<>();
     private int colorIndex;
 
-    public TeamManager(PlayerManager playerManager) {
+    public TeamManager(PlayerManager playerManager, Donutgame plugin) {
+        this.plugin = plugin;
         this.playerManager = Objects.requireNonNull(playerManager, "playerManager");
         this.playerManager.module().world().onPlayerCollisionsChanged(ignored -> refreshCollisionRules());
     }
 
     public void initialize() {
-        registerFriendlyFireListener();
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+    }
+
+    Donutgame implementationPlugin() {
+        return plugin;
     }
 
     public GameTeam newTeam() {
+        GameScope.requireActive(playerManager.module());
         GameTeam team = new GameTeam(this, scoreboard, teams.size());
         teams.add(team);
         return team;
@@ -100,7 +110,11 @@ public class TeamManager {
     }
 
     public GameTeam getPlayerTeam(GamePlayer player) {
-        return player == null ? null : teamsByPlayer.get(player.uuid());
+        if (player == null) {
+            return null;
+        }
+        GameScope.requirePlayer(playerManager.module(), player);
+        return teamsByPlayer.get(player.uuid());
     }
 
     public boolean playerHasTeam(GamePlayer player) {
@@ -156,22 +170,13 @@ public class TeamManager {
         return Collections.unmodifiableSet(matches);
     }
 
-    private void registerFriendlyFireListener() {
-        playerManager.module().registerDynamicEvent(
-            new Listener() {},
-            EntityDamageEvent.class,
-            (listener, event) -> handleFriendlyFire((EntityDamageEvent) event),
-            EventPriority.HIGHEST,
-            true
-        );
-    }
-
     private void refreshCollisionRules() {
         for (GameTeam team : teams) {
             team.setCollisionRule(team.collisionRule());
         }
     }
 
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     private void handleFriendlyFire(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player target)) {
             return;

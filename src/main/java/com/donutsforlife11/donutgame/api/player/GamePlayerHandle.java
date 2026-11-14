@@ -1,6 +1,7 @@
 package com.donutsforlife11.donutgame.api.player;
 
 import org.bukkit.entity.Entity;
+import com.donutsforlife11.donutgame.api.map.GameLocation;
 import org.bukkit.entity.Player;
 
 /**
@@ -25,6 +26,18 @@ public final class GamePlayerHandle {
 
     public static Entity bukkitEntity(GamePlayer player) {
         return player == null ? null : player.bukkitEntity();
+    }
+
+    public static void rememberVanillaDeath(GamePlayer player) {
+        player.rememberVanillaDeath();
+    }
+
+    public static GameLocation postDeathRespawnLocation(GamePlayer player, GameLocation fallback) {
+        return player.postDeathRespawnLocation(fallback);
+    }
+
+    public static void enterPostDeathSpectator(GamePlayer player, GameLocation location) {
+        player.enterPostDeathSpectator(location);
     }
 
     public static void captureExternalScoreboard(GamePlayer player, Player bukkitPlayer) {

@@ -20,6 +20,7 @@ import org.bukkit.util.Vector;
 
 import com.donutsforlife11.donutgame.api.entity.GameEntityBase;
 import com.donutsforlife11.donutgame.api.map.GameLocation;
+import com.donutsforlife11.donutgame.internal.game.GameScope;
 
 public final class GameNpcController {
     private final GameNpc npc;
@@ -60,8 +61,11 @@ public final class GameNpcController {
 
     public void follow(GameEntityBase entity) {
         Objects.requireNonNull(entity, "entity");
+        if (entity.world() != npc.world()) {
+            throw new IllegalArgumentException("NPC target belongs to another game world.");
+        }
         follow(() -> entity.isDead() || (entity instanceof com.donutsforlife11.donutgame.api.player.GamePlayer player
-            && !player.isOnline()) ? null : entity.location());
+            && !player.isOnline()) ? null : entity.getLocation());
     }
 
     public void pathfindTo(GameLocation location) {
@@ -74,14 +78,18 @@ public final class GameNpcController {
 
     public void pathfindFollowing(GameEntityBase entity) {
         Objects.requireNonNull(entity, "entity");
+        if (entity.world() != npc.world()) {
+            throw new IllegalArgumentException("NPC target belongs to another game world.");
+        }
         pathfindFollowing(() -> entity.isDead() || (entity instanceof com.donutsforlife11.donutgame.api.player.GamePlayer player
-            && !player.isOnline()) ? null : entity.location());
+            && !player.isOnline()) ? null : entity.getLocation());
     }
 
     private void navigate(List<GameLocation> locations, Supplier<GameLocation> following, boolean pathfinding) {
+        npc.requireCurrentWorld();
         for (GameLocation location : locations) {
-            if ((location.world() != null && location.world() != npc.world())
-                || !Double.isFinite(location.x()) || !Double.isFinite(location.y()) || !Double.isFinite(location.z())) {
+            GameScope.requireLocation(npc.world(), location);
+            if (!Double.isFinite(location.x()) || !Double.isFinite(location.y()) || !Double.isFinite(location.z())) {
                 throw new IllegalArgumentException("Navigation locations must be finite and in the NPC's world.");
             }
         }
@@ -104,6 +112,11 @@ public final class GameNpcController {
     }
 
     public void cancelNavigation() {
+        npc.requireCurrentWorld();
+        cancelNavigationInternal();
+    }
+
+    void cancelNavigationInternal() {
         collisionShapes.clear();
         following = null;
         target = null;
@@ -114,7 +127,7 @@ public final class GameNpcController {
         repathTicks = 0;
         boolean wasNavigating = navigating;
         navigating = false;
-        if (wasNavigating) {
+        if (wasNavigating && npc.isInCurrentWorld()) {
             Vector velocity = npc.mannequin.getVelocity();
             npc.mannequin.setVelocity(velocity.setX(0).setZ(0));
             npc.mannequin.setJumping(false);
@@ -122,6 +135,7 @@ public final class GameNpcController {
     }
 
     public void pause() {
+        npc.requireCurrentWorld();
         paused = true;
         if (navigating) {
             npc.mannequin.setVelocity(npc.mannequin.getVelocity().setX(0).setZ(0));
@@ -130,6 +144,7 @@ public final class GameNpcController {
     }
 
     public void resume() {
+        npc.requireCurrentWorld();
         paused = false;
     }
 
@@ -333,6 +348,8 @@ public final class GameNpcController {
 
     /** Bounded A*: cardinal edges avoid diagonal corner cutting; no chunks are loaded. */
     public List<GameLocation> findPath(GameLocation location) {
+        npc.requireCurrentWorld();
+        GameScope.requireLocation(npc.world(), location);
         Objects.requireNonNull(location, "location");
         if ((location.world() != null && location.world() != npc.world()) || !Double.isFinite(location.x())
             || !Double.isFinite(location.y()) || !Double.isFinite(location.z())) {

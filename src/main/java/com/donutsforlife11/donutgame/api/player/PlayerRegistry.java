@@ -7,21 +7,17 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Predicate;
 
-import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
 final class PlayerRegistry {
     private final GameModule module;
-    private final GamePlayerLifecycleService lifecycle;
     private final Map<UUID, GamePlayer> playersById = new LinkedHashMap<>();
 
-    PlayerRegistry(GameModule module, GamePlayerLifecycleService lifecycle) {
+    PlayerRegistry(GameModule module) {
         this.module = module;
-        this.lifecycle = lifecycle;
     }
 
     GamePlayer get(UUID uuid) {
@@ -35,7 +31,12 @@ final class PlayerRegistry {
     GamePlayer register(Player player) {
         boolean freshSession = !playersById.containsKey(player.getUniqueId());
         GamePlayer gamePlayer = playersById.computeIfAbsent(player.getUniqueId(), uuid -> new GamePlayer(module, uuid));
-        lifecycle.attach(gamePlayer, player, freshSession);
+        gamePlayer.captureExternalScoreboard(player);
+        if (freshSession) {
+            gamePlayer.startFreshSession(player);
+        } else {
+            gamePlayer.reattach(player);
+        }
         return gamePlayer;
     }
 
@@ -66,7 +67,7 @@ final class PlayerRegistry {
     Collection<Player> onlineBukkitPlayers() {
         Set<Player> players = new LinkedHashSet<>();
         for (GamePlayer gamePlayer : playersById.values()) {
-            Player player = GamePlayerHandle.bukkitPlayer(gamePlayer);
+            Player player = gamePlayer.playerInCurrentWorld();
             if (player != null) {
                 players.add(player);
             }
@@ -74,13 +75,4 @@ final class PlayerRegistry {
         return Collections.unmodifiableSet(players);
     }
 
-    void markOffline(Player player, Predicate<World> ownsWorld) {
-        if (player == null) {
-            return;
-        }
-        GamePlayer gamePlayer = playersById.get(player.getUniqueId());
-        if (gamePlayer != null && lifecycle.playerStillInOwnedWorld(player, ownsWorld)) {
-            lifecycle.markOffline(gamePlayer, player);
-        }
-    }
 }

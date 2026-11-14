@@ -40,8 +40,8 @@ public final class GameNpc extends GameEntity {
     private int interactionCooldown = 5;
     private int attackCooldown = 5;
 
-    public GameNpc(GameWorld world, long generation, Mannequin mannequin, PlayerProfile profile) {
-        super(world, mannequin.getUniqueId(), mannequin.getType());
+    GameNpc(GameWorld world, long generation, Mannequin mannequin, PlayerProfile profile) {
+        super(world, generation, mannequin);
         this.mannequin = mannequin;
         this.worldGeneration = generation;
         mannequin.setInvulnerable(true);
@@ -65,11 +65,8 @@ public final class GameNpc extends GameEntity {
         controller = new GameNpcController(this);
     }
 
-    public GameEntity entity() {
-        return this;
-    }
-
     public void setProfile(PlayerProfile profile) {
+        requireCurrentWorld();
         this.profile = Objects.requireNonNull(profile, "profile").clone();
         mannequin.setProfile(ResolvableProfile.resolvableProfile(this.profile));
     }
@@ -79,11 +76,13 @@ public final class GameNpc extends GameEntity {
     }
 
     public void setDescription(Component description) {
+        requireCurrentWorld();
         this.description = description;
         mannequin.setDescription(descriptionVisible ? description : null);
     }
 
     public void setDescriptionVisible(boolean visible) {
+        requireCurrentWorld();
         descriptionVisible = visible;
         mannequin.setDescription(visible ? description : null);
     }
@@ -93,6 +92,7 @@ public final class GameNpc extends GameEntity {
     }
 
     public void setImmovable(boolean immovable) {
+        requireCurrentWorld();
         mannequin.setImmovable(immovable);
         if (immovable) {
             mannequin.setVelocity(new Vector());
@@ -103,19 +103,23 @@ public final class GameNpc extends GameEntity {
     }
 
     public boolean isImmovable() {
+        requireCurrentWorld();
         return mannequin.isImmovable();
     }
 
     public void setSneaking(boolean sneaking) {
+        requireCurrentWorld();
         mannequin.setSneaking(sneaking);
         mannequin.setPose(sneaking ? Pose.SNEAKING : Pose.STANDING, true);
     }
 
     public boolean isSneaking() {
+        requireCurrentWorld();
         return mannequin.isSneaking();
     }
 
     public void setSprinting(boolean sprinting) {
+        requireCurrentWorld();
         this.sprinting = sprinting;
     }
 
@@ -124,6 +128,7 @@ public final class GameNpc extends GameEntity {
     }
 
     public void jump() {
+        requireCurrentWorld();
         if (!isImmovable() && mannequin.isOnGround()) {
             jumpRequested = true;
             mannequin.setJumping(true);
@@ -170,12 +175,28 @@ public final class GameNpc extends GameEntity {
 
     @Override
     public boolean isDead() {
-        return GameWorldHandle.generation(world()) != worldGeneration || !mannequin.isValid() || mannequin.isDead();
+        return !isInCurrentWorld() || !mannequin.isValid() || mannequin.isDead();
     }
 
     @Override
     public void remove() {
-        controller.cancelNavigation();
+        requireCurrentWorld();
+        discard();
+    }
+
+    boolean isInCurrentWorld() {
+        return world().owner().acceptsLiveOperations() && GameWorldHandle.generation(world()) == worldGeneration
+            && GameWorldHandle.bukkitWorld(world()) == mannequin.getWorld();
+    }
+
+    void requireCurrentWorld() {
+        if (!isInCurrentWorld()) {
+            throw new IllegalStateException("NPC belongs to an inactive world generation.");
+        }
+    }
+
+    void discard() {
+        controller.cancelNavigationInternal();
         interactions.clear();
         attacks.clear();
         mannequin.remove();
