@@ -74,7 +74,8 @@ public abstract class ModuleApiBoundaryTask extends DefaultTask {
         GAME_EVENT, API + "event.GamePlayerLateJoinEvent", API + "entity.GameEntity",
         API + "entity.npc.GameNpc", API + "item.GameLootTable", API + "map.GameWorld", API + "map.MapManager",
         API + "player.PlayerManager", API + "team.TeamManager", API + "ui.UIManager",
-        API + "time.TimeManager", API + "border.BorderManager", API + "data.GameData", API + "data.GameDataBase"
+        API + "time.TimeManager", API + "border.BorderManager", API + "data.GameData", API + "data.GameDataBase",
+        API + "storage.GameStorage"
     );
 
     @InputFiles @PathSensitive(PathSensitivity.RELATIVE)

@@ -157,13 +157,16 @@ public final class GameItemComponents {
         }
         NamedTextColor color = team.color();
         if (color == NamedTextColor.BLACK) return DyeColor.BLACK;
-        if (color == NamedTextColor.DARK_BLUE || color == NamedTextColor.BLUE) return DyeColor.BLUE;
+        if (color == NamedTextColor.DARK_BLUE) return DyeColor.BLUE;
+        if (color == NamedTextColor.BLUE) return DyeColor.BLUE;
         if (color == NamedTextColor.DARK_GREEN) return DyeColor.GREEN;
         if (color == NamedTextColor.GREEN) return DyeColor.LIME;
-        if (color == NamedTextColor.DARK_AQUA || color == NamedTextColor.AQUA) return DyeColor.CYAN;
-        if (color == NamedTextColor.DARK_RED || color == NamedTextColor.RED) return DyeColor.RED;
+        if (color == NamedTextColor.DARK_AQUA) return DyeColor.CYAN;
+        if (color == NamedTextColor.AQUA) return DyeColor.LIGHT_BLUE;
+        if (color == NamedTextColor.DARK_RED) return DyeColor.BROWN;
+        if (color == NamedTextColor.RED) return DyeColor.RED;
         if (color == NamedTextColor.DARK_PURPLE) return DyeColor.PURPLE;
-        if (color == NamedTextColor.LIGHT_PURPLE) return DyeColor.MAGENTA;
+        if (color == NamedTextColor.LIGHT_PURPLE) return DyeColor.PINK;
         if (color == NamedTextColor.GOLD) return DyeColor.ORANGE;
         if (color == NamedTextColor.YELLOW) return DyeColor.YELLOW;
         if (color == NamedTextColor.DARK_GRAY) return DyeColor.GRAY;

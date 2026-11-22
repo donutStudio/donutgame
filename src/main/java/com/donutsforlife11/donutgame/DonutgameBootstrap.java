@@ -2,7 +2,6 @@ package com.donutsforlife11.donutgame;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,6 +14,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import com.donutsforlife11.donutgame.internal.file.ModuleFiles;
+
 import io.papermc.paper.datapack.Datapack;
 import io.papermc.paper.datapack.DatapackRegistrar;
 import io.papermc.paper.plugin.bootstrap.BootstrapContext;
@@ -23,7 +24,7 @@ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import net.kyori.adventure.text.Component;
 
 /**
- * Exposes each module jar's data/<module-id>/ directory to Minecraft as a
+ * Exposes each module folder's data/<module-id>/ directory to Minecraft as a
  * private-to-the-module source pack. Minecraft itself still merges enabled
  * datapacks into global registries; GameData provides the module ownership
  * boundary used by module code.
@@ -71,7 +72,7 @@ public final class DonutgameBootstrap implements PluginBootstrap {
                 .filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".jar"))
                 .sorted()
                 .toList()) {
-                discoverPack(context, registrar, datapacksFolder, moduleJar);
+                discoverPack(context, registrar, modulesFolder, datapacksFolder, moduleJar);
             }
         } catch (IOException exception) {
             context.getLogger().warn("Failed to scan module datapacks in " + modulesFolder + ": " + exception.getMessage());
@@ -95,15 +96,17 @@ public final class DonutgameBootstrap implements PluginBootstrap {
         }
     }
 
-    private void discoverPack(BootstrapContext context, DatapackRegistrar registrar, Path datapacksFolder, Path moduleJar) {
+    private void discoverPack(BootstrapContext context, DatapackRegistrar registrar, Path modulesFolder, Path datapacksFolder, Path moduleJar) {
         try {
             String moduleId = readModuleId(moduleJar);
+            Path directory = ModuleFiles.directory(modulesFolder, moduleId);
+            ModuleFiles.seed(moduleJar, directory);
             String packId = "module-" + moduleId;
             Path packFolder = datapacksFolder.resolve(packId).normalize();
             if (!packFolder.startsWith(datapacksFolder)) {
                 throw new IOException("Resolved datapack path escaped runtime folder: " + packFolder);
             }
-            if (!extractDatapack(moduleJar, packFolder, moduleId)) {
+            if (!extractDatapack(directory, packFolder, moduleId)) {
                 return;
             }
             registrar.discoverPack(packFolder, packId, configurer -> configurer
@@ -111,7 +114,7 @@ public final class DonutgameBootstrap implements PluginBootstrap {
                 .autoEnableOnServerStart(true)
                 .position(false, Datapack.Position.TOP)
             );
-        } catch (IOException exception) {
+        } catch (IOException | IllegalArgumentException exception) {
             context.getLogger().warn("Failed to discover module datapack " + moduleJar + ": " + exception.getMessage());
         }
     }
@@ -136,35 +139,29 @@ public final class DonutgameBootstrap implements PluginBootstrap {
         }
     }
 
-    private boolean extractDatapack(Path moduleJar, Path packFolder, String moduleId) throws IOException {
-        try (JarFile jar = new JarFile(moduleJar.toFile())) {
-            List<JarEntry> dataEntries = jar.stream()
-                .filter(entry -> !entry.isDirectory() && entry.getName().startsWith("data/"))
-                .toList();
-            if (dataEntries.isEmpty()) {
-                return false;
-            }
-
-            for (JarEntry entry : dataEntries) {
-                validateOwnedNamespace(entry.getName(), moduleId);
-            }
-
-            deleteDirectory(packFolder);
-            Files.createDirectories(packFolder);
-            Files.writeString(packFolder.resolve("pack.mcmeta"), INTERNAL_PACK_METADATA, StandardCharsets.UTF_8);
-
-            for (JarEntry entry : dataEntries) {
-                Path target = packFolder.resolve(entry.getName()).normalize();
-                if (!target.startsWith(packFolder)) {
-                    throw new IOException("Refusing to extract unsafe module datapack entry: " + entry.getName());
-                }
-                Files.createDirectories(target.getParent());
-                try (InputStream input = jar.getInputStream(entry); OutputStream output = Files.newOutputStream(target)) {
-                    input.transferTo(output);
-                }
-            }
-            return true;
+    private boolean extractDatapack(Path directory, Path packFolder, String moduleId) throws IOException {
+        Path data = ModuleFiles.resolve(directory, "data");
+        if (!Files.isDirectory(data)) return false;
+        List<Path> dataFiles;
+        try (Stream<Path> files = Files.walk(data)) {
+            dataFiles = files.filter(Files::isRegularFile).sorted().toList();
         }
+        if (dataFiles.isEmpty()) return false;
+        for (Path file : dataFiles) {
+            String relative = directory.relativize(file).toString().replace('\\', '/');
+            validateOwnedNamespace(relative, moduleId);
+            ModuleFiles.resolve(directory, relative);
+        }
+        deleteDirectory(packFolder);
+        Files.createDirectories(packFolder);
+        Files.writeString(packFolder.resolve("pack.mcmeta"), INTERNAL_PACK_METADATA, StandardCharsets.UTF_8);
+        for (Path file : dataFiles) {
+            String relative = directory.relativize(file).toString().replace('\\', '/');
+            Path target = ModuleFiles.resolve(packFolder, relative);
+            Files.createDirectories(target.getParent());
+            Files.copy(file, target);
+        }
+        return true;
     }
 
     private void validateOwnedNamespace(String entryName, String moduleId) throws IOException {

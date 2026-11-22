@@ -1,0 +1,19 @@
+id: zone_wars
+main_class: com.donutsforlife11.zonewars.ZoneWars
+name: Zone Wars
+maps:
+  - dune
+team_count: 2
+point_count: 2
+item_count: 8
+game_duration: 300
+win_score: 1000
+capture_score: 100
+kill_score: 25
+death_score: 0
+respawn_delay: 10
+score_multiplier: 2
+score_multiplier_time: 60
+no_respawn_time: 0
+capture_mode: 0 # 0 = mining a point block, 1 = killing a point entity
+hunger_enabled: 0

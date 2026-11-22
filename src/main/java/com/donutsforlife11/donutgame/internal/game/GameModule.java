@@ -6,6 +6,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 import java.util.function.Supplier;
+import java.nio.file.Path;
 
 import org.bukkit.Sound;
 import org.bukkit.event.HandlerList;
@@ -14,6 +15,8 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import com.donutsforlife11.donutgame.Donutgame;
 import com.donutsforlife11.donutgame.api.border.BorderManager;
 import com.donutsforlife11.donutgame.api.data.GameData;
+import com.donutsforlife11.donutgame.api.storage.GameStorage;
+import com.donutsforlife11.donutgame.internal.storage.StorageDatabase;
 import com.donutsforlife11.donutgame.api.event.GameEventRegistrar;
 import com.donutsforlife11.donutgame.api.map.GameWorld;
 import com.donutsforlife11.donutgame.api.map.MapManager;
@@ -44,6 +47,9 @@ public abstract class GameModule {
     private UIManager uiManager;
     private BorderManager borderManager;
     private GameData data;
+    private GameStorage storage;
+    private StorageDatabase database;
+    private Path directory;
     private GameEventRegistrar eventRegistrar;
     private String id;
     private String name;
@@ -78,7 +84,10 @@ public abstract class GameModule {
         this.timeManager = timeManager;
         this.uiManager = uiManager;
         this.borderManager = borderManager;
-        this.data = new GameData(this, descriptor.file());
+        this.directory = descriptor.directory().toPath();
+        this.data = new GameData(this, descriptor.directory());
+        this.database = new StorageDatabase(directory.resolve("storage.db"));
+        this.storage = new GameStorage(this, database);
         this.eventRegistrar = new GameEventRegistrar(this, plugin);
     }
 
@@ -142,6 +151,13 @@ public abstract class GameModule {
         }
         shutdownFuture = new CompletableFuture<>();
         setLifecycleState(ModuleLifecycleState.UNLOADING);
+        if (database != null) {
+            try {
+                database.close();
+            } catch (RuntimeException exception) {
+                logError("Could not close game storage.", exception);
+            }
+        }
         borderManager.clear();
         timeManager.cancelAll();
         eventRegistrar.unregisterAll();
@@ -217,6 +233,14 @@ public abstract class GameModule {
 
     public GameData data() {
         return data;
+    }
+
+    public GameStorage storage() {
+        return storage;
+    }
+
+    public Path directory() {
+        return directory;
     }
 
     public MapManager mapManager() {

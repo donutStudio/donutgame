@@ -1,7 +1,6 @@
 package com.donutsforlife11.donutgame.internal.game;
 
 import java.io.File;
-import java.io.StringReader;
 
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -11,10 +10,17 @@ public record GameModuleDescriptor(
     String name,
     Class<? extends GameModule> moduleClass,
     String configText,
-    File file
+    File file,
+    File directory
 ) {
     public YamlConfiguration createConfig() {
-        return YamlConfiguration.loadConfiguration(new StringReader(configText));
+        YamlConfiguration config = new YamlConfiguration();
+        try {
+            config.load(new File(directory, "config.yml"));
+        } catch (Exception exception) {
+            throw new IllegalStateException("Could not load config for module " + id + ".", exception);
+        }
+        return config;
     }
 
     public GameModule createModule() throws ReflectiveOperationException {

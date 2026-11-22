@@ -19,6 +19,8 @@ protected CompletableFuture<Void> unload() // Unloads the game module
 void onReload() // Runs after the map resets when the module reloads
 void onUnload() // Runs when the game unloads
 GameData data() // Returns the module's data
+GameStorage storage() // Returns the module's storage
+Path directory() // Returns modules/<game id>/, shared by instances of this game
 MapManager mapManager() // Returns the module's map manager
 UIManager uiManager() // Returns the module's UI Manager
 PlayerManager playerManager() // Returns the module's player manager
@@ -422,12 +424,6 @@ void addWalkableTags(TagKey<BlockType>... tags) // Adds all supports from those 
 void removeWalkableTags(TagKey<BlockType>... tags) // Removes all supports from those tags
 ```
 
-NPC defaults: invulnerable, movable, non-persistent, with hidden descriptions, movement speed 0.1 and step height 0.6. Controllers default to arrival distance 0.35, follow range 32, timeout 200 ticks and vertical tolerance 1. Interaction and attack cooldowns are separate, per player, and default to 5 ticks. Callbacks replace the previous callback of the same kind; passing null clears it. NPCs are removed when their world is replaced/unloaded or their entity unloads, and when the plugin disables. Use the server thread for all NPC operations.
-
-Pathfinding uses bounded A* (at most 4096 expanded nodes), only in loaded chunks, with collision-shape clearance and safe support checks. It supports partial blocks, avoids corner cutting, and refuses drops over 3 blocks or rises above ordinary player jump height (1.25 blocks). Unsafe defaults include fire/campfire/portal tags, fluids, magma, cactus, berry bushes, wither roses, powder snow, cobwebs and pointed dripstone. Other solid supports and carpets/snow are allowed. Tag operations expand their current registry contents when called; subsequent block overrides take precedence. Allowing a block does not disable its physical collision. An empty path means no safe route was found within the search budget. Following waits outside its range, retries failed paths after 40 active ticks, and replans moving/blocked paths at most once per 10 active ticks.
-
-Movement uses player-like ground acceleration, slipperiness, sprint and sneak scaling with native mannequin gravity, collision and jumping. Paper has no mannequin movement-input API; exact client-player parity (including swimming, flight and all input-dependent behavior) is not guaranteed.
-
 ## PLAYER SYSTEM
 **PlayerManager**
 ```java
@@ -472,6 +468,9 @@ void giveItem(GameItemType item) // Gives an item to a player
 void giveItem(GameItem item) // Similar to above but takes in a GameItem
 List<GameItem> inventory() // Returns a player's inventory
 List<GameItem> hotbar() // Kinda like above but constrained to only the hotbar
+GameItem getInventoryItem(int slot) // Reads a copied stack from the current playing inventory
+void setInventoryItem(int slot, GameItem item) // Sets a copied stack; null clears the slot
+// Slots: 0-8 hotbar, 9-35 main storage, 36 feet, 37 legs, 38 chest, 39 head, 40 offhand
 ```
 
 ## TEAM SYSTEM
@@ -549,4 +548,16 @@ BorderShape shape() // Returns border shape
 GameLocation center() // Returns border center
 Vector dimensions() // Returns border dimensions
 boolean isMoving() // Returns whether border is moving or resizing
+```
+## GAME STORAGE
+**GameStorage**
+```java
+GameStorage player(GamePlayer player) // Returns this game's persistent storage for an owned player
+GameStorage player(UUID uuid) // Returns this game's persistent storage for a player UUID, including offline players
+<T> T get(String key, Class<T> type) // Returns a saved value as the specified type, or null if absent
+<T> T get(String key, Class<T> type, T fallback) // Returns a saved value, or the fallback if absent
+void set(String key, Object value) // Saves a copied value immediately; supports data records, collections, and GameItem; null removes the key
+boolean contains(String key) // Returns whether this scope has a saved value under the key
+boolean remove(String key) // Removes a saved value and returns whether it existed
+void clear() // Removes all values in this scope; game values and each player's values are separate
 ```

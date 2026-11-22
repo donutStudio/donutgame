@@ -13,6 +13,8 @@ import org.bukkit.Registry;
 import org.bukkit.advancement.Advancement;
 import org.bukkit.inventory.Recipe;
 import org.bukkit.loot.LootTable;
+import org.bukkit.configuration.file.YamlConfiguration;
+import com.donutsforlife11.donutgame.internal.file.ModuleFiles;
 
 import com.donutsforlife11.donutgame.api.item.GameItem;
 import com.donutsforlife11.donutgame.api.item.GameItems;
@@ -28,11 +30,11 @@ import io.papermc.paper.registry.tag.Tag;
  */
 public abstract class GameDataBase {
     private final GameModule module;
-    private final Path moduleJar;
+    private final Path moduleDirectory;
 
-    protected GameDataBase(GameModule module, File moduleJar) {
+    protected GameDataBase(GameModule module, File moduleDirectory) {
         this.module = Objects.requireNonNull(module, "module");
-        this.moduleJar = Objects.requireNonNull(moduleJar, "moduleJar").toPath().toAbsolutePath().normalize();
+        this.moduleDirectory = Objects.requireNonNull(moduleDirectory, "moduleDirectory").toPath().toAbsolutePath().normalize();
     }
 
     public final String namespace() {
@@ -44,11 +46,22 @@ public abstract class GameDataBase {
     }
 
     /**
-     * Read any file under {@code data/<module id>/} in this module jar.
+     * Read any file under {@code data/<module id>/} in this module directory.
      * The returned resource is read-only.
      */
     public final GameDataResource resource(String relativePath) {
-        return new GameDataResource(moduleJar, namespace(), relativePath);
+        return new GameDataResource(moduleDirectory, namespace(), relativePath);
+    }
+
+    /** Reads an editable YAML file from the game's directory, without jar fallbacks. */
+    public final YamlConfiguration config(String relativePath) {
+        YamlConfiguration config = new YamlConfiguration();
+        try {
+            config.load(ModuleFiles.resolve(moduleDirectory, relativePath).toFile());
+        } catch (Exception exception) {
+            throw new IllegalStateException("Could not load module config " + relativePath + ".", exception);
+        }
+        return config;
     }
 
     public final GameLootTable lootTable(NamespacedKey key) {
@@ -154,7 +167,7 @@ public abstract class GameDataBase {
             return registry.getTag(registryKey.tagKey(owned.toString()));
         } catch (NoSuchElementException | UnsupportedOperationException exception) {
             throw new IllegalArgumentException(
-                "Module data tag '" + owned + "' is present in the module jar but is not loaded in registry '" + registryPath + "'.",
+                "Module data tag '" + owned + "' is present in the module directory but is not loaded in registry '" + registryPath + "'.",
                 exception
             );
         }
@@ -174,7 +187,7 @@ public abstract class GameDataBase {
 
     private IllegalArgumentException missingLoaded(String type, NamespacedKey key) {
         return new IllegalArgumentException(
-            "Module " + type + " '" + key + "' exists in the module jar but is not loaded by the server. "
+            "Module " + type + " '" + key + "' exists in the module directory but is not loaded by the server. "
                 + "Reload Donutgame/server data after changing module datapack files."
         );
     }

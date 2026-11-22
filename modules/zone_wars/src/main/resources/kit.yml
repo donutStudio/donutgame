@@ -1,0 +1,14 @@
+kit:
+  hotbar:
+    0: iron_sword[unbreakable={}]
+    1: iron_axe[unbreakable={}]
+    2: bow[unbreakable={}]
+    7: golden_pickaxe[enchantments={efficiency:3},unbreakable={}]
+    8: white_concrete[custom_data={"donutgame:infinite_build":1b, "donutgame:team_sync":1b}] 65
+  inventory:
+    0: arrow 25
+  armor:
+    head: iron_helmet[unbreakable={},enchantments={fire_protection:2}]
+    chest: iron_chestplate[unbreakable={},enchantments={fire_protection:2}]
+    legs: leather_leggings[custom_data={"donutgame:team_sync":1b},unbreakable={},enchantments={fire_protection:2}]
+    feet: leather_boots[custom_data={"donutgame:team_sync":1b},unbreakable={},enchantments={fire_protection:2,feather_falling:2}]

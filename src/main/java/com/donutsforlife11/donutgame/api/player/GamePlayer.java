@@ -395,6 +395,7 @@ public final class GamePlayer implements GameEntityBase {
     }
 
     public List<GameItem> inventory() {
+        captureVisibleInventory();
         List<GameItem> items = new ArrayList<>();
         for (ItemStack item : PlayerSnapshot.cloneItems(playingState.inventory)) {
             items.add(GameItem.from(item));
@@ -403,6 +404,7 @@ public final class GamePlayer implements GameEntityBase {
     }
 
     public List<GameItem> hotbar() {
+        captureVisibleInventory();
         List<GameItem> items = new ArrayList<>();
         for (int index = 0; index < Math.min(9, playingState.inventory.length); index++) {
             items.add(GameItem.from(playingState.inventory[index]));
@@ -414,6 +416,23 @@ public final class GamePlayer implements GameEntityBase {
         if (slot < 0 || slot >= 9) {
             throw new IllegalArgumentException("hotbar slot must be between 0 and 8");
         }
+        setInventoryItem(slot, item);
+    }
+
+    public GameItem getHotbarItem(int slot) {
+        if (slot < 0 || slot >= 9) {
+            throw new IllegalArgumentException("hotbar slot must be between 0 and 8");
+        }
+        return getInventoryItem(slot);
+    }
+
+    /** Slots 0-8 hotbar, 9-35 storage, 36-39 feet/legs/chest/head, 40 offhand. */
+    public void setInventoryItem(int slot, GameItem item) {
+        checkInventorySlot(slot);
+        if (slot >= 36) {
+            setItem(inventoryEquipmentSlot(slot), item);
+            return;
+        }
         ItemStack stack = item == null ? null : GameItemComponents.normalize(this, item.copyBukkitItem());
         playingState.inventory[slot] = stack == null ? null : stack.clone();
         applyVisiblePlayer(player -> {
@@ -422,11 +441,35 @@ public final class GamePlayer implements GameEntityBase {
         });
     }
 
-    public GameItem getHotbarItem(int slot) {
-        if (slot < 0 || slot >= 9) {
-            throw new IllegalArgumentException("hotbar slot must be between 0 and 8");
+    public GameItem getInventoryItem(int slot) {
+        checkInventorySlot(slot);
+        if (slot >= 36) return getItem(inventoryEquipmentSlot(slot));
+        Player player = visiblePlayer();
+        if (player != null) {
+            ItemStack item = player.getInventory().getItem(slot);
+            playingState.inventory[slot] = item == null ? null : item.clone();
         }
         return GameItem.from(playingState.inventory[slot]);
+    }
+
+    private void captureVisibleInventory() {
+        Player player = visiblePlayer();
+        if (player != null) playingState.inventory = PlayerSnapshot.cloneItems(player.getInventory().getStorageContents());
+    }
+
+    private static void checkInventorySlot(int slot) {
+        if (slot < 0 || slot > 40) throw new IllegalArgumentException("Inventory slot must be between 0 and 40.");
+    }
+
+    private static EquipmentSlot inventoryEquipmentSlot(int slot) {
+        return switch (slot) {
+            case 36 -> EquipmentSlot.FEET;
+            case 37 -> EquipmentSlot.LEGS;
+            case 38 -> EquipmentSlot.CHEST;
+            case 39 -> EquipmentSlot.HEAD;
+            case 40 -> EquipmentSlot.OFF_HAND;
+            default -> throw new IllegalArgumentException("Not an equipment slot: " + slot);
+        };
     }
 
     @Override

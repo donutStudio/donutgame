@@ -5,24 +5,24 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.util.Objects;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
+import com.donutsforlife11.donutgame.internal.file.ModuleFiles;
 
 /**
  * Read-only access to one file in a module's own datapack namespace.
  */
 public final class GameDataResource {
-    private final Path moduleJar;
+    private final Path moduleDirectory;
     private final String namespace;
     private final String relativePath;
-    private final String jarPath;
+    private final String filePath;
 
-    GameDataResource(Path moduleJar, String namespace, String relativePath) {
-        this.moduleJar = Objects.requireNonNull(moduleJar, "moduleJar").toAbsolutePath().normalize();
+    GameDataResource(Path moduleDirectory, String namespace, String relativePath) {
+        this.moduleDirectory = Objects.requireNonNull(moduleDirectory, "moduleDirectory").toAbsolutePath().normalize();
         this.namespace = Objects.requireNonNull(namespace, "namespace");
         this.relativePath = normalizeRelativePath(relativePath);
-        this.jarPath = "data/" + namespace + "/" + this.relativePath;
+        this.filePath = "data/" + namespace + "/" + this.relativePath;
     }
 
     public String namespace() {
@@ -34,25 +34,14 @@ public final class GameDataResource {
     }
 
     public boolean exists() {
-        try (JarFile jar = new JarFile(moduleJar.toFile())) {
-            JarEntry entry = jar.getJarEntry(jarPath);
-            return entry != null && !entry.isDirectory();
-        } catch (IOException exception) {
-            throw new IllegalStateException("Could not read module jar " + moduleJar + ".", exception);
-        }
+        return Files.isRegularFile(ModuleFiles.resolve(moduleDirectory, filePath));
     }
 
     public byte[] bytes() {
-        try (JarFile jar = new JarFile(moduleJar.toFile())) {
-            JarEntry entry = jar.getJarEntry(jarPath);
-            if (entry == null || entry.isDirectory()) {
-                throw new IllegalArgumentException("Unknown module data resource: " + jarPath);
-            }
-            try (InputStream input = jar.getInputStream(entry)) {
-                return input.readAllBytes();
-            }
+        try {
+            return Files.readAllBytes(ModuleFiles.resolve(moduleDirectory, filePath));
         } catch (IOException exception) {
-            throw new IllegalStateException("Could not read module data resource " + jarPath + ".", exception);
+            throw new IllegalStateException("Could not read module data resource " + filePath + ".", exception);
         }
     }
 

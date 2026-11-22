@@ -24,6 +24,8 @@ dependencies {
     compileOnly("com.infernalsuite.asp:api:4.0.0-SNAPSHOT")
     implementation("fr.skytasul:glowingentities:2.0.0")
     implementation("fr.mrmicky:fastboard:2.2.1")
+    implementation("org.xerial:sqlite-jdbc:3.49.1.0")
+    implementation("com.google.code.gson:gson:2.13.1")
     implementation("com.infernalsuite.asp:file-loader:4.0.0-SNAPSHOT") {
         exclude(group = "com.infernalsuite.asp", module = "api")
     }
@@ -56,10 +58,17 @@ val verifyScopedState by tasks.registering(JavaExec::class) {
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("com.donutsforlife11.donutgame.api.player.ScopedStateChecks")
 }
+val verifyPersistence by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Verify SQLite persistence and external module resources without a running server."
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.donutsforlife11.donutgame.api.storage.PersistenceChecks")
+}
 tasks.test {
     // The small state suite uses a Java main; no test engine or server is needed.
     failOnNoDiscoveredTests.set(false)
     dependsOn(verifyScopedState)
+    dependsOn(verifyPersistence)
 }
 
 val paperApiSources by configurations.creating {
@@ -138,6 +147,8 @@ tasks {
     }
 
     shadowJar {
+        mergeServiceFiles()
+        relocate("com.google.gson", "com.donutsforlife11.donutgame.libs.gson")
         archiveBaseName.set("donutgame")
         archiveClassifier.set("")
         archiveVersion.set(project.version.toString())

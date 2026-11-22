@@ -146,12 +146,15 @@ public class FileService {
             throw new IllegalArgumentException("Module id must be a valid Minecraft namespace ([a-z0-9._-]+): " + gameId);
         }
 
+        Path directory = ModuleFiles.directory(modulesFolder.toPath(), gameId);
+        ModuleFiles.seed(gameModule.toPath(), directory);
+
         if (mainClass == null || mainClass.isBlank()) {
             throw new IllegalArgumentException("Module config is missing main_class");
         }
 
         Class<? extends GameModule> moduleClass = loader.loadClass(mainClass).asSubclass(GameModule.class);
-        return new GameModuleDescriptor(gameId, mainClass, name, moduleClass, configText, gameModule);
+        return new GameModuleDescriptor(gameId, mainClass, name, moduleClass, configText, gameModule, directory.toFile());
     }
 
     private GameMapDescriptor extractMapData(File gameMap) throws IOException {
