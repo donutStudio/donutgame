@@ -11,8 +11,6 @@ import com.donutsforlife11.donutgame.api.player.GamePlayer;
 
 final class DoppelgangerNpcManager {
     private final Doppelganger game;
-    private final Map<UUID, GameNpc> bodies = new HashMap<>();
-    private final Map<UUID, GamePlayer> owners = new HashMap<>();
     private final Map<UUID, GameNpc> bots = new LinkedHashMap<>();
     private final List<GameLocation> targets = new ArrayList<>();
     private boolean stopped;
@@ -20,9 +18,9 @@ final class DoppelgangerNpcManager {
     DoppelgangerNpcManager(Doppelganger game) { this.game = game; }
 
     void createCrowd(List<GamePlayer> players) {
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         int copies = Math.max(2, game.config().getInt("npc.npc_per_player", 3));
-        // TODO: The pool includes the player-controlled mannequins, rather than adding extra copies on top of the players.
+        // RODO: The pool includes the player-controlled mannequins, rather than adding extra copies on top of the players.
         List<PlayerProfile> profiles = new ArrayList<>();
         for (GamePlayer player : players) for (int i = 0; i < copies; i++) profiles.add(player.playerProfile());
         Collections.shuffle(profiles);
@@ -45,34 +43,34 @@ final class DoppelgangerNpcManager {
         npc.controller().pathfindSettings().setOpenDoors(true);
         npc.controller().pathfindSettings().setRadius(32);
         npc.controller().setNavigationTimeout(300);
-        npc.controller().setArrivalDistance(0.5);
+        npc.controller().setArrivalDistance(0.25);
         return npc;
     }
 
     private void findTargets() {
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         targets.addAll(game.world().getPoints("npc_target"));
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         var region = game.world().getRegion("town");
         if (region == null) {
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             if (targets.isEmpty()) {
                 game.logWarning("No town region or npc_target points; NPCs will use spawn points.");
                 targets.addAll(game.spawns());
             }
             return;
         }
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         if (region.blockVolume() > 262144) {
             game.logWarning("Town region is too large to scan; using npc_target or spawn points.");
             if (targets.isEmpty()) targets.addAll(game.spawns());
             return;
         }
         Set<Material> workstations = new HashSet<>();
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         for (String value : game.config().getStringList("npc.target_blocks")) {
             Material block = Material.matchMaterial(value);
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             if (block == null) {
                 game.logWarning("Ignoring unknown NPC workstation " + value);
                 continue;
@@ -105,9 +103,9 @@ final class DoppelgangerNpcManager {
 
     private void schedule(GameNpc npc) {
         if (stopped || !bots.containsKey(npc.uuid())) return;
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         int minimum = Math.max(1, game.config().getInt("npc.min_idle_time", 1));
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         int maximum = Math.max(minimum, game.config().getInt("npc.max_idle_time", 2));
         game.timeManager().newTimer(ThreadLocalRandom.current().nextInt(minimum*20, maximum*20+1)).onFinish(ignored -> {
             if (stopped || !game.running() || !bots.containsKey(npc.uuid())) return;
@@ -115,26 +113,14 @@ final class DoppelgangerNpcManager {
             if (nearby.isEmpty()) { schedule(npc); return; }
 
             GameLocation destination = nearby.get(ThreadLocalRandom.current().nextInt(nearby.size()));
-            npc.controller().pathfindTo(destination);
+            List<GameLocation> path = npc.controller().findPath(destination);
+            if (path.isEmpty()) { schedule(npc); return; }
+            npc.controller().moveAlong(intermediatePoints(npc.getLocation(), path));
 
         }).start();
     }
 
-    void moveBody(GamePlayer player, GameLocation destination) {
-        GameNpc npc = bodies.get(player.uuid());
-        if (npc == null || npc.isDead()) return;
-        npc.teleport(destination).thenAccept(moved -> {
-            if (moved && bodies.get(player.uuid()) == npc && !npc.isDead()) npc.setRotation(destination.yaw(), destination.pitch());
-        });
-    }
-
-    GameNpc body(GamePlayer player) { return bodies.get(player.uuid()); }
-    GamePlayer owner(GameNpc npc) { return owners.get(npc.uuid()); }
     int botCount() { return bots.size(); }
-    void removeBody(GamePlayer player) {
-        GameNpc body = bodies.remove(player.uuid());
-        if (body != null) { owners.remove(body.uuid()); body.remove(); }
-    }
     void remove(GameNpc npc) {
         if (bots.remove(npc.uuid()) == null) return;
         game.world().particle(Particle.POOF, npc.getLocation(), 20);
@@ -144,5 +130,22 @@ final class DoppelgangerNpcManager {
         stopped = true;
         bots.values().forEach(npc -> npc.controller().cancelNavigation());
     }
+    private List<GameLocation> intermediatePoints(GameLocation start, List<GameLocation> path) {
+        List<GameLocation> result = new ArrayList<>();
+        GameLocation previous = start;
+        for (GameLocation next : path) {
+            int steps = Math.max(1, (int) Math.ceil(Math.sqrt(distance(previous, next)) / 0.75));
+            for (int step = 1; step <= steps; step++) {
+                double fraction = step / (double) steps;
+                result.add(new GameLocation(next.world(),
+                    previous.x() + (next.x() - previous.x()) * fraction,
+                    previous.y() + (next.y() - previous.y()) * fraction,
+                    previous.z() + (next.z() - previous.z()) * fraction));
+            }
+            previous = next;
+        }
+        return result;
+    }
+
     private double distance(GameLocation a, GameLocation b) { return Math.pow(a.x()-b.x(),2)+Math.pow(a.y()-b.y(),2)+Math.pow(a.z()-b.z(),2); }
 }

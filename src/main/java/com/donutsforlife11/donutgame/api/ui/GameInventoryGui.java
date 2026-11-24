@@ -68,14 +68,14 @@ public final class GameInventoryGui implements InventoryHolder, Listener {
 
     @EventHandler public void click(InventoryClickEvent event) {
         if (event.getView().getTopInventory() != inventory) return;
-        // TODO: Cancel the whole view, including shift clicks and number-key transfers from the player's inventory.
+        // RODO: Cancel the whole view, including shift clicks and number-key transfers from the player's inventory.
         event.setCancelled(true);
         if (closed || !module.acceptsLiveOperations()) return;
         GamePlayer player = module.playerManager().getPlayer(event.getWhoClicked().getUniqueId());
         var action = actions.get(event.getRawSlot());
         if (player != null && action != null && (event.isLeftClick() || event.isRightClick())) {
             Click click = new Click(event.isRightClick(), event.isShiftClick());
-            // TODO: Run after inventory dispatch so callbacks can safely close or replace a menu.
+            // RODO: Run after inventory dispatch so callbacks can safely close or replace a menu.
             module.timeManager().newTimer(1).onFinish(ignored -> {
                 if (!closed && player.isOnline()) action.accept(player, click);
             }).start();

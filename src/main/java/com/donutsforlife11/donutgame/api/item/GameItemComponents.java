@@ -84,8 +84,16 @@ public final class GameItemComponents {
         if (item == null) {
             return 0;
         }
-        Integer value = item.getPersistentDataContainer().get(AUTO_IGNITE.key(), AUTO_IGNITE.type());
-        return value == null ? 0 : Math.max(0, value);
+        return Math.max(0, integerValue(item.getPersistentDataContainer(), AUTO_IGNITE.key()));
+    }
+
+    // RODO: Loot-table SNBT/JSON can encode small integers as byte or short tags.
+    static int integerValue(io.papermc.paper.persistence.PersistentDataContainerView data, NamespacedKey key) {
+        if (data.has(key, PersistentDataType.INTEGER)) return data.get(key, PersistentDataType.INTEGER);
+        if (data.has(key, PersistentDataType.BYTE)) return data.get(key, PersistentDataType.BYTE);
+        if (data.has(key, PersistentDataType.SHORT)) return data.get(key, PersistentDataType.SHORT);
+        if (data.has(key, PersistentDataType.LONG)) return (int) Math.clamp(data.get(key, PersistentDataType.LONG), Integer.MIN_VALUE, Integer.MAX_VALUE);
+        return 0;
     }
 
     public static PlayerVisibilityMode playerVisibilityMode(ItemStack item) {
@@ -214,7 +222,7 @@ public final class GameItemComponents {
             return false;
         }
         var data = item.getPersistentDataContainer();
-        // TODO: Paper throws on mismatched reads; item notation and older kits may store flags as integers.
+        // RODO: Paper throws on mismatched reads; item notation and older kits may store flags as integers.
         if (data.has(component.key(), PersistentDataType.BYTE)) {
             return data.get(component.key(), PersistentDataType.BYTE) != 0;
         }

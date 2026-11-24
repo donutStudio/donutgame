@@ -10,7 +10,7 @@ active_games: [slime_shot, king_kong_kombo, crystal_clash, terror_tower, sniper_
 microgames:
   slime_shot:
     maps: [arena]
-    bounciness: 0.1
+    bounciness: 0.8
   king_kong_kombo:
     maps: [island]
   crystal_clash:

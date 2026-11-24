@@ -15,9 +15,9 @@ public final class BoomBall extends Microgame {
     @Override public boolean beginOvertime() { return true; }
     private final List<BouncyFireball> balls = new ArrayList<>();
     private int server;
-    // TODO: Review text and string identifiers below before release.
+    // RODO: Review text and string identifiers below before release.
     public BoomBall(MicroRush game, GameMap map) { super(game,map,"boom_ball"); }
-    // TODO: Review text and string identifiers below before release.
+    // RODO: Review text and string identifiers below before release.
     @Override public void validate() { requireRegion("objective_a"); requireRegion("objective_b"); }
     @Override protected void effects(GamePlayer player) {
         player.addEffect(PotionEffectType.SPEED,-1,3,true);
@@ -27,7 +27,7 @@ public final class BoomBall extends Microgame {
     @Override public void start() {
         game.team(0).setFriendlyFire(false); game.team(1).setFriendlyFire(false);
         every(240, () -> {
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             if (balls.size() >= Math.max(1,game.config().getInt("microgames.boom_ball.max_balls",8))) return;
             GameLocation start = spawn(server);
             GameLocation other = spawn(1-server);
@@ -38,10 +38,10 @@ public final class BoomBall extends Microgame {
         every(200, () -> balls.forEach(BouncyFireball::accelerate));
         every(1, () -> {
             for (BouncyFireball ball : balls) {
-                // TODO: Review text and string identifiers below before release.
+                // RODO: Review text and string identifiers below before release.
                 if (ball.body.isDead()) { game.restartPoint(); return; }
                 ball.tick();
-                // TODO: Review text and string identifiers below before release.
+                // RODO: Review text and string identifiers below before release.
                 for (int team = 0; team < 2; team++) if (nearGoal(ball.body.getLocation(),team,1.5)) {
                     game.score(1-team,true); return;
                 }
@@ -66,7 +66,7 @@ public final class BoomBall extends Microgame {
     }
     @Override public void move(GameEvent<PlayerMoveEvent> event) {
         super.move(event);
-        // TODO: Review text and string identifiers below before release.
-        if (enemyHalf(event.getPlayer(),event.getTo()) || map.getRegion("objective_a").contains(event.getTo()) || map.getRegion("objective_b").contains(event.getTo())) event.getPlayer().kill();
+        // RODO: Review text and string identifiers below before release.
+        if (otherSide(event.getPlayer(),event.getTo()) || map.getRegion("objective_a").contains(event.getTo()) || map.getRegion("objective_b").contains(event.getTo())) event.setTo(event.getFrom());
     }
 }

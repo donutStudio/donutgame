@@ -17,7 +17,7 @@ respawn_delay: 10
 score_multiplier: 2
 score_multiplier_time: 60
 no_respawn_time: 0
-capture_mode: 0 # TODO: 0 mines beacon points; 1 kills 50-health shulker points.
+capture_mode: 0 # RODO: 0 mines beacon points; 1 kills 50-health shulker points.
 hunger_enabled: false
 
 overtime_shrink_time: 90

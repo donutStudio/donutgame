@@ -23,7 +23,7 @@ final class InventoryLayoutPlan {
         for (Start item : kit) {
             while (left.get(item.id) > 0) {
                 int slot = result.containsKey(item.slot) ? emptySlot(result) : item.slot;
-                // TODO: Config changes can make old split layouts too fragmented. Fall back to the current kit instead of losing items.
+                // RODO: Config changes can make old split layouts too fragmented. Fall back to the current kit instead of losing items.
                 if (slot < 0) return kit.stream().map(start -> new Placement(start.id,start.slot,start.count)).toList();
                 int count = Math.min(left.get(item.id),item.maxStack);
                 result.put(slot,new Placement(item.id,slot,count));

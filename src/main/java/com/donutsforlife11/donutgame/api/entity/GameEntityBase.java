@@ -41,11 +41,19 @@ public interface GameEntityBase extends PaperEntityMethods {
 
     UUID uuid();
 
+    /** Current world-space hitbox, including entity scale. */
+    default org.bukkit.util.BoundingBox getBoundingBox() { return requireEntity().getBoundingBox(); }
+
     default void setAI(boolean enabled) {
         if (requireEntity() instanceof org.bukkit.entity.Mob mob) mob.setAI(enabled);
     }
 
-    default void setCollidable(boolean collidable) { requireLivingEntity().setCollidable(collidable); }
+    /** Disable autonomous behavior while preserving movement physics. */
+    default void setAware(boolean aware) {
+        if (requireEntity() instanceof org.bukkit.entity.Mob mob) mob.setAware(aware);
+    }
+
+    default void setCollidable(boolean collidable) { com.donutsforlife11.donutgame.internal.game.EntityCollisions.set(world(), requireLivingEntity(), collidable); }
 
     default void setVisibleTo(GamePlayer viewer, boolean visible) {
         GameScope.requirePlayer(world().owner(), viewer);

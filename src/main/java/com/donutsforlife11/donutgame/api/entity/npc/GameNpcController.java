@@ -519,7 +519,7 @@ public final class GameNpcController {
     }
 
     private List<BoundingBox> shapes(Block block) {
-        // TODO: A* treats usable doors as open; steering opens only the nearby door on the chosen route.
+        // RODO: A* treats usable doors as open; steering opens only the nearby door on the chosen route.
         return passage(block) ? List.of() : List.copyOf(block.getCollisionShape().getBoundingBoxes());
     }
 

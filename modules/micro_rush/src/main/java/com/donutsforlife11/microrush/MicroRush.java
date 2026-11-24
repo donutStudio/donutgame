@@ -32,6 +32,7 @@ public final class MicroRush extends GameModule {
     private GameMap lobby, arena;
     private Microgame current;
     private String selected;
+    private String lastPreview;
     private boolean playing, ending;
     private boolean soloTesting;
     private boolean overtime;
@@ -44,11 +45,11 @@ public final class MicroRush extends GameModule {
     @Override public void onLoad() {
         timerBar = uiManager().newBossbar();
         lobby = mapManager().map();
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         if (lobby.getPoint("spawn") == null || lobby.getPoint("arena_origin") == null)
             // TODO: Review text and string identifiers below before release.
             throw new IllegalStateException("Micro Rush lobby needs spawn and arena_origin points.");
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         world().setSpawnLocation(lobby.getPoint("spawn"));
         world().setDifficulty(org.bukkit.Difficulty.EASY);
         world().setHungerEnabled(false);
@@ -59,18 +60,18 @@ public final class MicroRush extends GameModule {
         world().gamerules().spawnMobs(false);
         world().gamerules().mobGriefing(false);
         world().gamerules().blockDrops(false);
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         kits = data().config("kits.yml");
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         for (String id : new LinkedHashSet<>(config().getStringList("active_games"))) {
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             if (!Set.of("slime_shot","king_kong_kombo","crystal_clash","terror_tower","sniper_showdown","boom_ball").contains(id)) {
                 logWarning("Skipping unknown Micro Rush microgame " + id);
                 continue;
             }
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             List<String> maps = config().getStringList("microgames." + id + ".maps");
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             List<String> available = maps.stream().filter(map -> lobby.getSubmap(map) != null).toList();
             if (available.size() != maps.size()) logWarning("Ignoring missing submaps for " + id + ": " + maps);
             if (available.isEmpty()) {
@@ -88,7 +89,7 @@ public final class MicroRush extends GameModule {
         // TODO: Review text and string identifiers below before release.
         teams.add(teamManager().newTeam().setColor(NamedTextColor.BLUE).setDisplayName(Component.text("Blue", NamedTextColor.BLUE)));
         var players = new ArrayList<>(playerManager().getNonSpectators());
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         soloTesting = players.size() < 2;
         if (soloTesting) logWarning("Solo practice: empty opposing teams will not end the game.");
         Collections.shuffle(players);
@@ -114,29 +115,36 @@ public final class MicroRush extends GameModule {
         current = null;
         playerManager().getPlayers().forEach(p -> { p.cancelRespawn(); p.setSpectator(true,p.getLocation()); });
         if (rotation.isEmpty()) rotation.addAll(enabled);
-        // TODO: Each active game appears once per rotation; long matches can reuse the full rotation after exhaustion.
-        selected = rotation.remove(ThreadLocalRandom.current().nextInt(rotation.size()));
+        // RODO: Each active game appears once per rotation; long matches can reuse the full rotation after exhaustion.
+        selected = rotation.get(ThreadLocalRandom.current().nextInt(rotation.size()));
         Arrays.fill(points, 0);
         if (microClock != null) microClock.cancel();
         microClock = null;
         overtime = false;
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         timeLeft = Math.max(1, config().getInt("max_round_time",150));
         int token = ++generation;
         timeManager().newTimer(60).onTick(2, timer -> {
             if (token != generation || ending) return;
             // TODO: Review text and string identifiers below before release.
             if (timer.elapsedTicks() == 0) uiManager().title(playerManager().getPlayers(), Component.text("Choosing round...", NamedTextColor.BLUE));
-            uiManager().subtitle(playerManager().getPlayers(), Component.text(displayName(enabled.get(ThreadLocalRandom.current().nextInt(enabled.size())))));
+            uiManager().subtitle(playerManager().getPlayers(), Component.text(displayName(nextPreview())));
             uiManager().playSound(playerManager().getPlayers(), GameSound.of(Sound.UI_BUTTON_CLICK));
         }).onFinish(ignored -> {
             if (token != generation || ending) return;
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
+            rotation.remove(selected);
             uiManager().playSound(playerManager().getPlayers(),GameSound.of(Sound.ENTITY_PLAYER_LEVELUP));
             uiManager().title(playerManager().getPlayers(), Component.text("Round Chosen!", NamedTextColor.GREEN));
             uiManager().subtitle(playerManager().getPlayers(), Component.text(displayName(selected)));
             timeManager().newTimer(30).onFinish(delay -> loadPoint()).start();
         }).start();
+    }
+
+    private String nextPreview() {
+        List<String> choices = rotation.size() == 1 ? rotation : rotation.stream().filter(id -> !id.equals(lastPreview)).toList();
+        lastPreview = choices.get(ThreadLocalRandom.current().nextInt(choices.size()));
+        return lastPreview;
     }
 
     private void loadPoint() {
@@ -146,23 +154,23 @@ public final class MicroRush extends GameModule {
         if (current != null) { current.stop(); current = null; }
         for (GamePlayer player : playerManager().getPlayers()) { player.cancelRespawn(); player.setSpectator(true,player.getLocation()); }
         world().gamerules().pvp(false);
-        // TODO: Schematic regions are isolated from the lobby; erase the previous placement before pasting.
+        // RODO: Schematic regions are isolated from the lobby; erase the previous placement before pasting.
         clearCages();
         if (arena != null) {
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             world().fill(arena.getRegion("arena"), Material.AIR);
             arena.getPoints().forEach((name, locations) -> locations.forEach(point -> world().removePoint(name, point)));
             arena.getRegions().forEach((name, regions) -> regions.forEach(region -> world().removeRegion(name, region)));
             arena = null;
         }
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         List<String> maps = config().getStringList("microgames." + selected + ".maps");
         GameMap template = lobby.getSubmap(maps.get(ThreadLocalRandom.current().nextInt(maps.size())));
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         mapManager().place(template, lobby.getPoint("arena_origin"), MapRotation.DEG_0).thenAccept(placed -> {
             if (ending || token != generation || !acceptsLiveOperations()) return;
             arena = placed;
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             if (arena.getRegion("arena") == null || arena.getPoint("red_spawn") == null || arena.getPoint("blue_spawn") == null)
                 // TODO: Review text and string identifiers below before release.
                 throw new IllegalArgumentException("Microgame submap needs arena region, red_spawn point, and blue_spawn point.");
@@ -171,7 +179,7 @@ public final class MicroRush extends GameModule {
             current = create(selected, arena);
             current.validate();
             for (GamePlayer player : playerManager().getOnlinePlayers()) if (team(player) >= 0) current.setupPlayer(player);
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             buildCages();
             int ticks = Math.max(0, config().getInt("round_countdown", 3)) * 20 + 20;
             timeManager().newTimer(ticks).onTick(20, timer -> {
@@ -194,11 +202,11 @@ public final class MicroRush extends GameModule {
                     if (tick.elapsedTicks() > 0 && --timeLeft <= 0) {
                         if (!overtime && points[0] == points[1] && (current == null || current.beginOvertime())) {
                             overtime = true;
-                            // TODO: Review text and string identifiers below before release.
+                            // RODO: Review text and string identifiers below before release.
                             timeLeft = Math.max(1,config().getInt("overtime_time",60));
                         } else { completeMicrogame(points[0] == points[1] ? -1 : points[0] > points[1] ? 0 : 1); return; }
                     }
-                    // TODO: Review text and string identifiers below before release.
+                    // RODO: Review text and string identifiers below before release.
                     refreshTimerBar();
                 }).start();
                 timeManager().newTimer(60).onFinish(save -> {
@@ -217,14 +225,20 @@ public final class MicroRush extends GameModule {
     }
 
     private void refreshTimerBar() {
-                    timerBar.setColor(net.kyori.adventure.bossbar.BossBar.Color.WHITE).setTitle(Component.text(points[0], NamedTextColor.RED).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD).append(Component.text(" | ", NamedTextColor.GRAY)).append(Component.text(String.format("%02d:%02d", timeLeft/60, timeLeft%60), NamedTextColor.WHITE)).append(Component.text(" | ", NamedTextColor.GRAY)).append(Component.text(points[1], NamedTextColor.BLUE).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD)))
-                        // TODO: Review text and string identifiers below before release.
-                        .setProgress(timeLeft / (float)Math.max(1,config().getInt(overtime ? "overtime_time" : "max_round_time",overtime ? 60 : 150)))
-                        .show(playerManager().getOnlinePlayers());
+        Component title = Component.text(points[0], NamedTextColor.RED, net.kyori.adventure.text.format.TextDecoration.BOLD)
+            .append(Component.text(" | ", NamedTextColor.GRAY))
+            .append(Component.text(String.format("%02d:%02d", timeLeft / 60, timeLeft % 60), NamedTextColor.WHITE)
+                .decoration(net.kyori.adventure.text.format.TextDecoration.BOLD, false))
+            .append(Component.text(" | ", NamedTextColor.GRAY))
+            .append(Component.text(points[1], NamedTextColor.BLUE));
+        // RODO: Review text and string identifiers below before release.
+        int duration = Math.max(1, config().getInt(overtime ? "overtime_time" : "max_round_time", overtime ? 60 : 150));
+        timerBar.setColor(net.kyori.adventure.bossbar.BossBar.Color.WHITE).setTitle(title)
+            .setProgress(timeLeft / (float) duration).show(playerManager().getOnlinePlayers());
     }
 
     public void score(int team, boolean resetPoint) {
-        // TODO: Every microgame uses the same point target. Crystal Clash keeps its arena until a team reaches it.
+        // RODO: Every microgame uses the same point target. Crystal Clash keeps its arena until a team reaches it.
         if (!playing || ending || team < 0 || team > 1) return;
         points[team]++;
         refreshTimerBar();
@@ -237,15 +251,9 @@ public final class MicroRush extends GameModule {
         uiManager().gameMessage(playerManager().getPlayers(), teams.get(team).displayName().append(Component.text(" team has scored!")));
         world().particle(Particle.FIREWORK, current.spawn(team), 40, 0.5, 0.5, 0.5, 0.1, null);
         if (points[team] >= winTarget() || overtime) {
-            playing = false;
-            generation++;
-            if (microClock != null) microClock.cancel();
-            timerBar.hide();
-            current.stop();
+            stopMicrogame();
             wins[team]++;
             for (GamePlayer player : playerManager().getPlayers()) {
-                player.cancelRespawn();
-                player.setSpectator(true, player.getLocation());
                 // TODO: Review text and string identifiers below before release.
                 uiManager().title(player, Component.text(team(player) == team ? "Round Won" : "Round Lost"));
             }
@@ -256,34 +264,35 @@ public final class MicroRush extends GameModule {
         } else if (resetPoint) restartPoint();
     }
 
-    private void completeMicrogame(int winner) {
-        if (microClock != null) microClock.cancel();
-        timerBar.hide();
-        if (winner >= 0) {
-            playing = false;
-            generation++;
-            if (current != null) current.stop();
-            wins[winner]++;
-            // TODO: Rewrite timed microgame result text.
-            uiManager().title(playerManager().getPlayers(),teams.get(winner).displayName().append(Component.text(" wins the microgame!")));
-            if (wins[winner] >= winTarget()) finish(winner);
-            else timeManager().newTimer(60).onFinish(ignored -> chooseGame()).start();
-            return;
-        }
+    private void stopMicrogame() {
         playing = false;
         generation++;
+        if (microClock != null) { microClock.cancel(); microClock = null; }
+        timerBar.hide();
         if (current != null) current.stop();
-        // TODO: Review text and string identifiers below before release.
-        uiManager().title(playerManager().getPlayers(),Component.text("Tie!"));
+        for (GamePlayer player : playerManager().getPlayers()) {
+            player.cancelRespawn();
+            player.setSpectator(true, player.getLocation());
+        }
+    }
+
+    private void completeMicrogame(int winner) {
+        stopMicrogame();
+        if (winner >= 0) {
+            wins[winner]++;
+            // TODO: Rewrite timed microgame result text.
+            uiManager().title(playerManager().getPlayers(), teams.get(winner).displayName().append(Component.text(" wins the microgame!")));
+            if (wins[winner] >= winTarget()) { finish(winner); return; }
+        } else {
+            // TODO: Review text and string identifiers below before release.
+            uiManager().title(playerManager().getPlayers(), Component.text("Tie!"));
+        }
         timeManager().newTimer(60).onFinish(ignored -> chooseGame()).start();
     }
 
     public void restartPoint() {
         if (!playing || ending) return;
-        playing = false;
-        generation++;
-        current.stop();
-        playerManager().getPlayers().forEach(p -> { p.cancelRespawn(); p.setSpectator(true, p.getLocation()); });
+        stopMicrogame();
         int token = generation;
         timeManager().newTimer(80).onFinish(ignored -> { if (token == generation) loadPoint(); }).start();
     }
@@ -291,16 +300,12 @@ public final class MicroRush extends GameModule {
     private void finish(int winner) {
         if (ending) return;
         ending = true;
-        if (microClock != null) microClock.cancel();
-        timerBar.hide();
-        playing = false;
-        generation++;
-        if (current != null) current.stop();
+        stopMicrogame();
         world().gamerules().pvp(false);
         for (GamePlayer player : playerManager().getPlayers()) {
             player.cancelRespawn();
             // TODO: Review text and string identifiers below before release.
-            uiManager().title(player, Component.text(team(player) == winner ? "VICTORY" : "DEFEAT", team(player) == winner ? NamedTextColor.GOLD : NamedTextColor.RED));
+            uiManager().title(player, Component.text(team(player) == winner ? "VICTORY" : "DEFEAT", team(player) == winner ? NamedTextColor.GOLD : NamedTextColor.RED, net.kyori.adventure.text.format.TextDecoration.BOLD));
         }
         // TODO: Review text and string identifiers below before release.
         uiManager().subtitle(playerManager().getPlayers(), winner < 0 ? Component.text("No teams remain.") : teams.get(winner).displayName().append(Component.text(" team wins!")));
@@ -334,16 +339,16 @@ public final class MicroRush extends GameModule {
     }
 
     private void lobbyPlayer(GamePlayer player) {
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         player.setSpawnPoint(lobby.getPoint("spawn"));
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         player.setSpectator(team(player) < 0, lobby.getPoint("spawn"));
         if (team(player) >= 0) player.setGameMode(GameMode.ADVENTURE);
     }
 
     private void joinPlayer(GamePlayer player) {
         disconnected.remove(player.uuid());
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         if (ending || team(player) < 0 && !config().getBoolean("team_new_players", true)) { lobbyPlayer(player); return; }
         if (team(player) < 0) {
             GameTeam fairest = teams.stream().min(Comparator.comparingLong(t -> t.getPlayers().stream().filter(GamePlayer::isOnline).count())).orElseThrow();
@@ -353,9 +358,9 @@ public final class MicroRush extends GameModule {
     }
 
     @GameEventHandler public void lateJoin(GameEvent<GamePlayerLateJoinEvent> event) {
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         event.setSpectatorLocation(lobby.getPoint("spawn"));
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         if (!ending && config().getBoolean("team_new_players", true)) {
             joinPlayer(event.getPlayer());
             event.setJoinAsSpectator(event.getPlayer().isSpectator());
@@ -403,29 +408,32 @@ public final class MicroRush extends GameModule {
         if (current != null && event.getEntity() instanceof GameEntity entity) current.track(entity);
         if (playing && current != null) current.launched(event);
     }
-    @GameEventHandler public void explosion(GameEvent<EntityExplodeEvent> event) { event.removeBlocksIf(block -> true); }
+    @GameEventHandler(ignoreCancelled = true) public void explosion(GameEvent<EntityExplodeEvent> event) {
+        event.removeBlocksIf(block -> true);
+        if (playing && current != null) current.explosion(event);
+    }
     @GameEventHandler public void blockExplosion(GameEvent<BlockExplodeEvent> event) { event.removeBlocksIf(block -> true); }
 
     private Microgame create(String id, GameMap map) {
         return switch (id) {
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             case "slime_shot" -> new SlimeShot(this, map);
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             case "king_kong_kombo" -> new KingKongKombo(this, map);
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             case "crystal_clash" -> new CrystalClash(this, map);
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             case "terror_tower" -> new TerrorTower(this, map);
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             case "sniper_showdown" -> new SniperShowdown(this, map);
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             case "boom_ball" -> new BoomBall(this, map);
             default -> throw new IllegalArgumentException(id);
         };
     }
     public int team(GamePlayer player) { return teams.indexOf(player.getTeam()); }
     public GameTeam team(int index) { return teams.get(index); }
-    // TODO: Review text and string identifiers below before release.
+    // RODO: Review text and string identifiers below before release.
     public boolean soloTesting() { return soloTesting; }
     public int winTarget() { return Math.max(1, config().getInt("wins_required", 3)); }
     public boolean playing(Microgame game) { return playing && !ending && current == game; }
@@ -433,11 +441,11 @@ public final class MicroRush extends GameModule {
     public org.bukkit.configuration.ConfigurationSection kit(String id) { return kits.getConfigurationSection(id); }
     public static String displayName(String id) {
         return switch (id) {
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             case "slime_shot" -> "Slime Shot"; case "king_kong_kombo" -> "King Kong Kombo";
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             case "crystal_clash" -> "Crystal Clash"; case "terror_tower" -> "Terror Tower";
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             case "sniper_showdown" -> "Sniper Showdown"; case "boom_ball" -> "Boom Ball";
             default -> id;
         };

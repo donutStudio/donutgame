@@ -8,9 +8,6 @@ game_duration: 300
 sheriff_resistance: 255
 doppelganger_strength: 20
 sheriffs_exposed_at_start: false
-# These visibility settings identify allies through their disguise with colored glow.
-sheriffs_see_each_other: true
-doppelgangers_see_each_other: true
 sheriffs_can_attack_each_other: false
 sheriffs_can_attack_doppelgangers: true
 doppelgangers_can_attack_each_other: false
@@ -23,7 +20,7 @@ visual_lightning_on_kill: true
 doppelganger_reveal_time_on_kill: 2
 # Omit kill_goal to require all NPCs. An explicit kill_goal can shorten the game.
 npc:
-  # TODO: Total appearances per participant, including player disguises; 4 players * 3 = 12 townspeople.
+  # RODO: Total appearances per participant, including player disguises; 4 players * 3 = 12 townspeople.
   npc_per_player: 3
   target_blocks:
     - minecraft:crafting_table

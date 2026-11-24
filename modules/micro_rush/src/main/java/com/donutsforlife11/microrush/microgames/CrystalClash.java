@@ -2,12 +2,10 @@ package com.donutsforlife11.microrush.microgames;
 
 import java.util.*;
 import org.bukkit.Material;
-import org.bukkit.Particle;
 import org.bukkit.event.block.*;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.ProjectileHitEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
-import io.papermc.paper.event.player.PrePlayerAttackEntityEvent;
 import com.donutsforlife11.donutgame.api.entity.GameEntity;
 import com.donutsforlife11.donutgame.api.event.GameEvent;
 import com.donutsforlife11.donutgame.api.map.GameMap;
@@ -19,30 +17,25 @@ import net.kyori.adventure.text.Component;
 public final class CrystalClash extends Microgame {
     @Override public boolean beginOvertime() { return true; }
     private final Map<UUID,Integer> crystals = new HashMap<>();
-    private final Map<UUID,GameEntity> entities = new HashMap<>();
     private boolean fighting;
     private final Map<com.donutsforlife11.donutgame.api.map.GameLocation,org.bukkit.block.data.BlockData> barrierBlocks = new HashMap<>();
-    private boolean otherSide(GamePlayer player,com.donutsforlife11.donutgame.api.map.GameLocation at) {
-        var own=spawn(game.team(player));var enemy=spawn(1-game.team(player));
-        return distance(at,enemy)<distance(at,own);
-    }
     private void clearBarrier() {
         barrierBlocks.forEach((at,data) -> game.world().setBlock(at,data));barrierBlocks.clear();
     }
     @Override public void stop() { clearBarrier();super.stop(); }
 
-    // TODO: Review text and string identifiers below before release.
+    // RODO: Review text and string identifiers below before release.
     public CrystalClash(MicroRush game, GameMap map) { super(game,map,"crystal_clash"); }
-    // TODO: Review text and string identifiers below before release.
+    // RODO: Review text and string identifiers below before release.
     @Override public void validate() { requirePoint("objective_a"); requirePoint("objective_b"); }
     @Override public void start() {
         game.team(0).setFriendlyFire(false); game.team(1).setFriendlyFire(false);
         game.world().gamerules().pvp(false);
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         int defense = Math.max(0,game.config().getInt("microgames.crystal_clash.defense_time",30));
         // TODO: Review text and string identifiers below before release.
         game.uiManager().gameMessage(game.playerManager().getPlayers(),Component.text(defense + " seconds to build your defenses!"));
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         for (String barrier : List.of("objective_c","objective_d")) {
             var regions = new ArrayList<>(map.getRegions(barrier));
             var points=map.getPoints(barrier);
@@ -60,7 +53,7 @@ public final class CrystalClash extends Microgame {
         }
         after(defense*20, () -> {
             fighting = true;
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             clearBarrier();
             game.world().gamerules().pvp(true);
             // TODO: Review text and string identifiers below before release.
@@ -69,38 +62,27 @@ public final class CrystalClash extends Microgame {
         });
     }
     private void regenerate(int team) {
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         for (var point : map.getPoints(team==0 ? "objective_a" : "objective_b")) {
             GameEntity crystal = game.world().summon(center(point),GameEntities.END_CRYSTAL);
-            crystal.setInvulnerable(true); crystal.setGlowing(true);
+            crystal.setInvulnerable(false); crystal.setGlowing(true);
             crystal.setShowingBottom(false);
-            track(crystal); crystals.put(crystal.uuid(),team); entities.put(crystal.uuid(),crystal);
+            track(crystal); crystals.put(crystal.uuid(),team);
         }
     }
-    private void destroy(UUID id, GamePlayer player) {
-        Integer owner = crystals.get(id);
-        if (!fighting || owner == null || player == null || game.team(player) < 0 || owner == game.team(player)) return;
-        crystals.remove(id);
-        GameEntity crystal = entities.remove(id);
-        game.world().particle(Particle.FIREWORK,crystal.getLocation(),30);
-        crystal.remove();
-        game.score(game.team(player),false);
-        // TODO: Regenerate only an exhausted side, allowing configurable point targets beyond the map's crystal count.
+    @Override public void explosion(GameEvent<EntityExplodeEvent> event) {
+        Integer owner = crystals.remove(event.getEntity().uuid());
+        if (!fighting || owner == null) return;
+        game.score(1 - owner, false);
+        // RODO: Refill only the exhausted side when the round needs more points.
         if (active() && crystals.values().stream().noneMatch(team -> team.equals(owner))) after(40, () -> regenerate(owner));
     }
-    @Override public void attack(GameEvent<PrePlayerAttackEntityEvent> event) {
-        if (crystals.containsKey(event.getAttacked().uuid())) { event.setCancelled(true); destroy(event.getAttacked().uuid(),event.getPlayer()); }
-    }
+
     @Override public void damage(GameEvent<EntityDamageEvent> event) {
-        if (crystals.containsKey(event.getEntity().uuid())) { event.setCancelled(true); destroy(event.getEntity().uuid(),event.getAttacker()); }
-        else if (!fighting) event.setCancelled(true);
-    }
-    @Override public void projectile(GameEvent<ProjectileHitEvent> event) {
-        if (event.getHitEntity() != null && crystals.containsKey(event.getHitEntity().uuid())) {
-            event.setCancelled(true);
-            destroy(event.getHitEntity().uuid(),event.getShooter());
-            event.getEntity().remove();
-        }
+        if (!fighting) { event.setCancelled(true); return; }
+        Integer owner = crystals.get(event.getEntity().uuid());
+        GamePlayer attacker = event.getAttacker();
+        if (owner != null && attacker != null && (attacker.isSpectator() || owner == game.team(attacker))) event.setCancelled(true);
     }
     @Override public void move(GameEvent<PlayerMoveEvent> event) {
         super.move(event);
@@ -108,11 +90,11 @@ public final class CrystalClash extends Microgame {
     }
     @Override public void breakBlock(GameEvent<BlockBreakEvent> event) {
         String name = event.getBlock().getType().name();
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         event.setCancelled(!name.endsWith("_WOOL") && !name.equals("COBWEB"));
     }
     @Override public void placeBlock(GameEvent<BlockPlaceEvent> event) {
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         event.setCancelled(!map.getRegion("arena").contains(event.getBlockPlaced().getLocation()) || otherSide(event.getPlayer(),event.getBlockPlaced().getLocation()));
     }
 }

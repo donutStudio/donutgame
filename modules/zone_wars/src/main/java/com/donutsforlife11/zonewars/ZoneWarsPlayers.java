@@ -7,7 +7,7 @@ import com.donutsforlife11.donutgame.api.item.GameItem;
 import com.donutsforlife11.donutgame.api.map.*;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
-import com.donutsforlife11.zonewars.GameKits;
+import com.donutsforlife11.donutgame.api.item.GameKits;
 
 final class ZoneWarsPlayers {
     private final ZoneWars game;
@@ -21,7 +21,7 @@ final class ZoneWarsPlayers {
 
     ZoneWarsPlayers(ZoneWars game) {
         this.game = game;
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         kit = game.data().config("kit.yml");
     }
 
@@ -36,7 +36,7 @@ final class ZoneWarsPlayers {
             spawns.put(teams.get(i), spawn);
             GameRegion region = new GameRegion(new GameLocation(spawn.x()-2, spawn.y()-1, spawn.z()-2),
                 new GameLocation(spawn.x()+2, spawn.y()+3, spawn.z()+2));
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             if (i < game.world().getRegions("spawn").size()) region = game.world().getRegions("spawn").get(i);
             spawnRegions.add(region);
         }
@@ -61,7 +61,7 @@ final class ZoneWarsPlayers {
     }
 
     void startPlayers() {
-        // TODO: Restore only the air cells changed into countdown cages, preserving the map's original terrain.
+        // RODO: Restore only the air cells changed into countdown cages, preserving the map's original terrain.
         cages.forEach((at, block) -> game.world().setBlock(at, block));
         cages.clear();
         game.playerManager().getNonSpectators().forEach(this::protect);
@@ -87,7 +87,7 @@ final class ZoneWarsPlayers {
         player.clearActivePotionEffects();
         player.setFoodLevel(20);
         player.clearItems();
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         GameKits.give(game, player, kit.getConfigurationSection("kit"));
         game.prepareLayout(player);
         player.setSpectatableTeams(() -> game.teamManager().getTeams());
@@ -98,7 +98,7 @@ final class ZoneWarsPlayers {
     void giveRespawnKit(GamePlayer player) {
         respawning.remove(player.uuid());
         player.clearItems();
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         GameKits.give(game, player, kit.getConfigurationSection("kit"));
         game.prepareLayout(player);
         player.heal();
@@ -115,7 +115,7 @@ final class ZoneWarsPlayers {
     void protect(GamePlayer player) {
         long token = ++protectionId;
         protection.put(player.uuid(), token);
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         game.timeManager().newTimer(Math.max(0, game.config().getInt("spawn_protection", 4)) * 20)
             .onFinish(ignored -> protection.remove(player.uuid(), token)).start();
     }

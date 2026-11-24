@@ -21,7 +21,6 @@ final class MurderVoting {
 
     void begin() {
         votes.clear();
-
     }
 
     void open(GamePlayer player, int page) {
@@ -41,11 +40,11 @@ final class MurderVoting {
             if (candidate.uuid().equals(votes.get(player.uuid()))) head.setData(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
             menu.setItem(i-start, head, (voter, click) -> vote(voter, candidate.uuid()));
         }
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         menu.setItem(49, named(Material.BARRIER, "Skip"), (voter, click) -> vote(voter, SKIP));
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         if (page > 0) menu.setItem(45, named(Material.ARROW, "Previous"), (voter, click) -> open(voter, page-1));
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         if (start+45 < candidates.size()) menu.setItem(53, named(Material.ARROW, "Next"), (voter, click) -> open(voter, page+1));
         menu.open(player);
     }
@@ -57,22 +56,30 @@ final class MurderVoting {
     }
 
     private void vote(GamePlayer voter, UUID target) {
-        if (!game.meeting() || !game.living().contains(voter)
-            // TODO: Review text and string identifiers below before release.
-            || votes.containsKey(voter.uuid()) && !game.config().getBoolean("allow_vote_changing", true)
-            || !target.equals(SKIP) && game.living().stream().noneMatch(p -> p.uuid().equals(target))) return;
+        if (!game.meeting() || !game.living().contains(voter)) return;
+        // RODO: Review text and string identifiers below before release.
+        if (votes.containsKey(voter.uuid()) && !game.config().getBoolean("allow_vote_changing", true)) return;
+        if (!target.equals(SKIP) && game.living().stream().noneMatch(p -> p.uuid().equals(target))) return;
         votes.put(voter.uuid(), target);
         // TODO: Review text and string identifiers below before release.
         game.uiManager().gameMessage(voter, Component.text("Vote recorded."));
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         if (game.config().getBoolean("announce_votes", false)) {
-            // TODO: Review text and string identifiers below before release.
-            String who = game.config().getBoolean("anonymous_votes", true) ? "A player" : voter.name();
-            // TODO: Review text and string identifiers below before release.
-            game.message(who + " voted" + (game.config().getBoolean("anonymous_votes", true) ? "." : target.equals(SKIP) ? " to skip." : " for " + game.playerManager().getPlayer(target).name() + "."));
+            // RODO: Review text and string identifiers below before release.
+            if (game.config().getBoolean("anonymous_votes", true)) {
+                game.message("A player voted.");
+            } else if (target.equals(SKIP)) {
+                game.message(voter.name() + " voted to skip.");
+            } else {
+                game.message(voter.name() + " voted for " + game.playerManager().getPlayer(target).name() + ".");
+            }
         }
-        if (game.living().stream().allMatch(p -> votes.containsKey(p.uuid()))) resolve();
+        if (everyoneVoted()) resolve();
         else open(voter, 0);
+    }
+
+    private boolean everyoneVoted() {
+        return game.living().stream().allMatch(p -> votes.containsKey(p.uuid()));
     }
 
     void resolve() {
@@ -90,7 +97,7 @@ final class MurderVoting {
             else if (winners.isEmpty() || winners.getFirst().equals(SKIP)) game.message("Vote skipped.");
             else {
                 GamePlayer ejected = game.playerManager().getPlayer(winners.getFirst());
-                // TODO: Review text and string identifiers below before release.
+                // RODO: Review text and string identifiers below before release.
                 if (ejected != null) game.eliminate(ejected, "was voted out", true);
             }
             game.endMeeting();
@@ -102,7 +109,7 @@ final class MurderVoting {
         votes.entrySet().removeIf(entry -> entry.getValue().equals(player.uuid()));
         var menu = menus.remove(player.uuid());
         if (menu != null) menu.close();
-        if (game.meeting() && game.living().stream().allMatch(p -> votes.containsKey(p.uuid()))) resolve();
+        if (game.meeting() && everyoneVoted()) resolve();
     }
 
     void close() {

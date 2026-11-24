@@ -12,7 +12,7 @@ import com.donutsforlife11.donutgame.api.event.GameEvent;
 import com.donutsforlife11.donutgame.api.map.*;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.time.GameTimer;
-import com.donutsforlife11.microrush.GameKits;
+import com.donutsforlife11.donutgame.api.item.GameKits;
 import com.donutsforlife11.donutgame.api.item.GameItem;
 
 public abstract class Microgame {
@@ -43,7 +43,7 @@ public abstract class Microgame {
         GameKits.give(game, player, game.kit(id));
         effects(player);
         game.prepareLayout(player);
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         if (id.equals("sniper_showdown") || id.equals("terror_tower")) {
             player.inventory().stream().filter(item -> item != null && item.getType() == Material.ARROW).findFirst()
                 .ifPresent(item -> ammunition.put(player.uuid(), item));
@@ -53,14 +53,14 @@ public abstract class Microgame {
     public void lateJoin(GamePlayer player) { setupPlayer(player); }
     public void quit(GamePlayer player) { }
     public void death(GamePlayer player) {
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         player.respawn(Math.max(0, game.config().getInt("respawn_delay", 1))*20, () -> {
             effects(player);
             return spawn(game.team(player));
         });
     }
     public void move(GameEvent<PlayerMoveEvent> event) {
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         if (event.getTo().y() < map.getRegion("arena").min().y()-2) event.getPlayer().kill();
     }
     public void breakBlock(GameEvent<BlockBreakEvent> event) { event.setCancelled(true); }
@@ -68,6 +68,7 @@ public abstract class Microgame {
     public void damage(GameEvent<EntityDamageEvent> event) { }
     public void attack(GameEvent<PrePlayerAttackEntityEvent> event) { }
     public void projectile(GameEvent<ProjectileHitEvent> event) { }
+    public void explosion(GameEvent<EntityExplodeEvent> event) { }
     public void launched(GameEvent<ProjectileLaunchEvent> event) {
         GamePlayer player = event.getShooter();
         if (player != null && ammunition.containsKey(player.uuid())) after(1, () -> {
@@ -91,7 +92,7 @@ public abstract class Microgame {
     }
     protected final boolean active() { return game.playing(this); }
     public GameLocation spawn(int team) {
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         GameLocation point = map.getPoint(team == 0 ? "red_spawn" : "blue_spawn");
         return new GameLocation(point.world(),point.blockX()+0.5,point.y(),point.blockZ()+0.5,point.yaw(),point.pitch());
     }
@@ -104,8 +105,26 @@ public abstract class Microgame {
     protected final GameLocation center(GameLocation point) {
         return new GameLocation(point.world(),point.blockX()+0.5,point.y(),point.blockZ()+0.5,point.yaw(),point.pitch());
     }
+    protected final boolean otherSide(GamePlayer player, GameLocation location) {
+        if (game.team(player) < 0) return false;
+        return distance(location, spawn(1 - game.team(player))) < distance(location, spawn(game.team(player)));
+    }
+
+    protected final boolean inSlimeGoal(GameEntity ball, int team) {
+        String name = team == 0 ? "objective_a" : "objective_b";
+        var hitbox = ball.getBoundingBox();
+        // RODO: Datapack dx=6,dy=6,dz=6 is a 7-block box testing hitbox intersection, without a radius.
+        for (GameLocation point : map.getPoints(name)) {
+            if (new org.bukkit.util.BoundingBox(point.x(), point.y(), point.z(), point.x() + 7, point.y() + 7, point.z() + 7).overlaps(hitbox)) return true;
+        }
+        if (!map.getPoints(name).isEmpty()) return false;
+        GameRegion region = map.getRegion(name);
+        return region != null && new org.bukkit.util.BoundingBox(region.min().x(), region.min().y(), region.min().z(),
+            region.max().x() + 1, region.max().y() + 1, region.max().z() + 1).overlaps(hitbox);
+    }
+
     protected final boolean enemyHalf(GamePlayer player, GameLocation location) {
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         GameRegion region = map.getRegion(game.team(player)==0 ? "blue_spawn" : "red_spawn");
         return region != null && region.contains(location);
     }

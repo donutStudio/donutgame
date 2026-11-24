@@ -12,7 +12,7 @@ import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 
 public final class GameBossbar {
-    // TODO: The game updates this bar when its clock or state changes; the UI owns no ticking task.
+    // RODO: The game updates this bar when its clock or state changes; the UI owns no ticking task.
     private final GameModule module;
     private final BossBar bar = BossBar.bossBar(Component.empty(), 1, BossBar.Color.GREEN, BossBar.Overlay.PROGRESS);
     private final Map<UUID, org.bukkit.entity.Player> viewers = new HashMap<>();

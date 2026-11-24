@@ -12,7 +12,7 @@ import com.donutsforlife11.microrush.*;
 
 public final class SniperShowdown extends Microgame {
     @Override public boolean beginOvertime() { return true; }
-    // TODO: Review text and string identifiers below before release.
+    // RODO: Review text and string identifiers below before release.
     public SniperShowdown(MicroRush game, GameMap map) { super(game,map,"sniper_showdown"); }
     @Override protected void effects(GamePlayer player) {  }
     @Override public void start() { game.team(0).setFriendlyFire(false); game.team(1).setFriendlyFire(false); }
@@ -23,7 +23,7 @@ public final class SniperShowdown extends Microgame {
 
         boolean red = game.team(0).getNonSpectators().stream().anyMatch(GamePlayer::isOnline);
         boolean blue = game.team(1).getNonSpectators().stream().anyMatch(GamePlayer::isOnline);
-        // TODO: Simultaneous eliminations replay the point. Every new point restores health, kits and ammunition.
+        // RODO: Simultaneous eliminations replay the point. Every new point restores health, kits and ammunition.
         if (!red && !blue && game.soloTesting()) game.score(game.team(0).getPlayers().isEmpty() ? 0 : 1, true);
         else if (!red && !blue) game.restartPoint();
         else if (!red) game.score(1,true);
@@ -31,7 +31,9 @@ public final class SniperShowdown extends Microgame {
     }
     @Override public void move(GameEvent<PlayerMoveEvent> event) {
         super.move(event);
-        if (active() && (water(event.getTo()) || enemyHalf(event.getPlayer(),event.getTo()))) event.getPlayer().kill();
+        if (!active()) return;
+        if (otherSide(event.getPlayer(),event.getTo())) { event.setTo(event.getFrom()); return; }
+        if (water(event.getTo())) event.getPlayer().kill();
     }
     @Override public void damage(GameEvent<EntityDamageEvent> event) {
         if (event.getEntity() instanceof GamePlayer && event.getAttacker() != null
@@ -39,16 +41,16 @@ public final class SniperShowdown extends Microgame {
             && (projectile.getType() == org.bukkit.entity.EntityType.ARROW || projectile.getType() == org.bukkit.entity.EntityType.SPECTRAL_ARROW)) event.setDamage(1000);
     }
     @Override public void breakBlock(GameEvent<BlockBreakEvent> event) {
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         event.setCancelled(!event.getBlock().getType().name().endsWith("_WOOL"));
     }
     @Override public void placeBlock(GameEvent<BlockPlaceEvent> event) {
-        // TODO: Review text and string identifiers below before release.
-        event.setCancelled(!map.getRegion("arena").contains(event.getBlockPlaced().getLocation()) || enemyHalf(event.getPlayer(),event.getBlockPlaced().getLocation()));
+        // RODO: Review text and string identifiers below before release.
+        event.setCancelled(!map.getRegion("arena").contains(event.getBlockPlaced().getLocation()) || otherSide(event.getPlayer(),event.getBlockPlaced().getLocation()));
     }
     @Override public void projectile(GameEvent<ProjectileHitEvent> event) {
         var block = event.getHitBlock();
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         if (block != null && block.getType().name().endsWith("_WOOL")) {
             block.setType(Material.AIR);
             event.getEntity().remove();

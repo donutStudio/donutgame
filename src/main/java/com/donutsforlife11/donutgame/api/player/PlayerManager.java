@@ -70,10 +70,10 @@ public final class PlayerManager {
             }
             leavingPlayers.remove(player.getUniqueId());
             registry.register(player);
-            player.setCollidable(module.world().playerCollisionsEnabled());
+            com.donutsforlife11.donutgame.internal.game.EntityCollisions.set(module.world(), player, module.world().playerCollisionsEnabled());
             GamePlayer gamePlayer = registry.get(player.getUniqueId());
             module.teamManager().syncPlayer(gamePlayer);
-            // TODO: Reconnects finish asynchronously too; let the game apply the same join policy after reattachment.
+            // RODO: Reconnects finish asynchronously too; let the game apply the same join policy after reattachment.
             boolean reconnect = !freshSession && (module.lifecycleState() == ModuleLifecycleState.COUNTDOWN || module.hasStarted());
             if (lateJoin && freshSession || reconnect) {
                 applyLateJoinDefaults(player, gamePlayer);

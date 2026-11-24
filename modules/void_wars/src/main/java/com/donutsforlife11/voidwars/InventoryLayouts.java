@@ -28,7 +28,7 @@ public final class InventoryLayouts {
     }
 
     public void prepare(GamePlayer player) {
-        // TODO: Refresh the shared registry so simultaneous instances cannot assign the same index to different kits.
+        // RODO: Refresh the shared registry so simultaneous instances cannot assign the same index to different kits.
         GameItem[] latest = game.storage().get(key + ".items", GameItem[].class);
         if (latest != null) { identities.clear(); identities.addAll(List.of(latest)); }
         Map<Integer, Integer> amounts = new HashMap<>();
@@ -41,7 +41,7 @@ public final class InventoryLayouts {
             item.removeData(INDEX);
             GameItem canonical = canonical(item);
             int id = -1;
-            // TODO: Duplicate starting stacks get separate indices, while each player's matching kit reuses those indices.
+            // RODO: Duplicate starting stacks get separate indices, while each player's matching kit reuses those indices.
             for (int i = 0; i < identities.size(); i++) {
                 GameItem identity = identities.get(i);
                 if (!used.contains(i) && identity.getAmount() == canonical.getAmount() && identity.isSimilar(canonical)) { id = i; break; }
@@ -56,7 +56,7 @@ public final class InventoryLayouts {
         starts.put(player.uuid(), amounts);
         Placement[] layout = game.storage().player(player).get(key, Placement[].class);
         if (layout == null) { kit.forEach(player::setInventoryItem); return; }
-        // TODO: Only rearrange this round's kit. Saved items never create items or restore old kits.
+        // RODO: Only rearrange this round's kit. Saved items never create items or restore old kits.
         List<InventoryLayoutPlan.Start> initial = new ArrayList<>();
         Map<Integer, GameItem> sources = new HashMap<>();
         kit.forEach((slot, item) -> {
@@ -93,7 +93,7 @@ public final class InventoryLayouts {
     private GameItem canonical(GameItem source) {
         GameItem item = new GameItem(source.copyBukkitItem());
         if (GameItemComponents.hasTeamSync(item.copyBukkitItem())) {
-            // TODO: Team colors are presentation; identical starting stacks share IDs across teams and players.
+            // RODO: Team colors are presentation; identical starting stacks share IDs across teams and players.
             String name = item.getType().name();
             for (org.bukkit.DyeColor color : org.bukkit.DyeColor.values()) {
                 if (!name.startsWith(color.name() + "_")) continue;

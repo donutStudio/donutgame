@@ -752,7 +752,7 @@ public final class GamePlayer implements GameEntityBase {
             return;
         }
         PlayerAttributeDefaults.repairInvalidCameraDistance(player);
-        player.setCollidable(world().playerCollisionsEnabled());
+        com.donutsforlife11.donutgame.internal.game.EntityCollisions.set(world(), player, world().playerCollisionsEnabled());
         name = player.getName();
         state = PlayerState.ONLINE;
         long currentGeneration = GameWorldHandle.generation(world());
@@ -784,7 +784,7 @@ public final class GamePlayer implements GameEntityBase {
         pendingDeathSpectatorLocation = null;
         closeSpectatorSession(player);
         resetPlayingStateForGame();
-        player.setCollidable(world().playerCollisionsEnabled());
+        com.donutsforlife11.donutgame.internal.game.EntityCollisions.set(world(), player, world().playerCollisionsEnabled());
         name = player.getName();
         state = PlayerState.ONLINE;
         attachedWorldGeneration = GameWorldHandle.generation(world());

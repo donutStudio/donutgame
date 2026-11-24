@@ -14,7 +14,7 @@ import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
 public final class InventoryLayouts {
-    // TODO: Review text and string identifiers below before release.
+    // RODO: Review text and string identifiers below before release.
     private static final GameItemComponent<Integer> INDEX = GameItemComponents.integer("layout_index");
     private final GameModule game;
     private final String key;
@@ -23,16 +23,16 @@ public final class InventoryLayouts {
 
     public InventoryLayouts(GameModule game, String key) {
         this.game = game;
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         this.key = "inventory_layout." + key;
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         GameItem[] saved = game.storage().get(this.key + ".items", GameItem[].class);
         if (saved != null) identities.addAll(List.of(saved));
     }
 
     public void prepare(GamePlayer player) {
-        // TODO: Refresh the shared registry so simultaneous instances cannot assign the same index to different kits.
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Refresh the shared registry so simultaneous instances cannot assign the same index to different kits.
+        // RODO: Review text and string identifiers below before release.
         GameItem[] latest = game.storage().get(key + ".items", GameItem[].class);
         if (latest != null) { identities.clear(); identities.addAll(List.of(latest)); }
         Map<Integer, Integer> amounts = new HashMap<>();
@@ -45,7 +45,7 @@ public final class InventoryLayouts {
             item.removeData(INDEX);
             GameItem canonical = canonical(item);
             int id = -1;
-            // TODO: Duplicate starting stacks get separate indices, while each player's matching kit reuses those indices.
+            // RODO: Duplicate starting stacks get separate indices, while each player's matching kit reuses those indices.
             for (int i = 0; i < identities.size(); i++) {
                 GameItem identity = identities.get(i);
                 if (!used.contains(i) && identity.getAmount() == canonical.getAmount() && identity.isSimilar(canonical)) { id = i; break; }
@@ -56,12 +56,12 @@ public final class InventoryLayouts {
             kit.put(slot, item);
             amounts.merge(id, item.getAmount(), Integer::sum);
         }
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         if (changed) game.storage().set(key + ".items", identities.toArray(GameItem[]::new));
         starts.put(player.uuid(), amounts);
         Placement[] layout = game.storage().player(player).get(key, Placement[].class);
         if (layout == null) { kit.forEach(player::setInventoryItem); return; }
-        // TODO: Only rearrange this round's kit. Saved items never create items or restore old kits.
+        // RODO: Only rearrange this round's kit. Saved items never create items or restore old kits.
         List<InventoryLayoutPlan.Start> initial = new ArrayList<>();
         Map<Integer, GameItem> sources = new HashMap<>();
         kit.forEach((slot, item) -> {
@@ -98,12 +98,12 @@ public final class InventoryLayouts {
     private GameItem canonical(GameItem source) {
         GameItem item = new GameItem(source.copyBukkitItem());
         if (GameItemComponents.hasTeamSync(item.copyBukkitItem())) {
-            // TODO: Team colors are presentation; identical starting stacks share IDs across teams and players.
+            // RODO: Team colors are presentation; identical starting stacks share IDs across teams and players.
             String name = item.getType().name();
             for (org.bukkit.DyeColor color : org.bukkit.DyeColor.values()) {
-                // TODO: Review text and string identifiers below before release.
+                // RODO: Review text and string identifiers below before release.
                 if (!name.startsWith(color.name() + "_")) continue;
-                // TODO: Review text and string identifiers below before release.
+                // RODO: Review text and string identifiers below before release.
                 org.bukkit.Material white = org.bukkit.Material.matchMaterial("WHITE_" + name.substring(color.name().length()+1));
                 if (white != null) item.setType(white);
                 break;

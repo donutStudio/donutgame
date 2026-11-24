@@ -100,6 +100,7 @@ final class PlayerSnapshot {
         applyAttributes(player);
 
         player.setGameMode(gameMode);
+        com.donutsforlife11.donutgame.internal.game.EntityCollisions.clear(player);
         player.setInvulnerable(invulnerable);
         player.setInvisible(invisible);
         player.setCanPickupItems(canPickupItems);

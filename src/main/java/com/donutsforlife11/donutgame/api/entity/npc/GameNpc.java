@@ -44,7 +44,7 @@ public final class GameNpc extends GameEntity {
         super(world, generation, mannequin);
         this.mannequin = mannequin;
         this.worldGeneration = generation;
-        mannequin.setInvulnerable(true);
+        mannequin.setInvulnerable(false);
         mannequin.setPersistent(false);
         mannequin.setRemoveWhenFarAway(false);
         mannequin.setImmovable(false);

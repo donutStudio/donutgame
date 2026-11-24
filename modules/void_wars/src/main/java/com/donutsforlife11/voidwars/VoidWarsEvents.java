@@ -76,7 +76,7 @@ final class VoidWarsEvents {
             }
         }
         if (elapsed > 0 && !layoutSaved && itemDrops.stream().anyMatch(event -> event.ticks() == elapsed)) {
-            // TODO: Capture rearrangements before later loot can become confused with the starting kit.
+            // RODO: Capture rearrangements before later loot can become confused with the starting kit.
             layouts.saveAll();
             layoutSaved = true;
         }

@@ -2,7 +2,8 @@ package com.donutsforlife11.doppelganger;
 
 import java.util.*;
 import org.bukkit.GameMode;
-import org.bukkit.Sound;
+import org.bukkit.potion.PotionEffectType;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.event.block.*;
 import org.bukkit.event.entity.*;
 import org.bukkit.event.player.*;
@@ -21,8 +22,6 @@ public final class Doppelganger extends GameModule {
     private final Set<UUID> alive = new HashSet<>();
     private final Set<UUID> sheriffs = new HashSet<>();
     private final Set<UUID> revealed = new HashSet<>();
-    private final Map<UUID,Integer> exposure = new HashMap<>();
-    private int exposureSequence;
     private final Map<UUID, Integer> strikes = new HashMap<>();
     private DoppelgangerNpcManager npcs;
     private GameTimer clock;
@@ -35,17 +34,18 @@ public final class Doppelganger extends GameModule {
         if (spawns().isEmpty()) throw new IllegalStateException("Doppelganger needs spawn points.");
         world().setSpawnLocation(spawns().getFirst());
         world().setHungerEnabled(false);
+        world().setPlayerCollisionsEnabled(false);
         world().gamerules().pvp(false);
         world().gamerules().fallDamage(false);
         world().gamerules().showDeathMessages(false);
         world().gamerules().immediateRespawn(true);
         world().gamerules().spawnMobs(false);
         var players = new ArrayList<>(playerManager().getNonSpectators());
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         soloTesting = players.size() < 2;
         if (soloTesting) logWarning("Solo practice: opposing-role win checks are disabled.");
         Collections.shuffle(players);
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         int sheriffCount = Math.clamp(config().getInt("sheriff_count", 1), 0, Math.max(0, players.size() == 1 ? 1 : players.size()-1));
         var citizens = teamManager().newTeam().setTeamGlow(false).setNametagVisibility(OptionStatus.NEVER)
             .setSeeFriendlyInvisibles(false).setCollisionRule(OptionStatus.NEVER).setFriendlyFire(true);
@@ -67,14 +67,14 @@ public final class Doppelganger extends GameModule {
         }
         npcs = new DoppelgangerNpcManager(this);
 
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         goal = Math.clamp(config().getInt("kill_goal", Math.max(1, npcs.botCount())), 1, Math.max(1,npcs.botCount()));
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         remaining = Math.max(1, config().getInt("game_duration", 300));
         uiManager().newSidebar().setRefreshInterval(20)
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             .addEntry(SidebarEntry.integer("Townspeople", () -> npcs.botCount() + alive.size()))
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             .addEntry(SidebarEntry.time("Time", () -> remaining * 20))
             .addEntry(SidebarEntry.fraction("Kills", () -> kills, () -> goal))
             .addEntry(SidebarEntry.blank())
@@ -99,7 +99,6 @@ public final class Doppelganger extends GameModule {
             player.addEffect(isSheriff(player) ? org.bukkit.potion.PotionEffectType.RESISTANCE : org.bukkit.potion.PotionEffectType.STRENGTH,-1,
                 config().getInt(isSheriff(player) ? "sheriff_resistance" : "doppelganger_strength",isSheriff(player) ? 255 : 20),true);
             if(isSheriff(player) && config().getBoolean("sheriffs_exposed_at_start",false)) reveal(player);
-            refreshIdentity(player);
         }
         npcs.startWandering();
         for (GamePlayer player : playerManager().getNonSpectators()) {
@@ -116,35 +115,19 @@ public final class Doppelganger extends GameModule {
 
     private void reveal(GamePlayer sheriff) {
         if (!revealed.add(sheriff.uuid())) return;
-        refreshIdentity(sheriff);
+        sheriff.addEffect(PotionEffectType.GLOWING, -1, 0, true);
         uiManager().gameMessage(playerManager().getPlayers(),Component.text("Sheriff " + sheriff.name() + " has been revealed!",NamedTextColor.YELLOW));
-    }
-
-    private void refreshIdentity(GamePlayer player) {
-        var body = player;
-        body.setGlowColor(isSheriff(player) ? NamedTextColor.BLUE : NamedTextColor.RED);
-        var viewers = playerManager().getPlayers().stream().filter(viewer -> revealed.contains(player.uuid()) || exposure.containsKey(player.uuid()) ||
-            isSheriff(viewer)==isSheriff(player) && config().getBoolean(isSheriff(player) ? "sheriffs_see_each_other" : "doppelgangers_see_each_other",true)).toList();
-        body.setGlowing(true,viewers);
     }
 
     private void killedNpc(GamePlayer killer, GameNpc target) {
         var where = target.getLocation();
         var profile = target.profile();
         if(!isSheriff(killer)) {
-            var body = npcs.body(killer);
             if(config().getBoolean("disguise_on_kill",true)) killer.setSkin(profile);
             if(config().getBoolean("teleport_on_kill",true)) killer.teleport(where);
             kills++;
             int ticks = (int)Math.min(72000,Math.max(0,config().getDouble("doppelganger_reveal_time_on_kill",2))*20);
-            if(ticks > 0) {
-                int token=++exposureSequence;
-                exposure.put(killer.uuid(),token);
-                refreshIdentity(killer);
-                timeManager().newTimer(ticks).onFinish(timer -> {
-                    if(exposure.remove(killer.uuid(),token) && alive.contains(killer.uuid())) refreshIdentity(killer);
-                }).start();
-            }
+            if (ticks > 0) killer.addEffect(PotionEffectType.GLOWING, ticks, 0, true);
         } else {
             int used = strikes.merge(killer.uuid(),1,Integer::sum);
             uiManager().gameMessage(killer,Component.text("Innocent! Strike " + used + "/" + maxStrikes(),NamedTextColor.RED));
@@ -169,14 +152,14 @@ public final class Doppelganger extends GameModule {
 
     private void eliminate(GamePlayer player) {
         if (!alive.remove(player.uuid())) return;
-        npcs.removeBody(player);
+        player.removePotionEffect(PotionEffectType.GLOWING);
         player.setSpectator(true, player.getLocation());
         // TODO: Review text and string identifiers below before release.
         uiManager().title(player, Component.text("Eliminated!", NamedTextColor.RED));
     }
 
     private void checkWin() {
-        // TODO: Solo sessions can exercise NPCs without an absent opposing role immediately winning.
+        // RODO: Solo sessions can exercise NPCs without an absent opposing role immediately winning.
         if (soloTesting) {
             if (running && !ending && (npcs.botCount() == 0 || kills >= goal || alive.isEmpty())) finish(false);
             return;
@@ -193,9 +176,10 @@ public final class Doppelganger extends GameModule {
         if (clock != null) clock.cancel();
         npcs.stop();
         for (GamePlayer player : playerManager().getPlayers()) {
+            player.removePotionEffect(PotionEffectType.GLOWING);
             // TODO: Review text and string identifiers below before release.
             uiManager().title(player, Component.text(isSheriff(player) == sheriffsWon ? "VICTORY" : "DEFEAT",
-                isSheriff(player) == sheriffsWon ? NamedTextColor.GOLD : NamedTextColor.DARK_RED));
+                isSheriff(player) == sheriffsWon ? NamedTextColor.GOLD : NamedTextColor.DARK_RED, TextDecoration.BOLD));
             // TODO: Review text and string identifiers below before release.
             uiManager().subtitle(player, Component.text(sheriffsWon ? "Sheriffs caught the Doppelgangers!" : "Doppelgangers overran the town!"));
         }
@@ -204,26 +188,16 @@ public final class Doppelganger extends GameModule {
 
     @GameEventHandler public void move(GameEvent<PlayerMoveEvent> event) {
         if (!running) event.getPlayer().setSprinting(false);
-        if (running && alive.contains(event.getPlayer().uuid())) npcs.moveBody(event.getPlayer(), event.getTo());
     }
     @GameEventHandler(ignoreCancelled = true) public void damage(GameEvent<EntityDamageEvent> event) {
-        if(event.isArrowDamage()) { event.setCancelled(true);return; }
         double amount = event.getFinalDamage();
         event.setCancelled(true);
         applyHit(event.getAttacker(),event.getEntity(),amount);
     }
-    @GameEventHandler public void projectile(GameEvent<ProjectileHitEvent> event) {
-        if(event.getHitEntity() == null) return;
-        var shooter = event.getShooter();
-        if(shooter == null) return;
-        event.setCancelled(true);
-        applyHit(shooter,event.getHitEntity(),event.projectileImpactDamage());
-        event.getEntity().remove();
-    }
     private void applyHit(GamePlayer attacker, com.donutsforlife11.donutgame.api.entity.GameEntityBase entity, double amount) {
         if(!running || ending) return;
         GameNpc npc = entity instanceof GameNpc n ? n : null;
-        GamePlayer victim = entity instanceof GamePlayer p ? p : npc == null ? null : npcs.owner(npc);
+        GamePlayer victim = entity instanceof GamePlayer p ? p : null;
         if(attacker == null || !canAct(attacker)) return;
         if(victim != null) {
             if(victim == attacker || !alive.contains(victim.uuid())) return;
@@ -235,7 +209,7 @@ public final class Doppelganger extends GameModule {
                 }
                 if(config().getInt("sheriff_resistance",255) >= 4) return;
             }
-            if(!isSheriff(attacker) && !config().getBoolean("doppelgangers_can_attack_each_other",false)) return;
+            if(!isSheriff(attacker) && !isSheriff(victim) && !config().getBoolean("doppelgangers_can_attack_each_other",false)) return;
             if(isSheriff(attacker) && !isSheriff(victim) && !config().getBoolean("sheriffs_can_attack_doppelgangers",true)) return;
             double damage=amount;
             if(damage >= victim.getHealth()) { eliminate(victim);checkWin(); }
@@ -257,12 +231,17 @@ public final class Doppelganger extends GameModule {
         event.clearDrops(); event.setDroppedExp(0);
         eliminate(event.getPlayer()); checkWin();
     }
+    @Override public void onUnload() {
+        if (npcs != null) npcs.stop();
+        for (GamePlayer player : playerManager().getPlayers()) player.removePotionEffect(PotionEffectType.GLOWING);
+    }
+
     boolean running() { return running; }
     boolean isSheriff(GamePlayer player) { return sheriffs.contains(player.uuid()); }
-    // TODO: Review text and string identifiers below before release.
+    // RODO: Review text and string identifiers below before release.
     private int maxStrikes() { return Math.max(1, config().getInt("sheriff_strikes", 3)); }
     public List<GameLocation> spawns() {
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         return world().getPoints("spawn").stream().map(p -> new GameLocation(p.world(),p.blockX()+0.5,p.y(),p.blockZ()+0.5,p.yaw(),p.pitch())).toList();
     }
 }

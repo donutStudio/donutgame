@@ -335,7 +335,7 @@ public final class GameWorld extends PaperWorldMethods {
         World world = bukkitWorld;
         if (world != null) {
             for (org.bukkit.entity.Player player : world.getPlayers()) {
-                player.setCollidable(enabled);
+                com.donutsforlife11.donutgame.internal.game.EntityCollisions.set(this, player, enabled);
             }
         }
         for (Consumer<Boolean> listener : List.copyOf(playerCollisionListeners)) {

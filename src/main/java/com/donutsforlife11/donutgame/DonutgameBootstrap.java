@@ -129,7 +129,7 @@ public final class DonutgameBootstrap implements PluginBootstrap {
 
     private static void cacheBootstrapTitle(io.papermc.paper.datapack.DiscoveredDatapack discovered, String text)
         throws ReflectiveOperationException {
-        // TODO: Paper 26.2 wraps titles lazily, but Pack.equals converts them before CraftRegistry exists.
+        // RODO: Paper 26.2 wraps titles lazily, but Pack.equals converts them before CraftRegistry exists.
         // TODO: Cache a native literal for this plain title; remove this workaround when upstream fixes bootstrap conversion.
         var packField = discovered.getClass().getDeclaredField("pack");
         packField.setAccessible(true);

@@ -53,7 +53,7 @@ public final class GameInteractionService implements Listener {
     @EventHandler public void stop(PlayerStopUsingItemEvent event) { release(event.getPlayer().getUniqueId()); }
 
     private void tick() {
-        // TODO: Only players currently holding a registered item are checked; stop the timer when the last use ends.
+        // RODO: Only players currently holding a registered item are checked; stop the timer when the last use ends.
         for (Active use : java.util.List.copyOf(active.values())) {
             use.ticks++;
             GameItem current = use.player.getItem(use.hand);

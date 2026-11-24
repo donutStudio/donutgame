@@ -44,6 +44,7 @@ public final class GameNpcService implements Listener {
     public void enable() {
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
         ticker = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            com.donutsforlife11.donutgame.internal.game.EntityCollisions.tick();
             int now = Bukkit.getCurrentTick();
             for (GameNpc npc : List.copyOf(npcs.values())) {
                 if (npc.isDead()) {

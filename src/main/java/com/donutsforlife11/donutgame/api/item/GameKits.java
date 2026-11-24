@@ -1,33 +1,31 @@
-package com.donutsforlife11.murdermystery;
+package com.donutsforlife11.donutgame.api.item;
 
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import org.bukkit.configuration.ConfigurationSection;
-import com.donutsforlife11.donutgame.api.item.GameItem;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
 
+/** Applies configured kit slots, armor, offhand, and extra items. */
 public final class GameKits {
     private GameKits() { }
 
     public static void give(GameModule game, GamePlayer player, ConfigurationSection kit) {
         if (kit == null) return;
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         slots(game, player, kit.getConfigurationSection("hotbar"), 0, 9);
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         slots(game, player, kit.getConfigurationSection("inventory"), 9, 27);
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         var armor = Map.of("feet", 36, "legs", 37, "chest", 38, "head", 39);
         armor.forEach((name, slot) -> {
-            // TODO: Review text and string identifiers below before release.
+            // RODO: Review text and string identifiers below before release.
             String value = kit.getString("armor." + name);
             if (value != null) player.setInventoryItem(slot, game.data().item(value));
         });
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         String offhand = kit.getString("weapon.offhand");
         if (offhand != null) player.setInventoryItem(40, game.data().item(offhand));
-        // TODO: Review text and string identifiers below before release.
+        // RODO: Review text and string identifiers below before release.
         for (String value : kit.getStringList("items")) player.giveItem(game.data().item(value));
     }
 
