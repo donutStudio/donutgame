@@ -1,0 +1,5 @@
+# Item notation; each role receives its kit at game start.
+sheriff:
+  - 'bow[enchantments={power:20,infinity:1},unbreakable={}]'
+  - 'arrow 3'
+doppelganger: []

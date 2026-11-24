@@ -20,8 +20,9 @@ import net.kyori.adventure.text.format.NamedTextColor;
 public final class Doppelganger extends GameModule {
     private final Set<UUID> alive = new HashSet<>();
     private final Set<UUID> sheriffs = new HashSet<>();
-    private final Set<UUID> cooldowns = new HashSet<>();
-    private final Set<UUID> disguiseCooldowns = new HashSet<>();
+    private final Set<UUID> revealed = new HashSet<>();
+    private final Map<UUID,Integer> exposure = new HashMap<>();
+    private int exposureSequence;
     private final Map<UUID, Integer> strikes = new HashMap<>();
     private DoppelgangerNpcManager npcs;
     private GameTimer clock;
@@ -60,12 +61,14 @@ public final class Doppelganger extends GameModule {
             player.clearItems();
             player.clearActivePotionEffects();
             player.heal();
-            player.setInvisible(true);
+            player.setInvisible(false);
+            player.addEffect(org.bukkit.potion.PotionEffectType.INVISIBILITY,-1,0,true);
+            player.setSprinting(false);
         }
         npcs = new DoppelgangerNpcManager(this);
-        npcs.createCrowd(players);
+
         // TODO: Review text and string identifiers below before release.
-        goal = Math.clamp(config().getInt("kill_goal", Math.max(1, npcs.botCount()/2)), 1, Math.max(1,npcs.botCount()));
+        goal = Math.clamp(config().getInt("kill_goal", Math.max(1, npcs.botCount())), 1, Math.max(1,npcs.botCount()));
         // TODO: Review text and string identifiers below before release.
         remaining = Math.max(1, config().getInt("game_duration", 300));
         uiManager().newSidebar().setRefreshInterval(20)
@@ -73,21 +76,37 @@ public final class Doppelganger extends GameModule {
             .addEntry(SidebarEntry.integer("Townspeople", () -> npcs.botCount() + alive.size()))
             // TODO: Review text and string identifiers below before release.
             .addEntry(SidebarEntry.time("Time", () -> remaining * 20))
-            .addEntry(SidebarEntry.custom(player -> Component.text(isSheriff(player)
-                // TODO: Review text and string identifiers below before release.
-                ? "Strikes: " + strikes.getOrDefault(player.uuid(), 0) + "/" + maxStrikes()
-                // TODO: Review text and string identifiers below before release.
-                : "Kills: " + kills + "/" + goal, NamedTextColor.YELLOW))).show();
+            .addEntry(SidebarEntry.fraction("Kills", () -> kills, () -> goal))
+            .addEntry(SidebarEntry.blank())
+            .addEntry(SidebarEntry.fraction("Strikes", p -> strikes.getOrDefault(p.uuid(), 0), p -> maxStrikes())).show();
     }
 
     @Override public void onStart() {
         running = true;
+        var starters = new ArrayList<>(playerManager().getNonSpectators());
+        for (var player : starters) { player.teleport(player.spawnPoint()); player.setSprinting(false); }
+        npcs.createCrowd(starters);
+        goal = Math.clamp(config().getInt("kill_goal", Math.max(1, npcs.botCount())), 1, Math.max(1, npcs.botCount()));
+        world().gamerules().pvp(true);
+        var kits = data().config("kit.yml");
+        for(var player : starters) {
+            player.setAttributeBase(org.bukkit.attribute.Attribute.MAX_HEALTH,20);
+            player.setHealth(20);
+            player.resetAttributeBase(org.bukkit.attribute.Attribute.ATTACK_SPEED);
+            player.setInvisible(false);
+            player.removePotionEffect(org.bukkit.potion.PotionEffectType.INVISIBILITY);
+            for(String item : kits.getStringList(isSheriff(player) ? "sheriff" : "doppelganger")) player.giveItem(data().item(item));
+            player.addEffect(isSheriff(player) ? org.bukkit.potion.PotionEffectType.RESISTANCE : org.bukkit.potion.PotionEffectType.STRENGTH,-1,
+                config().getInt(isSheriff(player) ? "sheriff_resistance" : "doppelganger_strength",isSheriff(player) ? 255 : 20),true);
+            if(isSheriff(player) && config().getBoolean("sheriffs_exposed_at_start",false)) reveal(player);
+            refreshIdentity(player);
+        }
         npcs.startWandering();
         for (GamePlayer player : playerManager().getNonSpectators()) {
             // TODO: Review text and string identifiers below before release.
             uiManager().title(player, Component.text(isSheriff(player) ? "SHERIFF" : "DOPPELGANGER", isSheriff(player) ? NamedTextColor.BLUE : NamedTextColor.RED));
             // TODO: Review text and string identifiers below before release.
-            uiManager().subtitle(player, Component.text(isSheriff(player) ? "Catch every Doppelganger. Watch your strikes!" : "Blend in. Kill townspeople. Right click to disguise!"));
+            uiManager().subtitle(player, Component.text(isSheriff(player) ? "Catch and kill all secret Doppelgangers!" : "Blend in and kill townspeople without getting caught!"));
         }
         clock = timeManager().newTimer().onTick(20, timer -> {
             if (timer.elapsedTicks() > 0 && --remaining <= 0) finish(true);
@@ -95,48 +114,55 @@ public final class Doppelganger extends GameModule {
         checkWin();
     }
 
-    void attack(GamePlayer attacker, GameNpc target) {
-        if (!canAct(attacker) || cooldowns.contains(attacker.uuid())) return;
-        GamePlayer owner = npcs.owner(target);
-        if (owner == attacker) return;
-        cooldowns.add(attacker.uuid());
-        // TODO: Review text and string identifiers below before release.
-        timeManager().newTimer(Math.max(1, config().getInt("attack_cooldown", 2)) * 20).onFinish(ignored -> cooldowns.remove(attacker.uuid())).start();
-        if (isSheriff(attacker)) {
-            if (owner != null && !isSheriff(owner)) {
-                eliminate(owner);
-                // TODO: Review text and string identifiers below before release.
-                uiManager().gameMessage(attacker, Component.text("You caught a Doppelganger!", NamedTextColor.GREEN));
-            } else {
-                int used = strikes.merge(attacker.uuid(), 1, Integer::sum);
-                // TODO: Review text and string identifiers below before release.
-                uiManager().gameMessage(attacker, Component.text("Innocent! Strike " + used + "/" + maxStrikes(), NamedTextColor.RED));
-                if (owner == null) npcs.remove(target);
-                if (used >= maxStrikes()) eliminate(attacker);
-            }
-        } else if (owner == null) {
-            npcs.remove(target);
-            kills++;
-            uiManager().playSound(attacker, GameSound.of(Sound.ENTITY_PLAYER_ATTACK_CRIT));
-        } else if (isSheriff(owner)) {
-            eliminate(owner);
-        }
-        checkWin();
+    private void reveal(GamePlayer sheriff) {
+        if (!revealed.add(sheriff.uuid())) return;
+        refreshIdentity(sheriff);
+        uiManager().gameMessage(playerManager().getPlayers(),Component.text("Sheriff " + sheriff.name() + " has been revealed!",NamedTextColor.YELLOW));
     }
 
-    void disguise(GamePlayer player, GameNpc target) {
-        if (!canAct(player) || isSheriff(player) || npcs.owner(target) != null || disguiseCooldowns.contains(player.uuid())) return;
-        GameNpc body = npcs.body(player);
-        if (body == null) return;
-        // TODO: Swapping skins with a bot keeps each participant's appearance equally represented.
-        var previous = body.profile();
-        body.setProfile(target.profile());
-        target.setProfile(previous);
-        disguiseCooldowns.add(player.uuid());
-        // TODO: Review text and string identifiers below before release.
-        timeManager().newTimer(Math.max(1, config().getInt("disguise_cooldown", 10)) * 20).onFinish(ignored -> disguiseCooldowns.remove(player.uuid())).start();
-        // TODO: Review text and string identifiers below before release.
-        uiManager().gameMessage(player, Component.text("Disguise changed.", NamedTextColor.GREEN));
+    private void refreshIdentity(GamePlayer player) {
+        var body = player;
+        body.setGlowColor(isSheriff(player) ? NamedTextColor.BLUE : NamedTextColor.RED);
+        var viewers = playerManager().getPlayers().stream().filter(viewer -> revealed.contains(player.uuid()) || exposure.containsKey(player.uuid()) ||
+            isSheriff(viewer)==isSheriff(player) && config().getBoolean(isSheriff(player) ? "sheriffs_see_each_other" : "doppelgangers_see_each_other",true)).toList();
+        body.setGlowing(true,viewers);
+    }
+
+    private void killedNpc(GamePlayer killer, GameNpc target) {
+        var where = target.getLocation();
+        var profile = target.profile();
+        if(!isSheriff(killer)) {
+            var body = npcs.body(killer);
+            if(config().getBoolean("disguise_on_kill",true)) killer.setSkin(profile);
+            if(config().getBoolean("teleport_on_kill",true)) killer.teleport(where);
+            kills++;
+            int ticks = (int)Math.min(72000,Math.max(0,config().getDouble("doppelganger_reveal_time_on_kill",2))*20);
+            if(ticks > 0) {
+                int token=++exposureSequence;
+                exposure.put(killer.uuid(),token);
+                refreshIdentity(killer);
+                timeManager().newTimer(ticks).onFinish(timer -> {
+                    if(exposure.remove(killer.uuid(),token) && alive.contains(killer.uuid())) refreshIdentity(killer);
+                }).start();
+            }
+        } else {
+            int used = strikes.merge(killer.uuid(),1,Integer::sum);
+            uiManager().gameMessage(killer,Component.text("Innocent! Strike " + used + "/" + maxStrikes(),NamedTextColor.RED));
+            if(used >= maxStrikes()) eliminate(killer);
+        }
+        npcs.remove(target);
+        if(config().getBoolean("visual_lightning_on_kill",true)) world().visualLightning(where);
+        if(config().getBoolean("death_markers",true)) {
+            boolean head=false,dust=false;
+            for(int radius=0;radius<=2;radius++) for(int x=-radius;x<=radius;x++) for(int z=-radius;z<=radius;z++) {
+                var at = new GameLocation(where.world(),where.blockX()+x,where.blockY(),where.blockZ()+z);
+                if(!world().blockAt(at).getType().isAir() || !world().blockAt(new GameLocation(at.world(),at.x(),at.y()-1,at.z())).getType().isSolid()) continue;
+                if(!head) { world().setBlock(at,org.bukkit.Material.PLAYER_HEAD); world().blockAt(at).setSkullProfile(profile);head=true; }
+                else if(!dust) { world().setBlock(at,org.bukkit.Material.REDSTONE_WIRE);dust=true; }
+                if(head && dust) break;
+            }
+        }
+        checkWin();
     }
 
     private boolean canAct(GamePlayer player) { return running && !ending && alive.contains(player.uuid()) && player.isOnline() && !player.isSpectator(); }
@@ -152,12 +178,12 @@ public final class Doppelganger extends GameModule {
     private void checkWin() {
         // TODO: Solo sessions can exercise NPCs without an absent opposing role immediately winning.
         if (soloTesting) {
-            if (running && !ending && (kills >= goal || alive.isEmpty())) finish(false);
+            if (running && !ending && (npcs.botCount() == 0 || kills >= goal || alive.isEmpty())) finish(false);
             return;
         }
         if (!running || ending) return;
         if (alive.stream().noneMatch(id -> !sheriffs.contains(id))) finish(true);
-        else if (kills >= goal || alive.stream().noneMatch(sheriffs::contains)) finish(false);
+        else if (npcs.botCount() == 0 || kills >= goal || alive.stream().noneMatch(sheriffs::contains)) finish(false);
     }
 
     private void finish(boolean sheriffsWon) {
@@ -173,18 +199,50 @@ public final class Doppelganger extends GameModule {
             // TODO: Review text and string identifiers below before release.
             uiManager().subtitle(player, Component.text(sheriffsWon ? "Sheriffs caught the Doppelgangers!" : "Doppelgangers overran the town!"));
         }
-        timeManager().newTimer(120).onFinish(ignored -> unload()).start();
+        timeManager().newTimer(240).onFinish(ignored -> unload()).start();
     }
 
     @GameEventHandler public void move(GameEvent<PlayerMoveEvent> event) {
-        if (alive.contains(event.getPlayer().uuid())) npcs.moveBody(event.getPlayer(), event.getTo());
+        if (!running) event.getPlayer().setSprinting(false);
+        if (running && alive.contains(event.getPlayer().uuid())) npcs.moveBody(event.getPlayer(), event.getTo());
     }
-    @GameEventHandler public void damage(GameEvent<EntityDamageEvent> event) { event.setCancelled(true); }
-    @GameEventHandler public void attackPlayer(GameEvent<io.papermc.paper.event.player.PrePlayerAttackEntityEvent> event) {
-        if (event.getAttacked() instanceof GamePlayer target) {
-            event.setCancelled(true);
-            GameNpc body = npcs.body(target);
-            if (body != null) attack(event.getPlayer(), body);
+    @GameEventHandler(ignoreCancelled = true) public void damage(GameEvent<EntityDamageEvent> event) {
+        if(event.isArrowDamage()) { event.setCancelled(true);return; }
+        double amount = event.getFinalDamage();
+        event.setCancelled(true);
+        applyHit(event.getAttacker(),event.getEntity(),amount);
+    }
+    @GameEventHandler public void projectile(GameEvent<ProjectileHitEvent> event) {
+        if(event.getHitEntity() == null) return;
+        var shooter = event.getShooter();
+        if(shooter == null) return;
+        event.setCancelled(true);
+        applyHit(shooter,event.getHitEntity(),event.projectileImpactDamage());
+        event.getEntity().remove();
+    }
+    private void applyHit(GamePlayer attacker, com.donutsforlife11.donutgame.api.entity.GameEntityBase entity, double amount) {
+        if(!running || ending) return;
+        GameNpc npc = entity instanceof GameNpc n ? n : null;
+        GamePlayer victim = entity instanceof GamePlayer p ? p : npc == null ? null : npcs.owner(npc);
+        if(attacker == null || !canAct(attacker)) return;
+        if(victim != null) {
+            if(victim == attacker || !alive.contains(victim.uuid())) return;
+            if(isSheriff(victim)) {
+                if(isSheriff(attacker) && !config().getBoolean("sheriffs_can_attack_each_other",false)) return;
+                if(!isSheriff(attacker)) {
+                    if(!config().getBoolean("doppelgangers_can_attack_sheriffs",true)) return;
+                    reveal(victim);
+                }
+                if(config().getInt("sheriff_resistance",255) >= 4) return;
+            }
+            if(!isSheriff(attacker) && !config().getBoolean("doppelgangers_can_attack_each_other",false)) return;
+            if(isSheriff(attacker) && !isSheriff(victim) && !config().getBoolean("sheriffs_can_attack_doppelgangers",true)) return;
+            double damage=amount;
+            if(damage >= victim.getHealth()) { eliminate(victim);checkWin(); }
+            else if(damage > 0) victim.setHealth(victim.getHealth()-damage);
+        } else if(npc != null) {
+            if(amount >= npc.getHealth()) killedNpc(attacker,npc);
+            else if(amount > 0) npc.setHealth(npc.getHealth()-amount);
         }
     }
     @GameEventHandler public void breakBlock(GameEvent<BlockBreakEvent> event) { event.setCancelled(true); }

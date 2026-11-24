@@ -50,6 +50,7 @@ public final class GameNpcService implements Listener {
                     npc.discard();
                     continue;
                 }
+                npc.mannequin.getChunk().addPluginChunkTicket(plugin);
                 // Jump requests are one-shot, rather than continuous bunny hopping.
                 npc.mannequin.setJumping(npc.jumpRequested);
                 npc.jumpRequested = false;
@@ -96,6 +97,7 @@ public final class GameNpcService implements Listener {
     }
 
     public GameNpc register(GameWorld world, Mannequin mannequin, PlayerProfile profile) {
+        mannequin.getChunk().addPluginChunkTicket(plugin);
         GameNpc npc = new GameNpc(world, GameWorldHandle.generation(world), mannequin, profile);
         npcs.put(npc.uuid(), npc);
         return npc;

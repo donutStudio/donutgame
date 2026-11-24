@@ -95,6 +95,13 @@ public final class GameEvent<E extends Event> extends PaperEventMethods {
             ? module.playerManager().getPlayer(player.getUniqueId()) : null;
     }
 
+    public boolean isArrowDamage() {
+        return event instanceof org.bukkit.event.entity.EntityDamageByEntityEvent damage && damage.getDamager() instanceof org.bukkit.entity.AbstractArrow;
+    }
+    public double projectileImpactDamage() {
+        var projectile = require(org.bukkit.event.entity.ProjectileHitEvent.class).getEntity();
+        return projectile instanceof org.bukkit.entity.AbstractArrow arrow ? Math.ceil(arrow.getDamage()*arrow.getVelocity().length()) : 0;
+    }
     public GamePlayer getShooter() {
         Entity source = require(EntityEvent.class).getEntity();
         if (!(source instanceof org.bukkit.entity.Projectile projectile) || !(projectile.getShooter() instanceof Player player)) return null;

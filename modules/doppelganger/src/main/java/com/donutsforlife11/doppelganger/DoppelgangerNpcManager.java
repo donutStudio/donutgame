@@ -27,15 +27,6 @@ final class DoppelgangerNpcManager {
         for (GamePlayer player : players) for (int i = 0; i < copies; i++) profiles.add(player.playerProfile());
         Collections.shuffle(profiles);
         int index = 0;
-        for (GamePlayer player : players) {
-            GameNpc npc = create(player.spawnPoint(), profiles.get(index++));
-            npc.setGravity(false);
-            npc.setImmovable(true);
-            // TODO: Hide the player's own mannequin so it cannot intercept their clicks or obscure their camera.
-            npc.setVisibleTo(player, false);
-            bodies.put(player.uuid(), npc);
-            owners.put(npc.uuid(), player);
-        }
         while (index < profiles.size()) {
             GameNpc npc = create(game.spawns().get(index % game.spawns().size()), profiles.get(index));
             bots.put(npc.uuid(), npc);
@@ -48,9 +39,9 @@ final class DoppelgangerNpcManager {
         GameNpc npc = game.world().newNpc(point, profile);
         npc.setDescriptionVisible(false);
         npc.setCollidable(false);
-        npc.setAttackCooldown(5);
-        npc.onAttack(player -> game.attack(player, npc));
-        npc.onInteract(player -> game.disguise(player, npc));
+        npc.setInvulnerable(false);
+        npc.setAttributeBase(org.bukkit.attribute.Attribute.MAX_HEALTH,20);
+        npc.setHealth(20);
         npc.controller().pathfindSettings().setOpenDoors(true);
         npc.controller().pathfindSettings().setRadius(32);
         npc.controller().setNavigationTimeout(300);
@@ -115,23 +106,17 @@ final class DoppelgangerNpcManager {
     private void schedule(GameNpc npc) {
         if (stopped || !bots.containsKey(npc.uuid())) return;
         // TODO: Review text and string identifiers below before release.
-        int minimum = Math.max(1, game.config().getInt("npc.min_idle_time", 3));
+        int minimum = Math.max(1, game.config().getInt("npc.min_idle_time", 1));
         // TODO: Review text and string identifiers below before release.
-        int maximum = Math.max(minimum, game.config().getInt("npc.max_idle_time", 6));
+        int maximum = Math.max(minimum, game.config().getInt("npc.max_idle_time", 2));
         game.timeManager().newTimer(ThreadLocalRandom.current().nextInt(minimum*20, maximum*20+1)).onFinish(ignored -> {
             if (stopped || !game.running() || !bots.containsKey(npc.uuid())) return;
             List<GameLocation> nearby = targets.stream().filter(p -> distance(npc.getLocation(),p) <= 32*32).toList();
             if (nearby.isEmpty()) { schedule(npc); return; }
-            if (ThreadLocalRandom.current().nextDouble() < 0.25) { schedule(npc); return; }
+
             GameLocation destination = nearby.get(ThreadLocalRandom.current().nextInt(nearby.size()));
             npc.controller().pathfindTo(destination);
-            game.timeManager().newTimer(ThreadLocalRandom.current().nextInt(10,40)).onFinish(pause -> {
-                if (stopped || !bots.containsKey(npc.uuid()) || !npc.controller().isNavigating()) return;
-                npc.controller().pause();
-                game.timeManager().newTimer(ThreadLocalRandom.current().nextInt(5,20)).onFinish(resume -> {
-                    if (!stopped && bots.containsKey(npc.uuid())) npc.controller().resume();
-                }).start();
-            }).start();
+
         }).start();
     }
 

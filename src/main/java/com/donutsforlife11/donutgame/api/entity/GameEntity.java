@@ -30,6 +30,11 @@ public class GameEntity implements GameEntityBase {
         this.entityRef = new WeakReference<>(entity);
     }
 
+    @Override public void remove() {
+        var entity = entityRef.get();
+        if(entity != null && GameWorldHandle.generation(world) == generation) entity.remove();
+    }
+
     public final GameWorld world() {
         return world;
     }
@@ -48,7 +53,7 @@ public class GameEntity implements GameEntityBase {
             return null;
         }
         Entity cached = entityRef.get();
-        if (cached != null && cached.isValid() && cached.getWorld() == bukkitWorld) {
+        if (cached != null && !cached.isDead() && cached.getWorld() == bukkitWorld) {
             return cached;
         }
         Entity entity = bukkitWorld.getEntity(uuid);

@@ -48,7 +48,9 @@ def install(root, bundle):
     backup.mkdir(parents=True)
     for entry, target, _ in pending:
         if not target.is_file():
-            raise ValueError("Expected existing installation file: " + str(target))
+            if not entry.get("allow_new",False):
+                raise ValueError("Expected existing installation file: " + str(target))
+            continue
         saved = backup / entry["path"]
         saved.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(target, saved)
@@ -57,9 +59,10 @@ def install(root, bundle):
     try:
         ensure_stopped(root)
         for entry, target, payload in pending:
+            target.parent.mkdir(parents=True, exist_ok=True)
             temporary = target.with_name(target.name + ".codex-staged")
             temporary.write_bytes(payload)
-            temporary.chmod(target.stat().st_mode)
+            if target.exists(): temporary.chmod(target.stat().st_mode)
             os.replace(temporary, target)
             changed.append((entry, target))
         for entry, target, _ in pending:
@@ -68,7 +71,9 @@ def install(root, bundle):
             print("VERIFIED", entry["sha256"], entry["path"])
     except Exception:
         for entry, target in reversed(changed):
-            shutil.copy2(backup / entry["path"], target)
+            saved = backup / entry["path"]
+            if saved.exists(): shutil.copy2(saved, target)
+            elif target.exists(): target.unlink()
         raise
     print("BACKUP", backup)
     ensure_stopped(root)

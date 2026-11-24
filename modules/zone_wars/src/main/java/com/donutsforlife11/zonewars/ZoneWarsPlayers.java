@@ -42,13 +42,20 @@ final class ZoneWarsPlayers {
         }
         players.forEach(this::setup);
         for (GameLocation spawn : new HashSet<>(spawns.values())) {
-            for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) for (int y = 0; y < 3; y++) {
-                if (Math.abs(x) != 2 && Math.abs(z) != 2) continue;
+            var assigned = spawns.entrySet().stream().filter(e -> e.getValue().equals(spawn)).map(Map.Entry::getKey).toList();
+            var color = assigned.size() == 1 ? com.donutsforlife11.donutgame.api.item.GameItemComponents.teamDyeColor(assigned.getFirst()) : org.bukkit.DyeColor.WHITE;
+            var material = org.bukkit.Material.valueOf(color.name() + "_STAINED_GLASS");
+            var center = game.borderRegion().center();
+            int rx = Math.abs(center.x()-spawn.x()) > Math.abs(center.z()-spawn.z()) ? 1 : 3;
+            int rz = rx == 1 ? 3 : 1;
+            for (int x = -rx; x <= rx; x++) for (int z = -rz; z <= rz; z++) for (int y = 0; y <= 2; y++) {
+                if (Math.abs(x) != rx && Math.abs(z) != rz && y != 2) continue;
                 GameLocation at = new GameLocation(spawn.blockX()+x, spawn.blockY()+y, spawn.blockZ()+z);
                 var block = game.world().blockAt(at);
+                if (cages.containsKey(at)) { block.setType(org.bukkit.Material.WHITE_STAINED_GLASS); continue; }
                 if (!block.getType().isAir()) continue;
                 cages.put(at, block.getBlockData());
-                block.setType(org.bukkit.Material.WHITE_STAINED_GLASS);
+                block.setType(material);
             }
         }
     }

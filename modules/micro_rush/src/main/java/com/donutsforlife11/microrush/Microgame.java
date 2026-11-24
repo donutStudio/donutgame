@@ -30,6 +30,7 @@ public abstract class Microgame {
     public boolean beginOvertime() { return false; }
     public void setupPlayer(GamePlayer player) {
         GameLocation spawn = spawn(game.team(player));
+        player.resetAttributeBase(org.bukkit.attribute.Attribute.ATTACK_SPEED);
         player.cancelRespawn();
         player.setSpawnPoint(spawn);
         player.setSpectator(false, spawn);
@@ -108,5 +109,13 @@ public abstract class Microgame {
         GameRegion region = map.getRegion(game.team(player)==0 ? "blue_spawn" : "red_spawn");
         return region != null && region.contains(location);
     }
+    protected final boolean nearGoal(GameLocation position, int team, double radius) {
+        String goal=team==0 ? "objective_a" : "objective_b";
+        int extent=id.equals("boom_ball") ? 4 : 6;
+        for(var point : map.getPoints(goal)) if(GoalBounds.near(position.x(),position.y(),position.z(),point.x(),point.y(),point.z(),point.x()+extent+1,point.y()+extent+1,point.z()+extent+1,radius)) return true;
+        var region=map.getRegion(goal);
+        return region!=null && GoalBounds.near(position.x(),position.y(),position.z(),region.min().x(),region.min().y(),region.min().z(),region.max().x()+1,region.max().y()+1,region.max().z()+1,radius);
+    }
+
     protected final boolean water(GameLocation at) { return game.world().blockAt(at).is(Material.WATER); }
 }

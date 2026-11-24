@@ -17,6 +17,14 @@ import io.papermc.paper.datacomponent.DataComponentType;
 public final class GameItem extends PaperItemMethods {
     private ItemStack item;
 
+    public boolean hasFlag(String namespace, String name) {
+        var key = new org.bukkit.NamespacedKey(namespace, name);
+        var data = item.getPersistentDataContainer();
+        if (data.has(key, PersistentDataType.BYTE)) return data.get(key, PersistentDataType.BYTE) != 0;
+        if (data.has(key, PersistentDataType.INTEGER)) return data.get(key, PersistentDataType.INTEGER) != 0;
+        return false;
+    }
+
     public GameItem(Material material) {
         this(new ItemStack(Objects.requireNonNull(material, "material")));
     }

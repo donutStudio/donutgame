@@ -39,12 +39,13 @@ public final class BoomBall extends Microgame {
         every(1, () -> {
             for (BouncyFireball ball : balls) {
                 // TODO: Review text and string identifiers below before release.
-                if (ball.body.isDead() || !map.getRegion("arena").contains(ball.body.getLocation())) { game.restartPoint(); return; }
+                if (ball.body.isDead()) { game.restartPoint(); return; }
                 ball.tick();
                 // TODO: Review text and string identifiers below before release.
-                for (int team = 0; team < 2; team++) if (map.getRegion(team==0 ? "objective_a" : "objective_b").contains(ball.body.getLocation())) {
+                for (int team = 0; team < 2; team++) if (nearGoal(ball.body.getLocation(),team,1.5)) {
                     game.score(1-team,true); return;
                 }
+                if (!map.getRegion("arena").contains(ball.body.getLocation())) { game.restartPoint(); return; }
                 for (GamePlayer player : game.playerManager().getNonSpectators()) if (ball.touches(player)) {
                     game.score(1-game.team(player),true); return;
                 }

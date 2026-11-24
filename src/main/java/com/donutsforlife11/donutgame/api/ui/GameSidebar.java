@@ -28,6 +28,7 @@ public class GameSidebar {
     private final List<SidebarEntry> entries = new ArrayList<>();
     private final Map<UUID, FastBoard> boards = new LinkedHashMap<>();
     private final Map<UUID, BoardSnapshot> snapshots = new LinkedHashMap<>();
+    private final Map<UUID, org.bukkit.scoreboard.Scoreboard> viewerScoreboards = new LinkedHashMap<>();
 
     private Supplier<Collection<GamePlayer>> viewers;
     private Supplier<Component> title;
@@ -178,7 +179,15 @@ public class GameSidebar {
             return true;
         });
 
+        viewerScoreboards.keySet().retainAll(currentViewers.keySet());
         for (GamePlayer viewer : currentViewers.values()) {
+            var scoreboard = GamePlayerHandle.requireBukkitPlayer(viewer).getScoreboard();
+            var previousScoreboard = viewerScoreboards.put(viewer.uuid(), scoreboard);
+            if (previousScoreboard != null && previousScoreboard != scoreboard) {
+                var oldBoard = boards.remove(viewer.uuid());
+                if (oldBoard != null) oldBoard.delete();
+                snapshots.remove(viewer.uuid());
+            }
             FastBoard board = boards.computeIfAbsent(viewer.uuid(), ignored -> new FastBoard(GamePlayerHandle.requireBukkitPlayer(viewer)));
             Component renderedTitle = SidebarEntry.safe(title.get());
             List<Component> lines = new ArrayList<>(entries.size() + 2);

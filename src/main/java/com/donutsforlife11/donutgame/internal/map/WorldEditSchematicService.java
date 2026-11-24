@@ -89,7 +89,7 @@ final class WorldEditSchematicService implements SchematicService {
             if (cached != null && cached.lastModified() == lastModified) {
                 return cached;
             }
-            var format = ClipboardFormats.findByPath(normalizedPath);
+            var format = ClipboardFormats.findByFile(normalizedPath.toFile());
             if (format == null) {
                 throw new IllegalStateException("Unknown schematic format for " + normalizedPath);
             }

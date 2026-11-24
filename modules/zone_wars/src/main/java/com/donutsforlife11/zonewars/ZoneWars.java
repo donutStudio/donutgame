@@ -72,22 +72,12 @@ public final class ZoneWars extends GameModule {
         var sidebar = uiManager().newSidebar().setRefreshInterval(20);
         var listedTeams = new ArrayList<>(scores.keySet());
         int perLine = Math.max(1, (listedTeams.size()+9)/10);
-        for (int first = 0; first < listedTeams.size(); first += perLine) {
-            var row = List.copyOf(listedTeams.subList(first, Math.min(first+perLine,listedTeams.size())));
-            sidebar.addEntry(SidebarEntry.custom(() -> {
-                Component line = Component.empty();
-                // TODO: Review text and string identifiers below before release.
-                for (GameTeam team : row) line = line.append(line.equals(Component.empty()) ? Component.empty() : Component.text(" | "))
-                    // TODO: Review text and string identifiers below before release.
-                    .append(team.displayName()).append(Component.text(": " + scores.get(team),NamedTextColor.YELLOW));
-                return line;
-            }));
-        }
-        // TODO: Review text and string identifiers below before release.
-        sidebar.addEntry(SidebarEntry.blank()).addEntry(SidebarEntry.integer("Kills", p -> kills.getOrDefault(p.uuid(), 0)))
-            // TODO: Review text and string identifiers below before release.
-            .addEntry(SidebarEntry.time("Time", () -> remaining * 20)).show();
+        sidebar.addEntry(SidebarEntry.time("Time", () -> remaining * 20));
+        for (GameTeam team : listedTeams) sidebar.addEntry(SidebarEntry.integer(team.displayName().toString(), () -> scores.getOrDefault(team, 0)).setLabel(() -> net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(team.displayName())));
+        sidebar.addEntry(SidebarEntry.blank()).addEntry(SidebarEntry.integer("Kills", p -> kills.getOrDefault(p.uuid(), 0))).show();
         refreshBar();
+        int count = Math.min(world().getPoints("capture_point").size(), Math.max(1, config().getInt("point_count", 2)));
+        for (int i = 0; i < count; i++) generatePoint();
     }
 
     @Override public void onStart() {
@@ -96,8 +86,6 @@ public final class ZoneWars extends GameModule {
         running = true;
         world().gamerules().pvp(true);
         // TODO: Review text and string identifiers below before release.
-        int count = Math.min(world().getPoints("capture_point").size(), Math.max(1, config().getInt("point_count", 2)));
-        for (int i = 0; i < count; i++) generatePoint();
         // TODO: Review text and string identifiers below before release.
         for (int i = 0; i < Math.max(0, config().getInt("item_count", 8)); i++) generateDrop();
         clock = timeManager().newTimer().onTick(20, timer -> {
@@ -112,9 +100,9 @@ public final class ZoneWars extends GameModule {
     }
 
     private void generatePoint() {
-        if (!running || overtime) return;
+        if (ending || overtime) return;
         // TODO: Review text and string identifiers below before release.
-        var candidates = new ArrayList<>(world().getPoints("capture_point"));
+        var candidates = new ArrayList<>(world().getPoints("capture_point").stream().map(p -> new GameLocation(p.world(), p.x(), p.y()+1, p.z(), p.yaw(), p.pitch())).toList());
         candidates.removeAll(activePoints);
         if (candidates.isEmpty()) return;
         GameLocation point = candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
@@ -144,7 +132,7 @@ public final class ZoneWars extends GameModule {
         if (!running || overtime || player == null || player.isSpectator() || player.getTeam() == null || !activePoints.remove(point)) return;
         world().setBlock(point, Material.AIR);
         GameEntity visual = pointVisuals.remove(point);
-        if (visual != null && !visual.isDead()) visual.remove();
+        if (visual != null) visual.remove();
         // TODO: Review text and string identifiers below before release.
         int points = value("capture_score", 100);
         GameTimer previous = captureProtection.remove(player.uuid());
@@ -152,10 +140,11 @@ public final class ZoneWars extends GameModule {
         captureProtection.put(player.uuid(), timeManager().newTimer(10).onFinish(ignored -> captureProtection.remove(player.uuid())).start());
         world().particle(Particle.FIREWORK, center(point), 40, 0.5, 0.5, 0.5, 0.15, null);
         uiManager().playSound(playerManager().getPlayers(), GameSound.of(Sound.ENTITY_FIREWORK_ROCKET_BLAST));
-        for (GamePlayer viewer : playerManager().getPlayers()) uiManager().subtitle(viewer, Component.text(
-            // TODO: Review text and string identifiers below before release.
-            viewer.getTeam() == player.getTeam() ? "+ " + points + " Team captured point! " + points + " +" : "Team lost point!",
-            viewer.getTeam() == player.getTeam() ? NamedTextColor.GREEN : NamedTextColor.RED));
+        uiManager().title(playerManager().getPlayers(), Component.empty());
+        for (GamePlayer viewer : playerManager().getPlayers()) uiManager().subtitle(viewer,
+            viewer.getTeam() == player.getTeam()
+            ? Component.text("+ ",NamedTextColor.GRAY).append(Component.text(points)).append(Component.text(" Team captured point! ",NamedTextColor.GREEN)).append(Component.text(points)).append(Component.text(" +"))
+            : Component.text("Team lost point!",NamedTextColor.RED));
         addScore(player.getTeam(), points);
         timeManager().newTimer(200).onFinish(ignored -> generatePoint()).start();
     }
@@ -239,12 +228,17 @@ public final class ZoneWars extends GameModule {
             player.getTeam() == winner ? NamedTextColor.GOLD : NamedTextColor.RED));
         // TODO: Review text and string identifiers below before release.
         uiManager().subtitle(playerManager().getPlayers(), winner == null ? Component.text("No teams remain.") : winner.displayName().append(Component.text(" wins!")));
-        timeManager().newTimer(120).onFinish(ignored -> unload()).start();
+        timeManager().newTimer(240).onFinish(ignored -> unload()).start();
     }
 
     private void refreshBar() {
         // TODO: Review text and string identifiers below before release.
-        bossbar.setTitle(Component.text(overtime ? "OVERTIME | Last team standing wins!" : "Time | " + String.format("%02d:%02d", remaining / 60, remaining % 60)))
+        var teams = new ArrayList<>(scores.keySet());
+        Component title = Component.empty();
+        if (!teams.isEmpty()) title = title.append(Component.text(scores.get(teams.getFirst()), teams.getFirst().color()).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));
+        title = title.append(Component.text(" | ", NamedTextColor.GRAY)).append(Component.text(overtime ? "OVERTIME" : String.format("%02d:%02d", remaining / 60, remaining % 60), NamedTextColor.WHITE).decoration(net.kyori.adventure.text.format.TextDecoration.BOLD, overtime)).append(Component.text(" | ", NamedTextColor.GRAY));
+        if (teams.size() > 1) title = title.append(Component.text(scores.get(teams.get(1)), teams.get(1).color()).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));
+        bossbar.setTitle(title)
             .setColor(overtime ? BossBar.Color.RED : BossBar.Color.WHITE)
             // TODO: Review text and string identifiers below before release.
             .setProgress(overtime ? 1 : remaining / (float) Math.max(1, config().getInt("game_duration", 300)))
@@ -287,7 +281,7 @@ public final class ZoneWars extends GameModule {
         capture(point, event.getKiller());
         if (activePoints.remove(point)) {
             GameEntity visual = pointVisuals.remove(point);
-            if (visual != null && !visual.isDead()) visual.remove();
+            if (visual != null) visual.remove();
             timeManager().newTimer(200).onFinish(ignored -> generatePoint()).start();
         }
     }

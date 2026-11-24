@@ -39,6 +39,21 @@ public class SpectatorGuardEvents implements Listener {
         this.moduleService = moduleService;
     }
 
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onCommandGameMode(org.bukkit.event.player.PlayerGameModeChangeEvent event) {
+        if (!event.getCause().name().equals("COMMAND")) return;
+        var game = moduleService.getGameOfPlayer(event.getPlayer());
+        if (game == null) return;
+        var player = PlayerManagerHandle.getPlayer(game.playerManager(), event.getPlayer());
+        if (player == null) return;
+        var mode = event.getNewGameMode();
+        org.bukkit.Bukkit.getScheduler().runTask(org.bukkit.plugin.java.JavaPlugin.getPlugin(com.donutsforlife11.donutgame.Donutgame.class), () -> {
+            if (!game.acceptsLiveOperations() || !player.isOnline()) return;
+            player.setSpectator(mode == org.bukkit.GameMode.SPECTATOR);
+            if (mode != org.bukkit.GameMode.SPECTATOR) player.setGameMode(mode);
+        });
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST)
     public void preventBlockBreak(BlockBreakEvent event) {
         if (isSpectator(event.getPlayer())) {

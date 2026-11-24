@@ -21,7 +21,7 @@ final class MurderVoting {
 
     void begin() {
         votes.clear();
-        for (GamePlayer player : game.living()) open(player, 0);
+
     }
 
     void open(GamePlayer player, int page) {

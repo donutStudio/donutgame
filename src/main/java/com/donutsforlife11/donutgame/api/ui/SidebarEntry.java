@@ -41,6 +41,10 @@ public class SidebarEntry {
         return new SidebarEntry(null, true, player -> new RenderedEntry(component.apply(player), Component.empty()));
     }
 
+    public static SidebarEntry component(String label, Supplier<Component> value) {
+        return labeled(label, false, player -> value.get());
+    }
+
     public static SidebarEntry integer(String label, int value) {
         return integer(label, () -> value);
     }

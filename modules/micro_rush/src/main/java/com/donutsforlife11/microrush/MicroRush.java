@@ -96,20 +96,14 @@ public final class MicroRush extends GameModule {
             teams.get(i % 2).addPlayer(players.get(i));
             lobbyPlayer(players.get(i));
         }
-        var sidebar = uiManager().newSidebar().setRefreshInterval(20)
-            // TODO: Review text and string identifiers below before release.
-            .addEntry(SidebarEntry.custom(() -> Component.text(current == null ? "Choosing round..." : current.name(), NamedTextColor.GREEN)));
-        for (int i = 0; i < 2; i++) {
-            final int team = i;
-            sidebar.addEntry(SidebarEntry.custom(() -> teams.get(team).displayName()
-                // TODO: Review text and string identifiers below before release.
-                .append(Component.text(" | Games " + wins[team] + "/" + winTarget() + " | Points " + points[team] + "/" + winTarget()))));
+        var sidebar = uiManager().newSidebar().setRefreshInterval(10)
+            .addEntry(SidebarEntry.component("Microgame", () -> Component.text(current == null ? "Choosing round..." : current.name(), NamedTextColor.GREEN)));
+        for(int i=0;i<2;i++) {
+            final int team=i;
+            sidebar.addEntry(SidebarEntry.component(team==0 ? "Red" : "Blue", () -> Component.text(wins[team], team==0 ? NamedTextColor.RED : NamedTextColor.BLUE).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD).append(Component.text(" ("+points[team]+")",NamedTextColor.GRAY).decoration(net.kyori.adventure.text.format.TextDecoration.BOLD,false).decorate(net.kyori.adventure.text.format.TextDecoration.ITALIC))));
         }
-        // TODO: Review text and string identifiers below before release.
-        sidebar.addEntry(SidebarEntry.time("Time", () -> timeLeft * 20));
-        // TODO: Review text and string identifiers below before release.
-        sidebar.addEntry(SidebarEntry.fraction("Alive Players", () -> playerManager().getNonSpectators().size(),
-            () -> teams.stream().mapToInt(t -> t.getPlayers().size()).sum())).show();
+        sidebar.addEntry(SidebarEntry.time("Time", () -> timeLeft*20))
+            .addEntry(SidebarEntry.fraction("Alive Players", () -> playerManager().getNonSpectators().size(), () -> playerManager().getPlayers().size())).show();
     }
 
     @Override public void onStart() { chooseGame(); }
@@ -118,7 +112,7 @@ public final class MicroRush extends GameModule {
         if (ending) return;
         playing = false;
         current = null;
-        playerManager().getPlayers().forEach(this::lobbyPlayer);
+        playerManager().getPlayers().forEach(p -> { p.cancelRespawn(); p.setSpectator(true,p.getLocation()); });
         if (rotation.isEmpty()) rotation.addAll(enabled);
         // TODO: Each active game appears once per rotation; long matches can reuse the full rotation after exhaustion.
         selected = rotation.remove(ThreadLocalRandom.current().nextInt(rotation.size()));
@@ -129,18 +123,19 @@ public final class MicroRush extends GameModule {
         // TODO: Review text and string identifiers below before release.
         timeLeft = Math.max(1, config().getInt("max_round_time",150));
         int token = ++generation;
-        timeManager().newTimer(60).onTick(4, timer -> {
+        timeManager().newTimer(60).onTick(2, timer -> {
             if (token != generation || ending) return;
             // TODO: Review text and string identifiers below before release.
-            uiManager().title(playerManager().getPlayers(), Component.text("Choosing round...", NamedTextColor.BLUE));
+            if (timer.elapsedTicks() == 0) uiManager().title(playerManager().getPlayers(), Component.text("Choosing round...", NamedTextColor.BLUE));
             uiManager().subtitle(playerManager().getPlayers(), Component.text(displayName(enabled.get(ThreadLocalRandom.current().nextInt(enabled.size())))));
             uiManager().playSound(playerManager().getPlayers(), GameSound.of(Sound.UI_BUTTON_CLICK));
         }).onFinish(ignored -> {
             if (token != generation || ending) return;
             // TODO: Review text and string identifiers below before release.
+            uiManager().playSound(playerManager().getPlayers(),GameSound.of(Sound.ENTITY_PLAYER_LEVELUP));
             uiManager().title(playerManager().getPlayers(), Component.text("Round Chosen!", NamedTextColor.GREEN));
             uiManager().subtitle(playerManager().getPlayers(), Component.text(displayName(selected)));
-            loadPoint();
+            timeManager().newTimer(30).onFinish(delay -> loadPoint()).start();
         }).start();
     }
 
@@ -149,9 +144,10 @@ public final class MicroRush extends GameModule {
         playing = false;
         int token = ++generation;
         if (current != null) { current.stop(); current = null; }
-        for (GamePlayer player : playerManager().getPlayers()) { player.cancelRespawn(); lobbyPlayer(player); }
+        for (GamePlayer player : playerManager().getPlayers()) { player.cancelRespawn(); player.setSpectator(true,player.getLocation()); }
         world().gamerules().pvp(false);
         // TODO: Schematic regions are isolated from the lobby; erase the previous placement before pasting.
+        clearCages();
         if (arena != null) {
             // TODO: Review text and string identifiers below before release.
             world().fill(arena.getRegion("arena"), Material.AIR);
@@ -176,19 +172,25 @@ public final class MicroRush extends GameModule {
             current.validate();
             for (GamePlayer player : playerManager().getOnlinePlayers()) if (team(player) >= 0) current.setupPlayer(player);
             // TODO: Review text and string identifiers below before release.
-            int ticks = Math.max(0, config().getInt("round_countdown", 3)) * 20;
+            buildCages();
+            int ticks = Math.max(0, config().getInt("round_countdown", 3)) * 20 + 20;
             timeManager().newTimer(ticks).onTick(20, timer -> {
-                if (token != generation || ending) return;
-                uiManager().title(playerManager().getPlayers(), Component.text(Math.max(1, (timer.remainingTicks()+19)/20), NamedTextColor.YELLOW));
+                if (token != generation || ending || timer.elapsedTicks() < 20 || timer.remainingTicks() <= 0) return;
+                uiManager().playSound(playerManager().getPlayers(), GameSound.of(Sound.BLOCK_NOTE_BLOCK_PLING));
+                uiManager().title(playerManager().getPlayers(), Component.text((timer.remainingTicks()+19)/20, timer.remainingTicks() > 40 ? NamedTextColor.RED : timer.remainingTicks() > 20 ? NamedTextColor.YELLOW : NamedTextColor.GREEN).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));
             }).onFinish(ignored -> {
                 if (token != generation || ending) return;
+                clearCages();
+                for(var p : playerManager().getNonSpectators()) p.setGameMode(GameMode.SURVIVAL);
                 playing = true;
                 world().gamerules().pvp(true);
                 // TODO: Review text and string identifiers below before release.
-                uiManager().title(playerManager().getPlayers(), Component.text("> START <", NamedTextColor.WHITE));
+                uiManager().title(playerManager().getPlayers(), Component.text("> START <", NamedTextColor.WHITE).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));
+                uiManager().playSound(playerManager().getPlayers(), GameSound.of(Sound.ENTITY_ARROW_HIT_PLAYER));
+                uiManager().playSound(playerManager().getPlayers(), GameSound.of(Sound.BLOCK_NOTE_BLOCK_PLING).pitch(2f));
                 current.start();
                 if (microClock == null) microClock = timeManager().newTimer().onTick(20, tick -> {
-                    if (ending) return;
+                    if (ending || !playing) return;
                     if (tick.elapsedTicks() > 0 && --timeLeft <= 0) {
                         if (!overtime && points[0] == points[1] && (current == null || current.beginOvertime())) {
                             overtime = true;
@@ -197,10 +199,7 @@ public final class MicroRush extends GameModule {
                         } else { completeMicrogame(points[0] == points[1] ? -1 : points[0] > points[1] ? 0 : 1); return; }
                     }
                     // TODO: Review text and string identifiers below before release.
-                    timerBar.setTitle(Component.text((overtime ? "Overtime | " : "Time | ") + timeLeft))
-                        // TODO: Review text and string identifiers below before release.
-                        .setProgress(timeLeft / (float)Math.max(1,config().getInt(overtime ? "overtime_time" : "max_round_time",overtime ? 60 : 150)))
-                        .show(playerManager().getOnlinePlayers());
+                    refreshTimerBar();
                 }).start();
                 timeManager().newTimer(60).onFinish(save -> {
                     if (token == generation && playing && !ending) layouts.get(selected).saveAll();
@@ -217,10 +216,18 @@ public final class MicroRush extends GameModule {
         });
     }
 
+    private void refreshTimerBar() {
+                    timerBar.setColor(net.kyori.adventure.bossbar.BossBar.Color.WHITE).setTitle(Component.text(points[0], NamedTextColor.RED).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD).append(Component.text(" | ", NamedTextColor.GRAY)).append(Component.text(String.format("%02d:%02d", timeLeft/60, timeLeft%60), NamedTextColor.WHITE)).append(Component.text(" | ", NamedTextColor.GRAY)).append(Component.text(points[1], NamedTextColor.BLUE).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD)))
+                        // TODO: Review text and string identifiers below before release.
+                        .setProgress(timeLeft / (float)Math.max(1,config().getInt(overtime ? "overtime_time" : "max_round_time",overtime ? 60 : 150)))
+                        .show(playerManager().getOnlinePlayers());
+    }
+
     public void score(int team, boolean resetPoint) {
         // TODO: Every microgame uses the same point target. Crystal Clash keeps its arena until a team reaches it.
         if (!playing || ending || team < 0 || team > 1) return;
         points[team]++;
+        refreshTimerBar();
         for (GamePlayer player : playerManager().getPlayers()) {
             // TODO: Review text and string identifiers below before release.
             uiManager().subtitle(player, Component.text(team(player) == team ? "+ 1 Team scored point! 1 +" : "Enemy scored point!",
@@ -278,7 +285,7 @@ public final class MicroRush extends GameModule {
         current.stop();
         playerManager().getPlayers().forEach(p -> { p.cancelRespawn(); p.setSpectator(true, p.getLocation()); });
         int token = generation;
-        timeManager().newTimer(60).onFinish(ignored -> { if (token == generation) loadPoint(); }).start();
+        timeManager().newTimer(80).onFinish(ignored -> { if (token == generation) loadPoint(); }).start();
     }
 
     private void finish(int winner) {
@@ -297,14 +304,41 @@ public final class MicroRush extends GameModule {
         }
         // TODO: Review text and string identifiers below before release.
         uiManager().subtitle(playerManager().getPlayers(), winner < 0 ? Component.text("No teams remain.") : teams.get(winner).displayName().append(Component.text(" team wins!")));
-        timeManager().newTimer(120).onFinish(ignored -> unload()).start();
+        timeManager().newTimer(240).onFinish(ignored -> unload()).start();
+    }
+
+    private final Map<GameLocation, org.bukkit.block.data.BlockData> cageBlocks = new HashMap<>();
+    private void clearCages() {
+        cageBlocks.forEach((at, block) -> world().setBlock(at, block));
+        cageBlocks.clear();
+    }
+    private void buildCages() {
+        clearCages();
+        for(var p : playerManager().getNonSpectators()) p.setGameMode(GameMode.ADVENTURE);
+        var red = arena.getPoint("red_spawn"); var blue = arena.getPoint("blue_spawn");
+        boolean shared = red.blockX() == blue.blockX() && red.blockY() == blue.blockY() && red.blockZ() == blue.blockZ();
+        for (int team = 0; team < 2; team++) {
+            var spawn = team == 0 ? red : blue;
+            int rx = Math.abs(red.x()-blue.x()) > Math.abs(red.z()-blue.z()) ? 1 : 5;
+            int rz = rx == 1 ? 5 : 1;
+            for (int x=-rx; x<=rx; x++) for(int z=-rz; z<=rz; z++) for(int y=0;y<=2;y++) {
+                if(Math.abs(x)!=rx && Math.abs(z)!=rz && y!=2) continue;
+                var at = new GameLocation(spawn.world(),spawn.blockX()+x,spawn.blockY()+y,spawn.blockZ()+z);
+                var block = world().blockAt(at);
+                if(cageBlocks.containsKey(at)) { block.setType(Material.WHITE_STAINED_GLASS); continue; }
+                if(!block.getType().isAir()) continue;
+                cageBlocks.put(at,block.getBlockData());
+                block.setType(shared ? Material.WHITE_STAINED_GLASS : team==0 ? Material.RED_STAINED_GLASS : Material.LIGHT_BLUE_STAINED_GLASS);
+            }
+        }
     }
 
     private void lobbyPlayer(GamePlayer player) {
         // TODO: Review text and string identifiers below before release.
         player.setSpawnPoint(lobby.getPoint("spawn"));
         // TODO: Review text and string identifiers below before release.
-        player.setSpectator(true, lobby.getPoint("spawn"));
+        player.setSpectator(team(player) < 0, lobby.getPoint("spawn"));
+        if (team(player) >= 0) player.setGameMode(GameMode.ADVENTURE);
     }
 
     private void joinPlayer(GamePlayer player) {

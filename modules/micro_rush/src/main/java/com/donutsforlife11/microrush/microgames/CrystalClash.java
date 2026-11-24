@@ -21,6 +21,16 @@ public final class CrystalClash extends Microgame {
     private final Map<UUID,Integer> crystals = new HashMap<>();
     private final Map<UUID,GameEntity> entities = new HashMap<>();
     private boolean fighting;
+    private final Map<com.donutsforlife11.donutgame.api.map.GameLocation,org.bukkit.block.data.BlockData> barrierBlocks = new HashMap<>();
+    private boolean otherSide(GamePlayer player,com.donutsforlife11.donutgame.api.map.GameLocation at) {
+        var own=spawn(game.team(player));var enemy=spawn(1-game.team(player));
+        return distance(at,enemy)<distance(at,own);
+    }
+    private void clearBarrier() {
+        barrierBlocks.forEach((at,data) -> game.world().setBlock(at,data));barrierBlocks.clear();
+    }
+    @Override public void stop() { clearBarrier();super.stop(); }
+
     // TODO: Review text and string identifiers below before release.
     public CrystalClash(MicroRush game, GameMap map) { super(game,map,"crystal_clash"); }
     // TODO: Review text and string identifiers below before release.
@@ -33,15 +43,25 @@ public final class CrystalClash extends Microgame {
         // TODO: Review text and string identifiers below before release.
         game.uiManager().gameMessage(game.playerManager().getPlayers(),Component.text(defense + " seconds to build your defenses!"));
         // TODO: Review text and string identifiers below before release.
-        for (String barrier : List.of("objective_c","objective_d")) for (var region : map.getRegions(barrier))
-            // TODO: Review text and string identifiers below before release.
-            game.world().replace(region,Material.AIR,barrier.equals("objective_c") ? Material.RED_STAINED_GLASS : Material.BLUE_STAINED_GLASS);
+        for (String barrier : List.of("objective_c","objective_d")) {
+            var regions = new ArrayList<>(map.getRegions(barrier));
+            var points=map.getPoints(barrier);
+            if(regions.isEmpty() && points.size()>=2) {
+                var first=points.getFirst();var last=points.getLast();
+                regions.add(new com.donutsforlife11.donutgame.api.map.GameRegion(first,new com.donutsforlife11.donutgame.api.map.GameLocation(last.world(),last.x(),Math.max(first.y(),last.y())+5,last.z())));
+            }
+            for(var region : regions) for(int x=region.min().blockX();x<=region.max().blockX();x++) for(int y=region.min().blockY();y<=region.max().blockY();y++) for(int z=region.min().blockZ();z<=region.max().blockZ();z++) {
+                var at=new com.donutsforlife11.donutgame.api.map.GameLocation(region.world(),x,y,z);
+                var block=game.world().blockAt(at);
+                if(!block.getType().isAir()) continue;
+                barrierBlocks.put(at,block.getBlockData());
+                block.setType(barrier.equals("objective_c") ? Material.RED_STAINED_GLASS : Material.BLUE_STAINED_GLASS);
+            }
+        }
         after(defense*20, () -> {
             fighting = true;
             // TODO: Review text and string identifiers below before release.
-            for (String barrier : List.of("objective_c","objective_d")) for (var region : map.getRegions(barrier))
-                // TODO: Review text and string identifiers below before release.
-                game.world().replace(region,barrier.equals("objective_c") ? Material.RED_STAINED_GLASS : Material.BLUE_STAINED_GLASS,Material.AIR);
+            clearBarrier();
             game.world().gamerules().pvp(true);
             // TODO: Review text and string identifiers below before release.
             game.uiManager().gameMessage(game.playerManager().getPlayers(),Component.text("Defense period is now over! Fight!"));
@@ -84,7 +104,7 @@ public final class CrystalClash extends Microgame {
     }
     @Override public void move(GameEvent<PlayerMoveEvent> event) {
         super.move(event);
-        if (fighting && enemyHalf(event.getPlayer(),event.getTo())) event.getPlayer().kill();
+        if (!fighting && otherSide(event.getPlayer(),event.getTo())) event.setTo(event.getFrom());
     }
     @Override public void breakBlock(GameEvent<BlockBreakEvent> event) {
         String name = event.getBlock().getType().name();
@@ -93,6 +113,6 @@ public final class CrystalClash extends Microgame {
     }
     @Override public void placeBlock(GameEvent<BlockPlaceEvent> event) {
         // TODO: Review text and string identifiers below before release.
-        event.setCancelled(!map.getRegion("arena").contains(event.getBlockPlaced().getLocation()) || enemyHalf(event.getPlayer(),event.getBlockPlaced().getLocation()));
+        event.setCancelled(!map.getRegion("arena").contains(event.getBlockPlaced().getLocation()) || otherSide(event.getPlayer(),event.getBlockPlaced().getLocation()));
     }
 }

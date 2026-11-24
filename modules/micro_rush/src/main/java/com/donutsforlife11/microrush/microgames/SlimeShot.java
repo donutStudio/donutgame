@@ -34,20 +34,22 @@ public final class SlimeShot extends Microgame {
         ball.setAttributeBase(Attribute.SCALE,2);
         // TODO: Review text and string identifiers below before release.
         ball.setAttributeBase(Attribute.BOUNCINESS, Math.clamp(game.config().getDouble("microgames.slime_shot.bounciness",0.1),0,1));
-        ball.setInvulnerable(true); ball.setGlowing(true);
+        ball.setInvulnerable(false); ball.setGlowing(true);
         every(2, () -> {
             // TODO: Review text and string identifiers below before release.
-            if (ball.isDead() || !map.getRegion("arena").contains(ball.getLocation())) { game.restartPoint(); return; }
+            if (ball.isDead()) { game.restartPoint(); return; }
             // TODO: Review text and string identifiers below before release.
-            for (int team = 0; team < 2; team++) if (map.getRegion(team==0 ? "objective_a" : "objective_b").contains(ball.getLocation())) {
+            for (int team = 0; team < 2; team++) if (nearGoal(ball.getLocation(),team,1.5)) {
                 game.score(1-team,true); return;
             }
+            if (!map.getRegion("arena").contains(ball.getLocation())) { game.restartPoint(); return; }
             // TODO: Review text and string identifiers below before release.
             for (var pad : map.getPoints("objective_c")) if (distance(ball.getLocation(),pad) <= 1.7*1.7)
                 ball.setVelocity(ball.getVelocity().setY(1));
         });
         every(20, () -> { if (!ball.isDead()) game.world().particle(Particle.HAPPY_VILLAGER,ball.getLocation(),3); });
     }
+    @Override public void damage(GameEvent<org.bukkit.event.entity.EntityDamageEvent> event) { event.setCancelled(true); }
     @Override public void attack(GameEvent<PrePlayerAttackEntityEvent> event) {
         if (ball == null || !event.getAttacked().uuid().equals(ball.uuid())) return;
         event.setCancelled(true);

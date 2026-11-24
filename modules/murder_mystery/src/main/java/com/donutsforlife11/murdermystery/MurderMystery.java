@@ -125,7 +125,7 @@ public final class MurderMystery extends GameModule {
             // TODO: Review text and string identifiers below before release.
             .addEntry(SidebarEntry.time("Meeting", () -> (phase == Phase.MEETING ? meetingTime : 0) * 20))
             // TODO: Review text and string identifiers below before release.
-            .addEntry(SidebarEntry.custom(player -> Component.text(showKillClock(player) ? "Kill | " + time(killClock(player)) : "", NamedTextColor.RED)))
+            .addEntry(SidebarEntry.blank()).addEntry(SidebarEntry.time("Kill", player -> showKillClock(player) ? killClock(player) * 20 : 0))
             .show();
     }
 
@@ -287,7 +287,7 @@ public final class MurderMystery extends GameModule {
     }
 
     private void checkWin() {
-        if (participants.size() < 2) return;
+        if (participants.size() < 2 && !alive.isEmpty()) return;
         if (phase == Phase.WAITING || phase == Phase.ENDING) return;
         long remaining = alive.stream().filter(monsters::contains).count();
         if (remaining > 0 && alive.size() > remaining) return;
@@ -308,7 +308,7 @@ public final class MurderMystery extends GameModule {
         uiManager().subtitle(playerManager().getPlayers(), Component.text(monstersWon ? "Monsters win!" : "Innocents win!"));
         // TODO: Review text and string identifiers below before release.
         message("Monsters: " + participants.stream().filter(monsters::contains).map(playerManager()::getPlayer).filter(Objects::nonNull).map(GamePlayer::name).reduce((a,b) -> a + ", " + b).orElse("None"));
-        timeManager().newTimer(120).onFinish(ignored -> unload()).start();
+        timeManager().newTimer(240).onFinish(ignored -> unload()).start();
     }
 
     @GameEventHandler public void damage(GameEvent<EntityDamageEvent> event) {
@@ -387,6 +387,6 @@ public final class MurderMystery extends GameModule {
     static boolean marked(GameItem item, String marker) {
         // TODO: These tags belong to this game and stay in Minecraft's custom_data component.
         // TODO: Review text and string identifiers below before release.
-        return item != null && Pattern.compile("[\\\"']?murder_mystery:" + marker + "[\\\"']?\\s*:\\s*1b?").matcher(item.getItemMeta().getAsString()).find();
+        return item != null && item.hasFlag("murder_mystery", marker);
     }
 }

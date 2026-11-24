@@ -180,6 +180,11 @@ public final class GameWorld extends PaperWorldMethods {
         particle(particle, location, count, 0.3, 0.3, 0.3, 0, null);
     }
 
+    public void visualLightning(GameLocation location) {
+        var target = toBukkit(location);
+        target.getWorld().strikeLightningEffect(target);
+    }
+
     public GameNpc newNpc(GameLocation location) {
         return newNpc(location, (PlayerProfile) null);
     }

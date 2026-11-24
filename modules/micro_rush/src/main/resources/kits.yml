@@ -1,6 +1,6 @@
 slime_shot:
   hotbar:
-    0: 'netherite_sword[unbreakable={},enchantments={knockback:2},attribute_modifiers=[{id:"micro_rush:slime_shot_speed",amount:-0.7,operation:"add_value",type:"minecraft:attack_speed",slot:"mainhand"}],custom_name={text:"Slime Smasher",color:"green",bold:true,italic:false}]'
+    0: 'netherite_sword[unbreakable={},enchantments={knockback:2},custom_name={text:"Slime Smasher",color:"green",bold:true,italic:false}]'
   armor:
     feet: 'leather_boots[unbreakable={},custom_data={"donutgame:team_sync":1b}]'
 king_kong_kombo:

@@ -63,6 +63,17 @@ public final class GamePlayer implements GameEntityBase {
     private Supplier<Collection<GamePlayer>> spectatablePlayers;
     private Supplier<Collection<GameTeam>> spectatableTeams = List::of;
     private Scoreboard previousScoreboard;
+    private PlayerProfile originalSkin;
+    public void setSkin(PlayerProfile skin) {
+        Player player = attachedPlayer();
+        if(player == null) return;
+        if(originalSkin == null) originalSkin = player.getPlayerProfile().clone();
+        var changed = player.getPlayerProfile().clone();
+        changed.clearProperties();
+        changed.setProperties(skin.getProperties());
+        player.setPlayerProfile(changed);
+    }
+
 
     GamePlayer(GameModule module, UUID uuid) {
         this.module = module;
@@ -859,6 +870,8 @@ public final class GamePlayer implements GameEntityBase {
     }
 
     void detachAfterWorldExit(Player player) {
+        if(originalSkin != null && player != null) player.setPlayerProfile(originalSkin);
+        originalSkin = null;
         cancelRespawn();
         pendingDeathSpectatorLocation = null;
         closeSpectatorSession(player);
@@ -944,7 +957,10 @@ public final class GamePlayer implements GameEntityBase {
         Player player = attachedPlayer();
         if (player != null && player.isDead()) {
             pendingDeathSpectatorLocation = location == null ? locationOrSpawn() : location;
-
+            Bukkit.getScheduler().runTask(JavaPlugin.getPlugin(Donutgame.class), () -> {
+                Player current = attachedPlayer();
+                if (module.acceptsLiveOperations() && pendingDeathSpectatorLocation != null && current != null && current.isDead()) current.spigot().respawn();
+            });
             return;
         }
         pendingDeathSpectatorLocation = null;

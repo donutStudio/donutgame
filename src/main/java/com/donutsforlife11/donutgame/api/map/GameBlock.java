@@ -66,6 +66,10 @@ public final class GameBlock extends PaperBlockMethods {
         state.update(true, false);
     }
 
+    public void setSkullProfile(com.destroystokyo.paper.profile.PlayerProfile profile) {
+        editState(org.bukkit.block.Skull.class, skull -> skull.setPlayerProfile(profile));
+    }
+
     public void clearInventory() {
         editState(Container.class, container -> container.getSnapshotInventory().clear());
     }
