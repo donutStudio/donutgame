@@ -64,6 +64,20 @@ val verifyPersistence by tasks.registering(JavaExec::class) {
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("com.donutsforlife11.donutgame.api.storage.PersistenceChecks")
 }
+val verifyPackagedPersistence by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Exercise SQLite and relocated Gson from the deployable jar."
+    dependsOn(tasks.shadowJar, tasks.testClasses)
+    classpath = files(tasks.shadowJar.flatMap { it.archiveFile }, sourceSets.test.get().output) +
+        (sourceSets.test.get().runtimeClasspath - sourceSets.main.get().output)
+    mainClass.set("com.donutsforlife11.donutgame.api.storage.PersistenceChecks")
+}
+val verifyItemNotation by tasks.registering(JavaExec::class) {
+    group = "verification"
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.donutsforlife11.donutgame.api.item.ItemNotationChecks")
+}
 tasks.test {
     // The small state suite uses a Java main; no test engine or server is needed.
     failOnNoDiscoveredTests.set(false)
@@ -169,6 +183,8 @@ tasks {
 
     check {
         dependsOn(checkModuleApiBoundary)
+        dependsOn(verifyPackagedPersistence)
+        dependsOn(verifyItemNotation)
     }
 }
 

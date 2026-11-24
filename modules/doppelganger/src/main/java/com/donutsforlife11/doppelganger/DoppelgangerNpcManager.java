@@ -65,17 +65,27 @@ final class DoppelgangerNpcManager {
         var region = game.world().getRegion("town");
         if (region == null) {
             // TODO: Review text and string identifiers below before release.
-            if (targets.isEmpty()) throw new IllegalStateException("Doppelganger needs a town region or npc_target points.");
+            if (targets.isEmpty()) {
+                game.logWarning("No town region or npc_target points; NPCs will use spawn points.");
+                targets.addAll(game.spawns());
+            }
             return;
         }
         // TODO: Review text and string identifiers below before release.
-        if (region.blockVolume() > 262144) throw new IllegalStateException("The town scanning region must contain at most 262144 blocks; use npc_target points for larger maps.");
+        if (region.blockVolume() > 262144) {
+            game.logWarning("Town region is too large to scan; using npc_target or spawn points.");
+            if (targets.isEmpty()) targets.addAll(game.spawns());
+            return;
+        }
         Set<Material> workstations = new HashSet<>();
         // TODO: Review text and string identifiers below before release.
         for (String value : game.config().getStringList("npc.target_blocks")) {
             Material block = Material.matchMaterial(value);
             // TODO: Review text and string identifiers below before release.
-            if (block == null) throw new IllegalArgumentException("Unknown NPC workstation " + value);
+            if (block == null) {
+                game.logWarning("Ignoring unknown NPC workstation " + value);
+                continue;
+            }
             workstations.add(block);
         }
         for (int x = region.min().blockX(); x <= region.max().blockX(); x++) {

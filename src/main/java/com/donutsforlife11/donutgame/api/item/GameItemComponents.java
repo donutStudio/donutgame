@@ -213,16 +213,15 @@ public final class GameItemComponents {
         if (item == null) {
             return false;
         }
-        Byte value = item.getPersistentDataContainer().get(component.key(), component.type());
-        if (value != null) {
-            return value != 0;
+        var data = item.getPersistentDataContainer();
+        // TODO: Paper throws on mismatched reads; item notation and older kits may store flags as integers.
+        if (data.has(component.key(), PersistentDataType.BYTE)) {
+            return data.get(component.key(), PersistentDataType.BYTE) != 0;
         }
-        Boolean legacyBoolean = item.getPersistentDataContainer().get(component.key(), PersistentDataType.BOOLEAN);
-        if (legacyBoolean != null) {
-            return legacyBoolean;
+        if (data.has(component.key(), PersistentDataType.INTEGER)) {
+            return data.get(component.key(), PersistentDataType.INTEGER) != 0;
         }
-        Integer legacyInteger = item.getPersistentDataContainer().get(component.key(), PersistentDataType.INTEGER);
-        return legacyInteger != null && legacyInteger != 0;
+        return false;
     }
 
     private static boolean hasExplicitItemName(ItemStack item) {

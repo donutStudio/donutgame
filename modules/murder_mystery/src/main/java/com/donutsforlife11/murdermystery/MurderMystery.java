@@ -61,8 +61,9 @@ public final class MurderMystery extends GameModule {
         // TODO: Review text and string identifiers below before release.
         kits = data().config("kits.yml");
         List<GamePlayer> players = new ArrayList<>(playerManager().getNonSpectators());
+        if (players.size() < 2) logWarning("Solo practice: opposing-role win checks and kill timer are disabled.");
         // TODO: Review text and string identifiers below before release.
-        if (players.size() < 2) throw new IllegalStateException("Murder Mystery needs at least two players.");
+
         Collections.shuffle(players);
         // TODO: Review text and string identifiers below before release.
         monsterTeam = teamManager().newTeam().setTeamGlow(config().getBoolean("show_other_monsters", true))
@@ -72,7 +73,7 @@ public final class MurderMystery extends GameModule {
         innocentTeam = teamManager().newTeam().setTeamGlow(false).setFriendlyFire(false)
             .setNametagVisibility(OptionStatus.NEVER).setSeeFriendlyInvisibles(false);
         // TODO: Review text and string identifiers below before release.
-        int count = Math.clamp(config().getInt("monster_count", 1), 1, players.size()-1);
+        int count = Math.clamp(config().getInt("monster_count", 1), 0, Math.max(0,players.size() == 1 ? 1 : players.size()-1));
         // TODO: Review text and string identifiers below before release.
         List<String> enabled = config().getStringList("perks");
         // TODO: Review text and string identifiers below before release.
@@ -286,6 +287,7 @@ public final class MurderMystery extends GameModule {
     }
 
     private void checkWin() {
+        if (participants.size() < 2) return;
         if (phase == Phase.WAITING || phase == Phase.ENDING) return;
         long remaining = alive.stream().filter(monsters::contains).count();
         if (remaining > 0 && alive.size() > remaining) return;
@@ -371,7 +373,7 @@ public final class MurderMystery extends GameModule {
     boolean meeting() { return phase == Phase.MEETING; }
     boolean isMonster(GamePlayer player) { return monsters.contains(player.uuid()); }
     // TODO: Review text and string identifiers below before release.
-    private int killTime() { return Math.max(0, config().getInt("kill_time", 75)); }
+    private int killTime() { return participants.size() < 2 ? 0 : Math.max(0, config().getInt("kill_time", 75)); }
     // TODO: Review text and string identifiers below before release.
     private int killClock(GamePlayer player) { return config().getBoolean("shared_kill_time", true) ? sharedKillClock : killClocks.getOrDefault(player.uuid(), 0); }
     // TODO: Review text and string identifiers below before release.

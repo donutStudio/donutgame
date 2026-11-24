@@ -17,7 +17,7 @@ import org.bukkit.persistence.PersistentDataType;
 
 final class ItemNotation {
     private static final Pattern CUSTOM_DATA_ENTRY_PATTERN =
-        Pattern.compile("\"?([A-Za-z0-9_.-]+:[A-Za-z0-9_./-]+)\"?\\s*:\\s*(true|false|-?\\d+)");
+        Pattern.compile("\"?([A-Za-z0-9_.-]+:[A-Za-z0-9_./-]+)\"?\\s*:\\s*(true|false|-?\\d+[bB]?)(?=\\s*(?:,|$))");
     private static final NamespacedKey TEMPORARY_LOOT_TABLE_KEY = new NamespacedKey("donutgame", "temporary_loot_pool");
 
     private ItemNotation() {
@@ -144,6 +144,8 @@ final class ItemNotation {
     private static void setPersistentValue(PersistentDataContainer data, NamespacedKey key, String rawValue) {
         if ("true".equalsIgnoreCase(rawValue) || "false".equalsIgnoreCase(rawValue)) {
             data.set(key, PersistentDataType.BYTE, (byte) (Boolean.parseBoolean(rawValue) ? 1 : 0));
+        } else if (rawValue.endsWith("b") || rawValue.endsWith("B")) {
+            data.set(key, PersistentDataType.BYTE, Byte.parseByte(rawValue.substring(0, rawValue.length() - 1)));
         } else {
             data.set(key, PersistentDataType.INTEGER, Integer.parseInt(rawValue));
         }

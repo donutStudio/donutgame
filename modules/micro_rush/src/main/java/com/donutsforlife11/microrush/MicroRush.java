@@ -33,6 +33,7 @@ public final class MicroRush extends GameModule {
     private Microgame current;
     private String selected;
     private boolean playing, ending;
+    private boolean soloTesting;
     private boolean overtime;
     private com.donutsforlife11.donutgame.api.time.GameTimer microClock;
     private com.donutsforlife11.donutgame.api.ui.GameBossbar timerBar;
@@ -63,15 +64,20 @@ public final class MicroRush extends GameModule {
         // TODO: Review text and string identifiers below before release.
         for (String id : new LinkedHashSet<>(config().getStringList("active_games"))) {
             // TODO: Review text and string identifiers below before release.
-            if (!Set.of("slime_shot","king_kong_kombo","crystal_clash","terror_tower","sniper_showdown","boom_ball").contains(id))
-                // TODO: Review text and string identifiers below before release.
-                throw new IllegalArgumentException("Unknown Micro Rush microgame " + id);
+            if (!Set.of("slime_shot","king_kong_kombo","crystal_clash","terror_tower","sniper_showdown","boom_ball").contains(id)) {
+                logWarning("Skipping unknown Micro Rush microgame " + id);
+                continue;
+            }
             // TODO: Review text and string identifiers below before release.
             List<String> maps = config().getStringList("microgames." + id + ".maps");
             // TODO: Review text and string identifiers below before release.
-            if (maps.isEmpty()) throw new IllegalArgumentException("Configure at least one schematic submap for " + id);
-            // TODO: Review text and string identifiers below before release.
-            for (String map : maps) if (lobby.getSubmap(map) == null) throw new IllegalArgumentException("Missing Micro Rush submap " + map);
+            List<String> available = maps.stream().filter(map -> lobby.getSubmap(map) != null).toList();
+            if (available.size() != maps.size()) logWarning("Ignoring missing submaps for " + id + ": " + maps);
+            if (available.isEmpty()) {
+                logWarning("Skipping " + id + ": no available schematic submaps.");
+                continue;
+            }
+            config().set("microgames." + id + ".maps", available);
             enabled.add(id);
             layouts.put(id, new InventoryLayouts(this, id));
         }
@@ -83,7 +89,8 @@ public final class MicroRush extends GameModule {
         teams.add(teamManager().newTeam().setColor(NamedTextColor.BLUE).setDisplayName(Component.text("Blue", NamedTextColor.BLUE)));
         var players = new ArrayList<>(playerManager().getNonSpectators());
         // TODO: Review text and string identifiers below before release.
-        if (players.size() < 2) throw new IllegalStateException("Micro Rush needs at least two players.");
+        soloTesting = players.size() < 2;
+        if (soloTesting) logWarning("Solo practice: empty opposing teams will not end the game.");
         Collections.shuffle(players);
         for (int i = 0; i < players.size(); i++) {
             teams.get(i % 2).addPlayer(players.get(i));
@@ -332,7 +339,7 @@ public final class MicroRush extends GameModule {
         player.setSpectator(true);
         if (playing && current != null) current.quit(player);
         var present = java.util.stream.IntStream.range(0,2).filter(i -> teams.get(i).getPlayers().stream().anyMatch(p -> p.isOnline() && !disconnected.contains(p.uuid()))).boxed().toList();
-        if (hasStarted() && present.size() <= 1) finish(present.isEmpty() ? -1 : present.getFirst());
+        if (hasStarted() && (present.isEmpty() || !soloTesting && present.size() == 1)) finish(present.isEmpty() ? -1 : present.getFirst());
     }
     @GameEventHandler public void death(GameEvent<PlayerDeathEvent> event) {
         event.clearDrops(); event.setKeepInventory(true); event.setDroppedExp(0);
@@ -385,6 +392,7 @@ public final class MicroRush extends GameModule {
     public int team(GamePlayer player) { return teams.indexOf(player.getTeam()); }
     public GameTeam team(int index) { return teams.get(index); }
     // TODO: Review text and string identifiers below before release.
+    public boolean soloTesting() { return soloTesting; }
     public int winTarget() { return Math.max(1, config().getInt("wins_required", 3)); }
     public boolean playing(Microgame game) { return playing && !ending && current == game; }
     public void prepareLayout(GamePlayer player) { layouts.get(selected).prepare(player); }

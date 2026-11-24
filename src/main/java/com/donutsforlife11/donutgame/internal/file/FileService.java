@@ -205,7 +205,9 @@ public class FileService {
                         submapRuntimeFolder,
                         sourceName + ":" + submapFileName
                     );
-                    submaps.put(submap.id(), submap);
+                    if (submaps.putIfAbsent(submap.id(), submap) != null) {
+                        throw new IllegalStateException("Map " + sourceName + " contains duplicate submap id '" + submap.id() + "'.");
+                    }
                     continue;
                 }
                 if (!entryName.contains("/") && isMapAsset(entryName)) {

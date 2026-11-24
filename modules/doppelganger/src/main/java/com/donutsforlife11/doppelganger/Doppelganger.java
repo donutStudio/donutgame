@@ -26,6 +26,7 @@ public final class Doppelganger extends GameModule {
     private DoppelgangerNpcManager npcs;
     private GameTimer clock;
     private boolean running, ending;
+    private boolean soloTesting;
     private int kills, goal, remaining;
 
     @Override public void onLoad() {
@@ -40,10 +41,11 @@ public final class Doppelganger extends GameModule {
         world().gamerules().spawnMobs(false);
         var players = new ArrayList<>(playerManager().getNonSpectators());
         // TODO: Review text and string identifiers below before release.
-        if (players.size() < 2) throw new IllegalStateException("Doppelganger needs at least two players.");
+        soloTesting = players.size() < 2;
+        if (soloTesting) logWarning("Solo practice: opposing-role win checks are disabled.");
         Collections.shuffle(players);
         // TODO: Review text and string identifiers below before release.
-        int sheriffCount = Math.clamp(config().getInt("sheriff_count", 1), 1, players.size()-1);
+        int sheriffCount = Math.clamp(config().getInt("sheriff_count", 1), 0, Math.max(0, players.size() == 1 ? 1 : players.size()-1));
         var citizens = teamManager().newTeam().setTeamGlow(false).setNametagVisibility(OptionStatus.NEVER)
             .setSeeFriendlyInvisibles(false).setCollisionRule(OptionStatus.NEVER).setFriendlyFire(true);
         for (int i = 0; i < players.size(); i++) {
@@ -63,7 +65,7 @@ public final class Doppelganger extends GameModule {
         npcs = new DoppelgangerNpcManager(this);
         npcs.createCrowd(players);
         // TODO: Review text and string identifiers below before release.
-        goal = Math.clamp(config().getInt("kill_goal", Math.max(1, npcs.botCount()/2)), 1, npcs.botCount());
+        goal = Math.clamp(config().getInt("kill_goal", Math.max(1, npcs.botCount()/2)), 1, Math.max(1,npcs.botCount()));
         // TODO: Review text and string identifiers below before release.
         remaining = Math.max(1, config().getInt("game_duration", 300));
         uiManager().newSidebar().setRefreshInterval(20)
@@ -148,6 +150,11 @@ public final class Doppelganger extends GameModule {
     }
 
     private void checkWin() {
+        // TODO: Solo sessions can exercise NPCs without an absent opposing role immediately winning.
+        if (soloTesting) {
+            if (running && !ending && (kills >= goal || alive.isEmpty())) finish(false);
+            return;
+        }
         if (!running || ending) return;
         if (alive.stream().noneMatch(id -> !sheriffs.contains(id))) finish(true);
         else if (kills >= goal || alive.stream().noneMatch(sheriffs::contains)) finish(false);

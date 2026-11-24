@@ -109,14 +109,38 @@ public final class DonutgameBootstrap implements PluginBootstrap {
             if (!extractDatapack(directory, packFolder, moduleId)) {
                 return;
             }
-            registrar.discoverPack(packFolder, packId, configurer -> configurer
+            var discovered = registrar.discoverPack(packFolder, packId, configurer -> configurer
                 .title(Component.text("Donutgame " + moduleId))
                 .autoEnableOnServerStart(true)
                 .position(false, Datapack.Position.TOP)
             );
+            if (discovered != null) {
+                try {
+                    cacheBootstrapTitle(discovered, "Donutgame " + moduleId);
+                } catch (ReflectiveOperationException exception) {
+                    registrar.removeDiscoveredPack(discovered.getName());
+                    throw new IOException("Could not prepare registry-independent datapack title", exception);
+                }
+            }
         } catch (IOException | IllegalArgumentException exception) {
             context.getLogger().warn("Failed to discover module datapack " + moduleJar + ": " + exception.getMessage());
         }
+    }
+
+    private static void cacheBootstrapTitle(io.papermc.paper.datapack.DiscoveredDatapack discovered, String text)
+        throws ReflectiveOperationException {
+        // TODO: Paper 26.2 wraps titles lazily, but Pack.equals converts them before CraftRegistry exists.
+        // TODO: Cache a native literal for this plain title; remove this workaround when upstream fixes bootstrap conversion.
+        var packField = discovered.getClass().getDeclaredField("pack");
+        packField.setAccessible(true);
+        Object pack = packField.get(discovered);
+        Object title = pack.getClass().getMethod("getTitle").invoke(pack);
+        if (!title.getClass().getName().equals("io.papermc.paper.adventure.AdventureComponent")) return;
+        Class<?> component = Class.forName("net.minecraft.network.chat.Component");
+        Object literal = component.getMethod("literal", String.class).invoke(null, text);
+        var vanilla = title.getClass().getDeclaredField("vanilla");
+        vanilla.setAccessible(true);
+        vanilla.set(title, literal);
     }
 
     private String readModuleId(Path moduleJar) throws IOException {

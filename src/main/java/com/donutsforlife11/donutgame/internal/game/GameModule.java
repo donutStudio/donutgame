@@ -303,6 +303,10 @@ public abstract class GameModule {
         plugin.getLogger().info("[" + id + ":" + index + "] " + message);
     }
 
+    public final void logWarning(String message) {
+        plugin.getLogger().warning("[" + id + ":" + index + "] " + message);
+    }
+
     public final void logError(String message, Throwable throwable) {
         plugin.getLogger().log(Level.SEVERE, "[" + id + ":" + index + "] " + message, throwable);
     }

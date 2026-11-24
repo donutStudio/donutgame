@@ -17,9 +17,10 @@ public final class SniperShowdown extends Microgame {
     @Override protected void effects(GamePlayer player) { player.addEffect(PotionEffectType.WIND_CHARGED,-1,2,true); }
     @Override public void start() { game.team(0).setFriendlyFire(false); game.team(1).setFriendlyFire(false); }
     @Override public void lateJoin(GamePlayer player) { player.setSpectator(true,spawn(game.team(player))); }
-    @Override public void death(GamePlayer player) { after(1,this::checkTeams); }
+    @Override public void death(GamePlayer player) { if (game.soloTesting()) super.death(player); else after(1,this::checkTeams); }
     @Override public void quit(GamePlayer player) { after(1,this::checkTeams); }
     private void checkTeams() {
+        if (game.soloTesting()) return;
         boolean red = game.team(0).getNonSpectators().stream().anyMatch(GamePlayer::isOnline);
         boolean blue = game.team(1).getNonSpectators().stream().anyMatch(GamePlayer::isOnline);
         // TODO: Simultaneous eliminations replay the point. Every new point restores health, kits and ammunition.

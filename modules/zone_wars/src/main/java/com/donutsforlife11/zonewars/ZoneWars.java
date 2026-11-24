@@ -37,9 +37,12 @@ public final class ZoneWars extends GameModule {
     private GameBossbar bossbar;
     private GameTimer clock;
     private boolean running, ending, overtime;
+    private boolean soloTesting;
     private int remaining;
 
     @Override public void onLoad() {
+        soloTesting = playerManager().getNonSpectators().size() < 2;
+        if (soloTesting) logWarning("Solo practice: empty opposing teams will not end the game.");
         // TODO: Review text and string identifiers below before release.
         require(!spawns().isEmpty(), "spawn point(s)");
         // TODO: Review text and string identifiers below before release.
@@ -216,6 +219,7 @@ public final class ZoneWars extends GameModule {
     }
 
     private void checkAlive() {
+        if (soloTesting && !playerManager().getOnlinePlayers().isEmpty()) return;
         if (!running || ending) return;
         var alive = scores.keySet().stream().filter(team -> team.getPlayers().stream()
             .anyMatch(p -> p.isOnline() && (!p.isSpectator() || players.respawning(p) || p.respawnTimer() != null))).toList();
