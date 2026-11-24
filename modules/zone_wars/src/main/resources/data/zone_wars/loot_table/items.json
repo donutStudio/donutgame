@@ -50,6 +50,7 @@
         },
         {
           "type": "minecraft:loot_table",
+          "weight": 1,
           "value": {
             "pools": [
               {

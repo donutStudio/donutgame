@@ -24,6 +24,7 @@ import com.donutsforlife11.donutgame.internal.game.GameScope;
 
 public final class GameNpcController {
     private final GameNpc npc;
+    private PathfindingMode pathfindingMode = PathfindingMode.DEFAULT;
     private final PathfindSettings settings = new PathfindSettings();
     private List<GameLocation> route = List.of();
     private int waypoint;
@@ -46,6 +47,9 @@ public final class GameNpcController {
     GameNpcController(GameNpc npc) {
         this.npc = npc;
     }
+
+    public void setPathfindingMode(PathfindingMode mode) { pathfindingMode = Objects.requireNonNull(mode); }
+    public PathfindingMode pathfindingMode() { return pathfindingMode; }
 
     public void moveTo(GameLocation location) {
         navigate(List.of(Objects.requireNonNull(location, "location")), null, false);
@@ -283,6 +287,14 @@ public final class GameNpcController {
         if (!navigating) {
             return;
         }
+        if (pathfindingMode == PathfindingMode.ROUNDED) {
+            while (waypoint + 1 < route.size()) {
+                GameLocation point = route.get(waypoint);
+                if (Math.hypot(point.x() - position.getX(), point.z() - position.getZ()) > 0.35
+                    || Math.abs(point.y() - position.getY()) > 0.2) break;
+                waypoint++;
+            }
+        }
         GameLocation next = route.get(waypoint);
         double dx = next.x() - position.getX();
         double dy = next.y() - position.getY();
@@ -396,6 +408,7 @@ public final class GameNpcController {
                     path.add(node.location());
                 }
                 Collections.reverse(path);
+                if (pathfindingMode == PathfindingMode.ROUNDED) path = roundPath(path);
                 collisionShapes.clear();
                 return List.copyOf(path);
             }
@@ -427,6 +440,65 @@ public final class GameNpcController {
         }
         collisionShapes.clear();
         return List.of();
+    }
+
+    private List<GameLocation> roundPath(List<GameLocation> path) {
+        List<GameLocation> corners = new ArrayList<>();
+        corners.add(npc.getLocation());
+        // RODO: Merge straight runs so turns can sweep over several blocks rather than every A* cell.
+        for (int i = 0; i < path.size(); i++) {
+            GameLocation previous = corners.getLast(), current = path.get(i);
+            if (i + 1 < path.size()) {
+                GameLocation next = path.get(i + 1);
+                double ax = current.x() - previous.x(), az = current.z() - previous.z();
+                double bx = next.x() - current.x(), bz = next.z() - current.z();
+                if (Math.abs(previous.y() - current.y()) < 0.001 && Math.abs(current.y() - next.y()) < 0.001
+                    && Math.abs(ax * bz - az * bx) < 0.001 && ax * bx + az * bz > 0) continue;
+            }
+            corners.add(current);
+        }
+        List<GameLocation> rounded = new ArrayList<>();
+        rounded.add(corners.getFirst());
+        for (int i = 1; i + 1 < corners.size(); i++) {
+            GameLocation before = corners.get(i - 1), corner = corners.get(i), after = corners.get(i + 1);
+            double incoming = Math.hypot(corner.x() - before.x(), corner.z() - before.z());
+            double outgoing = Math.hypot(after.x() - corner.x(), after.z() - corner.z());
+            if (incoming < 0.01 || outgoing < 0.01 || Math.abs(before.y() - corner.y()) > 0.001 || Math.abs(after.y() - corner.y()) > 0.001) {
+                rounded.add(corner);
+                continue;
+            }
+            double radius = Math.min(1.8, Math.min(incoming, outgoing) * 0.45);
+            GameLocation entry = interpolate(corner, before, radius / incoming);
+            GameLocation exit = interpolate(corner, after, radius / outgoing);
+            rounded.add(entry);
+            int samples = Math.max(4, (int) Math.ceil(radius * 8));
+            for (int sample = 1; sample <= samples; sample++) {
+                double t = sample / (double) samples;
+                rounded.add(interpolate(interpolate(entry, corner, t), interpolate(corner, exit, t), t));
+            }
+        }
+        rounded.add(corners.getLast());
+        // RODO: Validate the full hitbox along every segment; tight corners retain the original safe route.
+        GameLocation previous = rounded.getFirst();
+        for (GameLocation next : rounded.subList(1, rounded.size())) {
+            double length = Math.hypot(next.x() - previous.x(), next.z() - previous.z());
+            int samples = Math.max(1, (int) Math.ceil(length / 0.2));
+            GameLocation step = previous;
+            for (int sample = 1; sample <= samples; sample++) {
+                GameLocation probe = interpolate(previous, next, sample / (double) samples);
+                double floor = standingHeight(probe.x(), probe.y(), probe.z());
+                if (!Double.isFinite(floor) || Math.abs(floor - probe.y()) > 0.1
+                    || !canTraverse(step.x(), step.y(), step.z(), probe.x(), probe.y(), probe.z())) return path;
+                step = probe;
+            }
+            previous = next;
+        }
+        return List.copyOf(rounded.subList(1, rounded.size()));
+    }
+
+    private GameLocation interpolate(GameLocation a, GameLocation b, double t) {
+        return new GameLocation(npc.world(), a.x() + (b.x() - a.x()) * t,
+            a.y() + (b.y() - a.y()) * t, a.z() + (b.z() - a.z()) * t);
     }
 
     /** Find a safe collision surface under the NPC's footprint, including partial blocks. */

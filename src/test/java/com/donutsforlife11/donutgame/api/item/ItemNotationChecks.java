@@ -31,6 +31,24 @@ public final class ItemNotationChecks {
         if (values.get("donutgame:count")[0] != PersistentDataType.INTEGER || !Integer.valueOf(25).equals(values.get("donutgame:count")[1]))
             throw new AssertionError("Integer custom data must remain an integer");
         if (values.containsKey("donutgame:large")) throw new AssertionError("Do not partially parse unsupported numeric suffixes");
-        System.out.println("Passed byte flag and integer item notation checks.");
+        NamespacedKey fuse = NamespacedKey.fromString("donutgame:auto_ignite");
+        for (var type : new PersistentDataType[]{PersistentDataType.BYTE, PersistentDataType.SHORT, PersistentDataType.INTEGER, PersistentDataType.LONG}) {
+            Number value;
+            if (type == PersistentDataType.BYTE) value = Byte.valueOf((byte)80);
+            else if (type == PersistentDataType.SHORT) value = Short.valueOf((short)80);
+            else if (type == PersistentDataType.INTEGER) value = Integer.valueOf(80);
+            else value = Long.valueOf(80);
+            var data = (PersistentDataContainer) Proxy.newProxyInstance(ItemNotationChecks.class.getClassLoader(),
+                new Class<?>[]{PersistentDataContainer.class}, (proxy, method, arguments) -> {
+                    if (method.getName().equals("has")) return arguments[1] == type;
+                    if (method.getName().equals("get")) {
+                        if (arguments[1] != type) throw new IllegalArgumentException("Wrong NBT numeric type");
+                        return type.getPrimitiveType().cast(value);
+                    }
+                    return null;
+                });
+            if (GameItemComponents.integerValue(data, fuse) != 80) throw new AssertionError("Loot fuse must survive numeric NBT encodings");
+        }
+        System.out.println("Passed byte flag, integer notation, and loot fuse numeric type checks.");
     }
 }

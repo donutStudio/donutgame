@@ -44,6 +44,7 @@ final class DoppelgangerNpcManager {
         npc.controller().pathfindSettings().setRadius(32);
         npc.controller().setNavigationTimeout(300);
         npc.controller().setArrivalDistance(0.25);
+        npc.setPathfindingMode(com.donutsforlife11.donutgame.api.entity.npc.PathfindingMode.ROUNDED);
         return npc;
     }
 
@@ -53,14 +54,16 @@ final class DoppelgangerNpcManager {
         // RODO: Review text and string identifiers below before release.
         var region = game.world().getRegion("town");
         if (region == null) {
-            // RODO: Review text and string identifiers below before release.
-            if (targets.isEmpty()) {
-                game.logWarning("No town region or npc_target points; NPCs will use spawn points.");
-                targets.addAll(game.spawns());
-            }
-            return;
+            List<GameLocation> spawns = game.spawns();
+            double minX = spawns.stream().mapToDouble(GameLocation::x).min().orElse(0) - 16;
+            double maxX = spawns.stream().mapToDouble(GameLocation::x).max().orElse(0) + 16;
+            double minY = spawns.stream().mapToDouble(GameLocation::y).min().orElse(0) - 8;
+            double maxY = spawns.stream().mapToDouble(GameLocation::y).max().orElse(0) + 8;
+            double minZ = spawns.stream().mapToDouble(GameLocation::z).min().orElse(0) - 16;
+            double maxZ = spawns.stream().mapToDouble(GameLocation::z).max().orElse(0) + 16;
+            region = new com.donutsforlife11.donutgame.api.map.GameRegion(
+                new GameLocation(minX, minY, minZ), new GameLocation(maxX, maxY, maxZ));
         }
-        // RODO: Review text and string identifiers below before release.
         if (region.blockVolume() > 262144) {
             game.logWarning("Town region is too large to scan; using npc_target or spawn points.");
             if (targets.isEmpty()) targets.addAll(game.spawns());
@@ -113,9 +116,7 @@ final class DoppelgangerNpcManager {
             if (nearby.isEmpty()) { schedule(npc); return; }
 
             GameLocation destination = nearby.get(ThreadLocalRandom.current().nextInt(nearby.size()));
-            List<GameLocation> path = npc.controller().findPath(destination);
-            if (path.isEmpty()) { schedule(npc); return; }
-            npc.controller().moveAlong(intermediatePoints(npc.getLocation(), path));
+            npc.controller().pathfindTo(destination);
 
         }).start();
     }
@@ -130,22 +131,5 @@ final class DoppelgangerNpcManager {
         stopped = true;
         bots.values().forEach(npc -> npc.controller().cancelNavigation());
     }
-    private List<GameLocation> intermediatePoints(GameLocation start, List<GameLocation> path) {
-        List<GameLocation> result = new ArrayList<>();
-        GameLocation previous = start;
-        for (GameLocation next : path) {
-            int steps = Math.max(1, (int) Math.ceil(Math.sqrt(distance(previous, next)) / 0.75));
-            for (int step = 1; step <= steps; step++) {
-                double fraction = step / (double) steps;
-                result.add(new GameLocation(next.world(),
-                    previous.x() + (next.x() - previous.x()) * fraction,
-                    previous.y() + (next.y() - previous.y()) * fraction,
-                    previous.z() + (next.z() - previous.z()) * fraction));
-            }
-            previous = next;
-        }
-        return result;
-    }
-
     private double distance(GameLocation a, GameLocation b) { return Math.pow(a.x()-b.x(),2)+Math.pow(a.y()-b.y(),2)+Math.pow(a.z()-b.z(),2); }
 }

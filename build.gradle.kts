@@ -72,6 +72,12 @@ val verifyPackagedPersistence by tasks.registering(JavaExec::class) {
         (sourceSets.test.get().runtimeClasspath - sourceSets.main.get().output)
     mainClass.set("com.donutsforlife11.donutgame.api.storage.PersistenceChecks")
 }
+val verifyEntityMechanics by tasks.registering(JavaExec::class) {
+    group = "verification"
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.donutsforlife11.donutgame.api.entity.EntityMechanicsChecks")
+}
 val verifyItemNotation by tasks.registering(JavaExec::class) {
     group = "verification"
     dependsOn(tasks.testClasses)
@@ -185,6 +191,7 @@ tasks {
         dependsOn(checkModuleApiBoundary)
         dependsOn(verifyPackagedPersistence)
         dependsOn(verifyItemNotation)
+        dependsOn(verifyEntityMechanics)
     }
 }
 

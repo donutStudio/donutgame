@@ -169,6 +169,9 @@ public final class GameNpc extends GameEntity {
         return attackCooldown;
     }
 
+    public void setPathfindingMode(PathfindingMode mode) { controller.setPathfindingMode(mode); }
+    public PathfindingMode pathfindingMode() { return controller.pathfindingMode(); }
+
     public GameNpcController controller() {
         return controller;
     }
