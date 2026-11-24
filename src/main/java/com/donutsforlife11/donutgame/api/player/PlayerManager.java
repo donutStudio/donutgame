@@ -54,6 +54,10 @@ public final class PlayerManager {
         if (!acceptsPlayerRegistration()) {
             return CompletableFuture.completedFuture(false);
         }
+        GamePlayer registered = registry.get(player.getUniqueId());
+        if (registered != null && registered.isOnline() && ownsWorld(player.getWorld())) {
+            return CompletableFuture.completedFuture(true);
+        }
         boolean freshSession = !registry.contains(player.getUniqueId());
         World world = GameWorldHandle.requireBukkitWorld(module.world());
         Location destination = world.getSpawnLocation();
@@ -69,7 +73,9 @@ public final class PlayerManager {
             player.setCollidable(module.world().playerCollisionsEnabled());
             GamePlayer gamePlayer = registry.get(player.getUniqueId());
             module.teamManager().syncPlayer(gamePlayer);
-            if (lateJoin && freshSession) {
+            // TODO: Reconnects finish asynchronously too; let the game apply the same join policy after reattachment.
+            boolean reconnect = !freshSession && (module.lifecycleState() == ModuleLifecycleState.COUNTDOWN || module.hasStarted());
+            if (lateJoin && freshSession || reconnect) {
                 applyLateJoinDefaults(player, gamePlayer);
             }
             module.log("Joined player " + player.getName() + " to game world " + world.getName() + ".");
@@ -243,6 +249,9 @@ public final class PlayerManager {
     private void finishExit(Player player, GamePlayer gamePlayer) {
         if (gamePlayer == null) {
             return;
+        }
+        if (module.acceptsLiveOperations()) {
+            Bukkit.getPluginManager().callEvent(new com.donutsforlife11.donutgame.api.event.GamePlayerLeaveEvent(module, gamePlayer));
         }
         var team = module.teamManager().getPlayerTeam(gamePlayer);
         if (team != null) {

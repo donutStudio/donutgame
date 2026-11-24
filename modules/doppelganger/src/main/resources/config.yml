@@ -1,11 +1,15 @@
 id: doppelganger
 main_class: com.donutsforlife11.doppelganger.Doppelganger
 name: Doppelganger
-maps:
-  - orange_hollows
+maps: [orange_hollows]
 sheriff_count: 1
 sheriff_strikes: 3
+game_duration: 300
+attack_cooldown: 2
+disguise_cooldown: 10
+# TODO: Omit kill_goal to require half of the real NPCs, rounded down (at least one).
 npc:
+  # TODO: Total appearances per participant, including player disguises; 4 players * 3 = 12 townspeople.
   npc_per_player: 3
   target_blocks:
     - minecraft:crafting_table
@@ -15,42 +19,5 @@ npc:
     - minecraft:barrel
     - minecraft:lectern
     - minecraft:composter
-  passage_blocks:
-    - minecraft:oak_door
-    - minecraft:spruce_door
-    - minecraft:birch_door
-    - minecraft:jungle_door
-    - minecraft:acacia_door
-    - minecraft:dark_oak_door
-    - minecraft:mangrove_door
-    - minecraft:cherry_door
-    - minecraft:bamboo_door
-    - minecraft:crimson_door
-    - minecraft:warped_door
-    - minecraft:oak_fence_gate
-    - minecraft:spruce_fence_gate
-    - minecraft:birch_fence_gate
-    - minecraft:jungle_fence_gate
-    - minecraft:acacia_fence_gate
-    - minecraft:dark_oak_fence_gate
-    - minecraft:mangrove_fence_gate
-    - minecraft:cherry_fence_gate
-    - minecraft:bamboo_fence_gate
-    - minecraft:crimson_fence_gate
-    - minecraft:warped_fence_gate
-    - minecraft:oak_trapdoor
-    - minecraft:spruce_trapdoor
-    - minecraft:birch_trapdoor
-    - minecraft:jungle_trapdoor
-    - minecraft:acacia_trapdoor
-    - minecraft:dark_oak_trapdoor
-    - minecraft:mangrove_trapdoor
-    - minecraft:cherry_trapdoor
-    - minecraft:bamboo_trapdoor
-    - minecraft:crimson_trapdoor
-    - minecraft:warped_trapdoor
-  idle_chance: 0.15
   min_idle_time: 3
-  max_idle_time: 3
-  wander_chance: 0.20
-  wander_radius: 12
+  max_idle_time: 6

@@ -1,0 +1,41 @@
+slime_shot:
+  hotbar:
+    0: 'netherite_sword[unbreakable={},enchantments={knockback:2},attribute_modifiers=[{id:"micro_rush:slime_shot_speed",amount:-0.7,operation:"add_value",type:"minecraft:attack_speed",slot:"mainhand"}],custom_name={text:"Slime Smasher",color:"green",bold:true,italic:false}]'
+  armor:
+    feet: 'leather_boots[unbreakable={},custom_data={"donutgame:team_sync":1b}]'
+king_kong_kombo:
+  hotbar:
+    0: 'bamboo[item_model="minecraft:stick",attribute_modifiers=[{id:"micro_rush:attack_speed",type:"minecraft:attack_speed",amount:21,operation:"add_value"}],enchantments={knockback:1},item_name={text:"Kombo Stick",color:"gold",bold:true}]'
+crystal_clash:
+  hotbar:
+    0: iron_sword[unbreakable={}]
+    1: iron_axe[unbreakable={}]
+    2: bow[enchantments={power:2},unbreakable={}]
+    7: shears[unbreakable={}]
+    8: 'white_wool[custom_data={"donutgame:infinite_build":1b,"donutgame:team_sync":1b}] 65'
+  inventory:
+    0: arrow 25
+  armor:
+    feet: 'leather_boots[custom_data={"donutgame:team_sync":1b}]'
+    legs: iron_leggings
+    chest: iron_chestplate
+  weapon:
+    offhand: shield
+terror_tower:
+  hotbar:
+    0: 'blaze_rod[item_model="minecraft:stick",item_name="Stick",enchantments={knockback:2}]'
+    1: wind_charge 4
+    2: crossbow[enchantments={quick_charge:2,punch:4,infinity:1}]
+  inventory:
+    0: arrow
+  armor:
+    feet: 'leather_boots[unbreakable={},custom_data={"donutgame:team_sync":1b}]'
+sniper_showdown:
+  hotbar:
+    0: 'bow[enchantment_glint_override=false,enchantments={power:100,infinity:1},tooltip_display={hidden_components:["minecraft:enchantments"]},unbreakable={}]'
+    1: 'crossbow[enchantments={power:100,infinity:1,multishot:1},tooltip_display={hidden_components:["minecraft:enchantments"]},unbreakable={},use_cooldown={seconds:2}]'
+    2: 'white_wool[custom_data={"donutgame:team_sync":1b}] 32'
+    3: shears[unbreakable={}]
+  inventory:
+    0: arrow
+boom_ball: {}

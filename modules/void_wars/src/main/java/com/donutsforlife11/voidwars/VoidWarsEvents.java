@@ -34,12 +34,15 @@ final class VoidWarsEvents {
     private final List<TimedLoot> itemDrops = new ArrayList<>();
     private final List<TimedLoot> chestFills = new ArrayList<>();
     private final List<BorderShrink> borderShrinks = new ArrayList<>();
+    private com.donutsforlife11.voidwars.InventoryLayouts layouts;
+    private boolean layoutSaved;
 
     VoidWarsEvents(VoidWars game) {
         this.game = game;
     }
 
     void load() {
+        layouts = new com.donutsforlife11.voidwars.InventoryLayouts(game, "kit");
         itemDrops.clear();
         chestFills.clear();
         borderShrinks.clear();
@@ -56,6 +59,7 @@ final class VoidWarsEvents {
     }
 
     void prepareRound() {
+        layoutSaved = false;
         chests.clear();
         spawnChests();
     }
@@ -71,7 +75,13 @@ final class VoidWarsEvents {
                 game.uiManager().gameMessage(game.playerManager().getPlayers(), Component.text("PvP is now enabled!"));
             }
         }
+        if (elapsed > 0 && !layoutSaved && itemDrops.stream().anyMatch(event -> event.ticks() == elapsed)) {
+            // TODO: Capture rearrangements before later loot can become confused with the starting kit.
+            layouts.saveAll();
+            layoutSaved = true;
+        }
         itemDrops.stream().filter(event -> event.ticks() == elapsed).forEach(event -> dropItems(event.lootTable()));
+        if (elapsed == 0) game.playerManager().getNonSpectators().forEach(layouts::prepare);
         chestFills.stream().filter(event -> event.ticks() == elapsed).forEach(event -> fillChests(event.lootTable()));
         borderShrinks.stream().filter(event -> event.ticks() == elapsed).forEach(event -> shrinkBorder(event.scale()));
     }

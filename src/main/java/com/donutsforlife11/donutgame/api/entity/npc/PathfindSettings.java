@@ -21,6 +21,10 @@ public final class PathfindSettings {
     final Set<Material> crossable = EnumSet.noneOf(Material.class);
     final Set<Material> walkable = EnumSet.noneOf(Material.class);
     private double radius = 32.0;
+    private boolean openDoors;
+
+    public void setOpenDoors(boolean enabled) { openDoors = enabled; }
+    public boolean openDoors() { return openDoors; }
 
     PathfindSettings() {
         Set<Material> hazards = EnumSet.of(Material.LAVA, Material.WATER, Material.CACTUS, Material.MAGMA_BLOCK,
@@ -132,4 +136,3 @@ public final class PathfindSettings {
         }
     }
 }
-

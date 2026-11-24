@@ -151,6 +151,7 @@ public abstract class GameModule {
         }
         shutdownFuture = new CompletableFuture<>();
         setLifecycleState(ModuleLifecycleState.UNLOADING);
+        if (data != null) data.clearInteractions();
         if (database != null) {
             try {
                 database.close();

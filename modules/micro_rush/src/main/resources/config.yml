@@ -1,0 +1,28 @@
+id: micro_rush
+main_class: com.donutsforlife11.microrush.MicroRush
+name: Micro Rush
+maps: [micro_rush_lobby]
+wins_required: 3
+team_new_players: true
+round_countdown: 3
+respawn_delay: 1
+active_games: [slime_shot, king_kong_kombo, crystal_clash, terror_tower, sniper_showdown, boom_ball]
+microgames:
+  slime_shot:
+    maps: [slime_shot_arena]
+    bounciness: 0.1
+  king_kong_kombo:
+    maps: [king_kong_island]
+  crystal_clash:
+    maps: [crystal_castle]
+    defense_time: 30
+  terror_tower:
+    maps: [terror_bastion]
+  sniper_showdown:
+    maps: [sniper_oasis]
+  boom_ball:
+    maps: [boom_court]
+    max_balls: 8
+
+max_round_time: 150
+overtime_time: 60

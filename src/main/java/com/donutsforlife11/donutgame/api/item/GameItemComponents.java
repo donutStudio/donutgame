@@ -18,6 +18,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 
 public final class GameItemComponents {
+    public static final GameItemComponent<String> INTERACT_EVENT = string("interact_event");
     public static final GameItemComponent<Byte> INFINITE_BUILD = bool("infinite_build");
     public static final GameItemComponent<Byte> INFINITE_USE = bool("infinite_use");
     public static final GameItemComponent<Byte> TEAM_SYNC = bool("team_sync");
@@ -124,6 +125,13 @@ public final class GameItemComponents {
         }
         if (player != null && hasTeamSync(item)) {
             item = applyTeamSync(player.getTeam(), item);
+        }
+        if (item.getPersistentDataContainer().has(INTERACT_EVENT.key(), INTERACT_EVENT.type())
+            && !item.isDataOverridden(DataComponentTypes.CONSUMABLE)) {
+            item.setData(DataComponentTypes.CONSUMABLE,
+                io.papermc.paper.datacomponent.item.Consumable.consumable().consumeSeconds(3600).hasConsumeParticles(false)
+                    .animation(io.papermc.paper.datacomponent.item.consumable.ItemUseAnimation.NONE)
+                    .sound(net.kyori.adventure.key.Key.key("minecraft:intentionally_empty")));
         }
         if ((hasInfiniteBuild(item) || hasInfiniteUse(item)) && !item.isDataOverridden(DataComponentTypes.MAX_STACK_SIZE)) {
             item.unsetData(DataComponentTypes.DAMAGE);

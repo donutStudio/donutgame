@@ -25,6 +25,22 @@ public class UIManager {
     private final GameModule module;
     private final TitlePacketTracker titleTracker = new TitlePacketTracker();
     private final Set<GameSidebar> sidebars = ConcurrentHashMap.newKeySet();
+    private final Set<GameBossbar> bossbars = ConcurrentHashMap.newKeySet();
+    private final Set<GameInventoryGui> menus = ConcurrentHashMap.newKeySet();
+
+    public GameBossbar newBossbar() {
+        GameScope.requireActive(module);
+        GameBossbar bar = new GameBossbar(module);
+        bossbars.add(bar);
+        return bar;
+    }
+
+    public GameInventoryGui newInventoryGui(int rows, Component title) {
+        GameScope.requireActive(module);
+        GameInventoryGui menu = new GameInventoryGui(module, rows, title, menus::remove);
+        menus.add(menu);
+        return menu;
+    }
 
     public UIManager(GameModule module) {
         this.module = module;
@@ -118,10 +134,12 @@ public class UIManager {
     }
 
     public void clear(GamePlayer gamePlayer) {
+        bossbars.forEach(bar -> bar.hide(gamePlayer));
         Player player = resolvePlayer(gamePlayer);
         if (player == null) {
             return;
         }
+        List.copyOf(menus).forEach(menu -> menu.closeViewer(player));
         player.sendTitlePart(TitlePart.TITLE, Component.empty());
         player.sendTitlePart(TitlePart.SUBTITLE, Component.empty());
         player.sendActionBar(Component.empty());
@@ -129,6 +147,10 @@ public class UIManager {
     }
 
     public void clear() {
+        bossbars.forEach(GameBossbar::hide);
+        bossbars.clear();
+        List.copyOf(menus).forEach(GameInventoryGui::close);
+        menus.clear();
         for (GameSidebar sidebar : List.copyOf(sidebars)) {
             sidebar.hide();
         }

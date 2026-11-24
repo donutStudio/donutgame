@@ -304,6 +304,7 @@ public final class GameNpcController {
         }
         double ux = dx / horizontal;
         double uz = dz / horizontal;
+        if (settings.openDoors()) openPassages(position, ux, uz);
         // Probe the full hitbox ahead. The same geometry is used by A* and direct steering.
         double probe = Math.min(horizontal, 0.45);
         double floor = standingHeight(position.getX() + ux * probe, position.getY(), position.getZ() + uz * probe);
@@ -445,7 +446,7 @@ public final class GameNpcController {
                      by <= Math.min(world.getMaxHeight() - 1, (int) Math.floor(maximum)); by++) {
                     Block block = world.getBlockAt(bx, by, bz);
                     var shapes = collisionShapes.computeIfAbsent(new org.bukkit.util.BlockVector(bx, by, bz),
-                        ignored -> List.copyOf(block.getCollisionShape().getBoundingBoxes()));
+                        ignored -> shapes(block));
                     for (BoundingBox shape : shapes) {
                         double top = by + shape.getMaxY();
                         if (top < minimum || top > maximum + 1.0E-5 || top < highest - 1.0E-5
@@ -494,7 +495,7 @@ public final class GameNpcController {
                      by <= Math.min(world.getMaxHeight() - 1, (int) Math.floor(swept.getMaxY())); by++) {
                     Block block = world.getBlockAt(bx, by, bz);
                     var shapes = collisionShapes.computeIfAbsent(new org.bukkit.util.BlockVector(bx, by, bz),
-                        ignored -> List.copyOf(block.getCollisionShape().getBoundingBoxes()));
+                        ignored -> shapes(block));
                     BoundingBox blockBox = new BoundingBox(bx, by, bz, bx + 1, by + 1, bz + 1);
                     if ((blockBox.overlaps(swept) || blockBox.overlaps(landing) || blockBox.overlaps(lift))
                         && !settings.crossable.contains(block.getType())) {
@@ -510,5 +511,33 @@ public final class GameNpcController {
             }
         }
         return true;
+    }
+
+    private boolean passage(Block block) {
+        return settings.openDoors() && (block.getBlockData() instanceof org.bukkit.block.data.type.Gate
+            || block.getBlockData() instanceof org.bukkit.block.data.type.Door && block.getType() != org.bukkit.Material.IRON_DOOR);
+    }
+
+    private List<BoundingBox> shapes(Block block) {
+        // TODO: A* treats usable doors as open; steering opens only the nearby door on the chosen route.
+        return passage(block) ? List.of() : List.copyOf(block.getCollisionShape().getBoundingBoxes());
+    }
+
+    private void openPassages(Location position, double dx, double dz) {
+        int x = (int) Math.floor(position.getX() + dx);
+        int z = (int) Math.floor(position.getZ() + dz);
+        for (int y = position.getBlockY(); y <= position.getBlockY()+1; y++) {
+            Block block = position.getWorld().getBlockAt(x, y, z);
+            if (!passage(block) || !(block.getBlockData() instanceof org.bukkit.block.data.Openable open) || open.isOpen()) continue;
+            org.bukkit.Material type = block.getType();
+            open.setOpen(true);
+            block.setBlockData(open, true);
+            npc.world().owner().timeManager().newTimer(80).onFinish(ignored -> {
+                if (!npc.isInCurrentWorld() || block.getType() != type || !(block.getBlockData() instanceof org.bukkit.block.data.Openable current)) return;
+                current.setOpen(false);
+                block.setBlockData(current, true);
+            }).start();
+        }
+        collisionShapes.clear();
     }
 }

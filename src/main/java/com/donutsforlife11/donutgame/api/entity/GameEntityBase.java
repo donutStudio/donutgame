@@ -41,6 +41,45 @@ public interface GameEntityBase extends PaperEntityMethods {
 
     UUID uuid();
 
+    default void setAI(boolean enabled) {
+        if (requireEntity() instanceof org.bukkit.entity.Mob mob) mob.setAI(enabled);
+    }
+
+    default void setCollidable(boolean collidable) { requireLivingEntity().setCollidable(collidable); }
+
+    default void setVisibleTo(GamePlayer viewer, boolean visible) {
+        GameScope.requirePlayer(world().owner(), viewer);
+        var player = com.donutsforlife11.donutgame.api.player.GamePlayerHandle.bukkitPlayer(viewer);
+        if (player == null) return;
+        var plugin = JavaPlugin.getPlugin(Donutgame.class);
+        if (visible) player.showEntity(plugin, requireEntity()); else player.hideEntity(plugin, requireEntity());
+    }
+
+    default void setSize(int size) {
+        if (requireEntity() instanceof org.bukkit.entity.Slime slime) slime.setSize(size);
+        else throw new IllegalStateException("Entity is not a slime.");
+    }
+
+    default boolean addPassenger(GameEntityBase passenger) {
+        GameScope.requireLocation(world(), passenger.getLocation());
+        return requireEntity().addPassenger(GameEntityHandle.requireBukkitEntity(passenger));
+    }
+
+    default void setExplosionPower(int power) {
+        if (requireEntity() instanceof org.bukkit.entity.Fireball fireball) {
+            fireball.setYield(power);
+            fireball.setIsIncendiary(false);
+        }
+    }
+
+    default void setAcceleration(Vector acceleration) {
+        if (requireEntity() instanceof org.bukkit.entity.Fireball fireball) fireball.setAcceleration(acceleration.clone());
+    }
+
+    default void setShowingBottom(boolean showing) {
+        if (requireEntity() instanceof org.bukkit.entity.EnderCrystal crystal) crystal.setShowingBottom(showing);
+    }
+
     default CompletableFuture<Boolean> teleport(GameLocation location) {
         GameWorld world = world();
         var destination = GameLocationHandle.toBukkit(location, world);

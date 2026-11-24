@@ -152,6 +152,34 @@ public final class GameWorld extends PaperWorldMethods {
         return GameEntityHandle.create(this, entity);
     }
 
+    public GameEntity dropItem(GameLocation location, com.donutsforlife11.donutgame.api.item.GameItem item) {
+        Location target = toBukkit(location);
+        var dropped = target.getWorld().dropItem(target, item.copyBukkitItem());
+        dropped.setUnlimitedLifetime(true);
+        return GameEntityHandle.create(this, dropped);
+    }
+
+    public GameEntity blockDisplay(GameLocation location, GameBlockType block, float scale) {
+        if (!Float.isFinite(scale) || scale <= 0) throw new IllegalArgumentException("Display scale must be positive.");
+        Location target = toBukkit(location);
+        var display = target.getWorld().spawn(target, org.bukkit.entity.BlockDisplay.class);
+        display.setBlock(block.material().createBlockData());
+        var transformation = display.getTransformation();
+        transformation.getScale().set(scale);
+        display.setTransformation(transformation);
+        return GameEntityHandle.create(this, display);
+    }
+
+    public <T> void particle(org.bukkit.Particle particle, GameLocation location, int count,
+                             double spreadX, double spreadY, double spreadZ, double speed, T data) {
+        Location target = toBukkit(location);
+        target.getWorld().spawnParticle(particle, target, count, spreadX, spreadY, spreadZ, speed, data);
+    }
+
+    public void particle(org.bukkit.Particle particle, GameLocation location, int count) {
+        particle(particle, location, count, 0.3, 0.3, 0.3, 0, null);
+    }
+
     public GameNpc newNpc(GameLocation location) {
         return newNpc(location, (PlayerProfile) null);
     }

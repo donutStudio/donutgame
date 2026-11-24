@@ -4,6 +4,8 @@ name: Zone Wars
 maps:
   - dune
 team_count: 2
+team_new_players: true
+spawn_protection: 4
 point_count: 2
 item_count: 8
 game_duration: 300
@@ -15,5 +17,7 @@ respawn_delay: 10
 score_multiplier: 2
 score_multiplier_time: 60
 no_respawn_time: 0
-capture_mode: 0 # 0 = mining a point block, 1 = killing a point entity
-hunger_enabled: 0
+capture_mode: 0 # TODO: 0 mines beacon points; 1 kills 50-health shulker points.
+hunger_enabled: false
+
+overtime_shrink_time: 90

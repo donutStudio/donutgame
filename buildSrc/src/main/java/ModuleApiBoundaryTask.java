@@ -61,7 +61,9 @@ public abstract class ModuleApiBoundaryTask extends DefaultTask {
         "org.bukkit.util.BlockVector", "org.bukkit.util.BoundingBox",
         "com.destroystokyo.paper.profile.PlayerProfile", "com.destroystokyo.paper.profile.ProfileProperty",
         "io.papermc.paper.datacomponent.DataComponentType", "io.papermc.paper.datacomponent.DataComponentTypes",
-        "io.papermc.paper.datacomponent.DataComponentBuilder"
+        "io.papermc.paper.datacomponent.DataComponentBuilder",
+        "io.papermc.paper.datacomponent.item.ResolvableProfile",
+        "io.papermc.paper.datacomponent.item.DyedItemColor"
     );
 
     private static final Set<String> INTERNAL_API = Set.of(

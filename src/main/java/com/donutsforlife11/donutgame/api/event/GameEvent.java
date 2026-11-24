@@ -47,6 +47,7 @@ public final class GameEvent<E extends Event> extends PaperEventMethods {
 
     public GamePlayer getPlayer() {
         checkOpen();
+        if (event instanceof GamePlayerLeaveEvent leave) return leave.gamePlayer();
         if (event instanceof PlayerEvent playerEvent) {
             return module.playerManager().getPlayer(playerEvent.getPlayer().getUniqueId());
         }
@@ -66,14 +67,38 @@ public final class GameEvent<E extends Event> extends PaperEventMethods {
         return wrapEntity(require(EntityEvent.class).getEntity());
     }
 
+    public GameEntityBase getItemEntity() {
+        return wrapEntity(require(org.bukkit.event.entity.EntityPickupItemEvent.class).getItem());
+    }
+
+    public int getRemainingItems() {
+        return require(org.bukkit.event.entity.EntityPickupItemEvent.class).getRemaining();
+    }
+
+    public GameEntityBase getAttacked() {
+        return wrapEntity(require(io.papermc.paper.event.player.PrePlayerAttackEntityEvent.class).getAttacked());
+    }
+
     public GamePlayer getKiller() {
-        PlayerDeathEvent death = require(PlayerDeathEvent.class);
-        Player killer = death.getPlayer().getKiller();
+        EntityDeathEvent death = require(EntityDeathEvent.class);
+        Player killer = death.getEntity().getKiller();
         if (killer == null && death.getDamageSource().getCausingEntity() instanceof Player player) {
             killer = player;
         }
         return killer == null || !GameEventRegistrar.owns(module, killer.getWorld()) ? null
             : module.playerManager().getPlayer(killer.getUniqueId());
+    }
+
+    public GamePlayer getAttacker() {
+        Entity causing = require(org.bukkit.event.entity.EntityDamageEvent.class).getDamageSource().getCausingEntity();
+        return causing instanceof Player player && GameEventRegistrar.owns(module, player.getWorld())
+            ? module.playerManager().getPlayer(player.getUniqueId()) : null;
+    }
+
+    public GamePlayer getShooter() {
+        Entity source = require(EntityEvent.class).getEntity();
+        if (!(source instanceof org.bukkit.entity.Projectile projectile) || !(projectile.getShooter() instanceof Player player)) return null;
+        return GameEventRegistrar.owns(module, player.getWorld()) ? module.playerManager().getPlayer(player.getUniqueId()) : null;
     }
 
     public GameBlock getBlock() {
@@ -110,6 +135,10 @@ public final class GameEvent<E extends Event> extends PaperEventMethods {
 
     public void clearDrops() {
         require(EntityDeathEvent.class).getDrops().clear();
+    }
+
+    public void removeDropsIf(Predicate<? super com.donutsforlife11.donutgame.api.item.GameItem> predicate) {
+        require(EntityDeathEvent.class).getDrops().removeIf(item -> predicate.test(com.donutsforlife11.donutgame.api.item.GameItem.from(item)));
     }
 
     public void setDroppedExp(int experience) {

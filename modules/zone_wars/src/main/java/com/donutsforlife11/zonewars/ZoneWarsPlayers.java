@@ -1,158 +1,120 @@
 package com.donutsforlife11.zonewars;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.LinkedHashMap;
-
-import org.bukkit.configuration.ConfigurationSection;
+import java.util.*;
+import org.bukkit.GameMode;
 import org.bukkit.configuration.file.YamlConfiguration;
-
 import com.donutsforlife11.donutgame.api.item.GameItem;
-
-import com.donutsforlife11.donutgame.api.map.GameLocation;
-import com.donutsforlife11.donutgame.api.map.GameRegion;
-import com.donutsforlife11.donutgame.api.object.GameBlockType;
-import com.donutsforlife11.donutgame.api.object.GameBlocks;
+import com.donutsforlife11.donutgame.api.map.*;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
+import com.donutsforlife11.zonewars.GameKits;
 
-import net.kyori.adventure.text.format.NamedTextColor;
-
-public class ZoneWarsPlayers {
-    private ZoneWars game;
-    private final Map<GameTeam, GameLocation> teamSpawns = new HashMap<>();
-    private final Map<NamedTextColor, GameBlockType> colorMap = new HashMap<>(Map.ofEntries(
-        Map.entry(NamedTextColor.BLACK, GameBlocks.BLACK_STAINED_GLASS),
-        Map.entry(NamedTextColor.DARK_BLUE, GameBlocks.BLUE_STAINED_GLASS),
-        Map.entry(NamedTextColor.BLUE, GameBlocks.BLUE_STAINED_GLASS),
-        Map.entry(NamedTextColor.DARK_GREEN, GameBlocks.GREEN_STAINED_GLASS),
-        Map.entry(NamedTextColor.GREEN, GameBlocks.LIME_STAINED_GLASS),
-        Map.entry(NamedTextColor.DARK_AQUA, GameBlocks.CYAN_STAINED_GLASS),
-        Map.entry(NamedTextColor.AQUA, GameBlocks.LIGHT_BLUE_STAINED_GLASS),
-        Map.entry(NamedTextColor.DARK_RED, GameBlocks.BROWN_STAINED_GLASS),
-        Map.entry(NamedTextColor.RED, GameBlocks.RED_STAINED_GLASS),
-        Map.entry(NamedTextColor.DARK_PURPLE, GameBlocks.PURPLE_STAINED_GLASS),
-        Map.entry(NamedTextColor.LIGHT_PURPLE, GameBlocks.PINK_STAINED_GLASS),
-        Map.entry(NamedTextColor.GOLD, GameBlocks.ORANGE_STAINED_GLASS),
-        Map.entry(NamedTextColor.YELLOW, GameBlocks.YELLOW_STAINED_GLASS),
-        Map.entry(NamedTextColor.DARK_GRAY, GameBlocks.GRAY_STAINED_GLASS),
-        Map.entry(NamedTextColor.GRAY, GameBlocks.LIGHT_GRAY_STAINED_GLASS),
-        Map.entry(NamedTextColor.WHITE, GameBlocks.WHITE_STAINED_GLASS)
-    ));
+final class ZoneWarsPlayers {
+    private final ZoneWars game;
+    private final Map<GameTeam, GameLocation> spawns = new LinkedHashMap<>();
     private final List<GameRegion> spawnRegions = new ArrayList<>();
+    private final Map<GameLocation, org.bukkit.block.data.BlockData> cages = new HashMap<>();
+    private final Map<UUID, Long> protection = new HashMap<>();
+    private final Set<UUID> respawning = new HashSet<>();
+    private final YamlConfiguration kit;
+    private long protectionId;
 
-    public ZoneWarsPlayers(ZoneWars game) {
+    ZoneWarsPlayers(ZoneWars game) {
         this.game = game;
+        // TODO: Review text and string identifiers below before release.
+        kit = game.data().config("kit.yml");
     }
 
-    public void assignTeams() {
-        List<GamePlayer> players = new ArrayList<>(game.playerManager().getPlayers());
+    void loadPlayers() {
+        var players = new ArrayList<>(game.playerManager().getPlayers());
         Collections.shuffle(players);
-        for (int i = 0; i < game.teamCount(); i++) {
-            game.teamManager().newColoredTeam();
+        if (game.teamManager().getTeams().isEmpty()) for (int i = 0; i < game.teamCount(); i++) game.teamManager().newColoredTeam();
+        var teams = new ArrayList<>(game.teamManager().getTeams());
+        for (int i = 0; i < players.size(); i++) if (players.get(i).getTeam() == null) teams.get(i % teams.size()).addPlayer(players.get(i));
+        for (int i = 0; i < teams.size(); i++) {
+            GameLocation spawn = ZoneWars.center(game.spawns().get(i % game.spawns().size()));
+            spawns.put(teams.get(i), spawn);
+            GameRegion region = new GameRegion(new GameLocation(spawn.x()-2, spawn.y()-1, spawn.z()-2),
+                new GameLocation(spawn.x()+2, spawn.y()+3, spawn.z()+2));
+            // TODO: Review text and string identifiers below before release.
+            if (i < game.world().getRegions("spawn").size()) region = game.world().getRegions("spawn").get(i);
+            spawnRegions.add(region);
         }
-        List<GameTeam> teams = new ArrayList<>(game.teamManager().getTeams());
-        for (int i = 0; i < players.size(); i++) {
-            GamePlayer player = players.get(i);
-            teams.get(i % game.teamCount()).addPlayer(player);
-        }
-    }
-
-    public void loadPlayers() {
-        Map<Integer, GameItem> kit = loadKit();
-        if (game.teamManager().getTeams().isEmpty()) assignTeams();
-        int targetSpawn = 0;
-        for (GameTeam team : game.teamManager().getTeams()) {
-            for (GamePlayer player : team.getPlayers()) {
-                GameLocation spawn = game.spawns().get(targetSpawn);
-                spawn = new GameLocation(spawn.blockX() + 0.5d, spawn.y(), spawn.blockZ() + 0.5d);
-                player.teleport(spawn);
-                player.setSpawnPoint(spawn);
-                player.clearItems();
-                kit.forEach(player::setInventoryItem);
-                teamSpawns.put(team, spawn);
+        players.forEach(this::setup);
+        for (GameLocation spawn : new HashSet<>(spawns.values())) {
+            for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) for (int y = 0; y < 3; y++) {
+                if (Math.abs(x) != 2 && Math.abs(z) != 2) continue;
+                GameLocation at = new GameLocation(spawn.blockX()+x, spawn.blockY()+y, spawn.blockZ()+z);
+                var block = game.world().blockAt(at);
+                if (!block.getType().isAir()) continue;
+                cages.put(at, block.getBlockData());
+                block.setType(org.bukkit.Material.WHITE_STAINED_GLASS);
             }
-            targetSpawn = (targetSpawn + 1) % game.spawns().size();
-        }
-        placeSpawns();
-    }
-    public void startPlayers() {
-        for (GameRegion region : spawnRegions) {
-            game.world().fill(region, GameBlocks.AIR);
         }
     }
 
-    private Map<Integer, GameItem> loadKit() {
-        YamlConfiguration config = game.data().config("kit.yml");
-        Map<Integer, GameItem> items = new LinkedHashMap<>();
-        readKitSlots(items, config.getConfigurationSection("kit.hotbar"), 0, 9);
-        readKitSlots(items, config.getConfigurationSection("kit.inventory"), 9, 27);
-        Map<String, Integer> armorSlots = Map.of("feet", 36, "legs", 37, "chest", 38, "head", 39);
-        for (String armor : List.of("feet", "legs", "chest", "head")) {
-            String item = config.getString("kit.armor." + armor);
-            if (item != null) items.put(armorSlots.get(armor), game.data().item(item));
-        }
-        String offhand = config.getString("kit.weapon.offhand");
-        if (offhand != null) items.put(40, game.data().item(offhand));
-        return items;
+    void startPlayers() {
+        // TODO: Restore only the air cells changed into countdown cages, preserving the map's original terrain.
+        cages.forEach((at, block) -> game.world().setBlock(at, block));
+        cages.clear();
+        game.playerManager().getNonSpectators().forEach(this::protect);
     }
 
-    private void readKitSlots(Map<Integer, GameItem> items, ConfigurationSection section, int offset, int size) {
-        if (section == null) return;
-        for (String key : section.getKeys(false).stream().sorted(java.util.Comparator.comparingInt(Integer::parseInt)).toList()) {
-            int slot = Integer.parseInt(key);
-            if (slot < 0 || slot >= size) throw new IllegalArgumentException("Invalid kit slot " + section.getCurrentPath() + "." + key);
-            items.put(offset + slot, game.data().item(section.getString(key)));
+    void join(GamePlayer player) {
+        if (player.getTeam() == null) {
+            var team = spawns.keySet().stream().min(Comparator.comparingLong(t -> t.getPlayers().stream().filter(GamePlayer::isOnline).count())).orElseThrow();
+            team.addPlayer(player);
         }
+        setup(player);
+        if (game.running()) protect(player);
     }
 
-    public void placeSpawns() {
-        Map<GameLocation, Set<GameTeam>> spawnTeams = new HashMap<>();
-        for (Map.Entry<GameTeam, GameLocation> entry : teamSpawns.entrySet()) {
-            spawnTeams.computeIfAbsent(entry.getValue(), k -> new HashSet<>())
-                    .add(entry.getKey());
-        }
-        // Calculate an integer block midpoint for all points to face toward
-        GameRegion borderRegion = game.borderRegion();
-        GameLocation center = new GameLocation(
-            (borderRegion.min().x() + borderRegion.max().x()) / 2d,
-            (borderRegion.min().y() + borderRegion.max().y()) / 2d,
-            (borderRegion.min().z() + borderRegion.max().z()) / 2d
-        );
-        center = new GameLocation(center.blockX(), center.blockY(), center.blockZ());
-        for (GameLocation point : spawnTeams.keySet()) {
-            double xDistance = Math.abs(center.x() - point.x());
-            double zDistance = Math.abs(center.z() - point.z());
-            GameRegion fillRegion;
-            if (xDistance > zDistance) {
-                fillRegion = new GameRegion(
-                    new GameLocation(point.x() - 1, point.y(), point.z() - 3), 
-                    new GameLocation(point.x() + 1, point.y() + 2, point.z() + 3)
-                );
-            } else {
-                fillRegion = new GameRegion(
-                    new GameLocation(point.x() - 3, point.y(), point.z() - 1), 
-                    new GameLocation(point.x() + 3, point.y() + 2, point.z() + 1)
-                );
-            }
-            spawnRegions.add(fillRegion);
-            if (spawnTeams.get(point).size() > 1) {
-                game.world().replace(fillRegion, GameBlocks.AIR, GameBlocks.WHITE_STAINED_GLASS);
-            } else {
-                NamedTextColor color = (new ArrayList<>(spawnTeams.get(point))).getFirst().color();
-                GameBlockType block = colorMap.getOrDefault(color, GameBlocks.WHITE_STAINED_GLASS);
-                game.world().replace(fillRegion, GameBlocks.AIR, block);
-            }
-            GameRegion clearRegion = new GameRegion(
-                new GameLocation(fillRegion.min().x() + 1, fillRegion.min().y(), fillRegion.min().z() + 1),
-                new GameLocation(fillRegion.max().x() - 1, fillRegion.max().y() - 1, fillRegion.max().z() - 1)
-            );
-            game.world().fill(clearRegion, GameBlocks.AIR);
-        }
+    private void setup(GamePlayer player) {
+        GameLocation spawn = spawns.get(player.getTeam());
+        if (spawn == null) { player.setSpectator(true, game.world().getSpawnLocation()); return; }
+        player.cancelRespawn();
+        player.setSpawnPoint(spawn);
+        player.setSpectator(false, spawn);
+        player.setGameMode(GameMode.SURVIVAL);
+        player.heal();
+        player.clearActivePotionEffects();
+        player.setFoodLevel(20);
+        player.clearItems();
+        // TODO: Review text and string identifiers below before release.
+        GameKits.give(game, player, kit.getConfigurationSection("kit"));
+        game.prepareLayout(player);
+        player.setSpectatableTeams(() -> game.teamManager().getTeams());
     }
+
+    boolean inSpawn(GameLocation location) { return spawnRegions.stream().anyMatch(region -> region.contains(location)); }
+
+    void giveRespawnKit(GamePlayer player) {
+        respawning.remove(player.uuid());
+        player.clearItems();
+        // TODO: Review text and string identifiers below before release.
+        GameKits.give(game, player, kit.getConfigurationSection("kit"));
+        game.prepareLayout(player);
+        player.heal();
+        // TODO: Review text and string identifiers below before release.
+        game.uiManager().title(player, net.kyori.adventure.text.Component.text("Respawned!", net.kyori.adventure.text.format.NamedTextColor.GREEN));
+    }
+
+    boolean protectedSpawn(GamePlayer player) {
+        return protection.containsKey(player.uuid()) && inSpawn(player.getLocation());
+    }
+
+    void removeProtection(GamePlayer player) { protection.remove(player.uuid()); }
+
+    void protect(GamePlayer player) {
+        long token = ++protectionId;
+        protection.put(player.uuid(), token);
+        // TODO: Review text and string identifiers below before release.
+        game.timeManager().newTimer(Math.max(0, game.config().getInt("spawn_protection", 4)) * 20)
+            .onFinish(ignored -> protection.remove(player.uuid(), token)).start();
+    }
+
+    void beginRespawn(GamePlayer player) { respawning.add(player.uuid()); }
+    boolean respawning(GamePlayer player) { return respawning.contains(player.uuid()); }
+    void cancelRespawn(GamePlayer player) { respawning.remove(player.uuid()); player.cancelRespawn(); }
+    void cancelRespawns() { respawning.clear(); game.playerManager().getPlayers().forEach(GamePlayer::cancelRespawn); }
 }

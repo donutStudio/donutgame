@@ -1,0 +1,20 @@
+id: murder_mystery
+main_class: com.donutsforlife11.murdermystery.MurderMystery
+name: Murder Mystery
+maps: [mansion]
+monster_count: 1
+show_other_monsters: true
+monster_friendly_fire: true
+kill_time: 75
+shared_kill_time: true
+show_kill_time_to_innocents: false
+meeting_time: 60
+reveal_role_on_death: true
+announce_deaths: true
+monster_kit_delay: 5
+meeting_kit_delay: 10
+allow_vote_changing: true
+announce_votes: false
+anonymous_votes: true
+shared_monster_perk: true
+perks: [killers_aura]

@@ -109,6 +109,8 @@ public class GameEventRegistrar {
         }
         // Check subclass cases before their single-actor parent.
         return switch (event) {
+            case GamePlayerLeaveEvent leave -> leave.module() == module
+                && module.playerManager().getPlayer(leave.gamePlayer().uuid()) == leave.gamePlayer();
             case GamePlayerLateJoinEvent lateJoin -> lateJoin.module() == module && ownsPlayer(lateJoin.getPlayer());
             case org.bukkit.event.player.PlayerMoveEvent move -> ownsPlayer(move.getPlayer())
                 && owns(module, move.getFrom().getWorld()) && ownsLocation(move.getTo());
@@ -133,6 +135,9 @@ public class GameEventRegistrar {
                 && ownsLocation(explosion.getLocation()) && explosion.blockList().stream().allMatch(this::ownsBlock);
             // Death cleanup still runs for the owned victim. getKiller exposes only an owned player.
             case org.bukkit.event.entity.EntityDeathEvent death -> ownsEntity(death.getEntity());
+            case org.bukkit.event.entity.EntityPickupItemEvent pickup -> ownsEntity(pickup.getEntity()) && ownsEntity(pickup.getItem());
+            case org.bukkit.event.entity.EntityTeleportEvent teleport -> ownsEntity(teleport.getEntity());
+            case com.destroystokyo.paper.event.player.PlayerPostRespawnEvent respawn -> ownsPlayer(respawn.getPlayer());
             case org.bukkit.event.entity.EntityDamageEvent damage -> ownsEntity(damage.getEntity())
                 && ownsDamage(damage.getDamageSource())
                 && (!(damage instanceof org.bukkit.event.entity.EntityDamageByEntityEvent byEntity) || ownsEntity(byEntity.getDamager()))
