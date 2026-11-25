@@ -35,6 +35,32 @@ public final class ModuleFiles {
         return target;
     }
 
+    /** Classloaders must never read the deployment jar after it can be overwritten by an upload. */
+    public static Path snapshot(Path moduleJar, Path snapshots) throws IOException {
+        Files.createDirectories(snapshots);
+        Path copy = Files.createTempFile(snapshots, "module-", ".jar");
+        try {
+            Files.copy(moduleJar, copy, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            // RODO: Check every local header and CRC before retaining a snapshot for lazy class loading.
+            int entries = 0;
+            try (var zip = new java.util.zip.ZipInputStream(Files.newInputStream(copy))) {
+                while (zip.getNextEntry() != null) {
+                    zip.transferTo(java.io.OutputStream.nullOutputStream());
+                    zip.closeEntry();
+                    entries++;
+                }
+            }
+            if (entries == 0) throw new IOException("Module is empty or is not a jar: " + moduleJar);
+            try (var jar = new JarFile(copy.toFile())) {
+                if (jar.getJarEntry("config.yml") == null) throw new IOException("Module jar is missing config.yml");
+            }
+            return copy;
+        } catch (IOException | RuntimeException error) {
+            Files.deleteIfExists(copy);
+            throw error;
+        }
+    }
+
     /** Jar resources are installation defaults; existing server files always win. */
     public static void seed(Path moduleJar, Path directory) throws IOException {
         Files.createDirectories(directory);

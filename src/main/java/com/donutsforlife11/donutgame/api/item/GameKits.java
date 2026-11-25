@@ -33,7 +33,6 @@ public final class GameKits {
         if (section == null) return;
         for (String key : section.getKeys(false).stream().sorted(java.util.Comparator.comparingInt(Integer::parseInt)).toList()) {
             int slot = Integer.parseInt(key);
-            // TODO: Review text and string identifiers below before release.
             if (slot < 0 || slot >= length) throw new IllegalArgumentException("Invalid kit slot " + section.getCurrentPath() + "." + key);
             player.setInventoryItem(offset + slot, game.data().item(section.getString(key)));
         }

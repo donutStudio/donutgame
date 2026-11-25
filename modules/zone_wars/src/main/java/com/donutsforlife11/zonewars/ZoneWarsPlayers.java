@@ -3,7 +3,6 @@ package com.donutsforlife11.zonewars;
 import java.util.*;
 import org.bukkit.GameMode;
 import org.bukkit.configuration.file.YamlConfiguration;
-import com.donutsforlife11.donutgame.api.item.GameItem;
 import com.donutsforlife11.donutgame.api.map.*;
 import com.donutsforlife11.donutgame.api.player.GamePlayer;
 import com.donutsforlife11.donutgame.api.team.GameTeam;
@@ -102,7 +101,6 @@ final class ZoneWarsPlayers {
         GameKits.give(game, player, kit.getConfigurationSection("kit"));
         game.prepareLayout(player);
         player.heal();
-        // TODO: Review text and string identifiers below before release.
         game.uiManager().title(player, net.kyori.adventure.text.Component.text("Respawned!", net.kyori.adventure.text.format.NamedTextColor.GREEN));
     }
 

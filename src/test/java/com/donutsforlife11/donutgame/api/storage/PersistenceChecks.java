@@ -104,6 +104,18 @@ public final class PersistenceChecks {
         rejects(() -> ModuleFiles.resolve(directory, "../outside"));
         rejects(() -> ModuleFiles.resolve(directory, "C:/outside"));
         rejects(() -> ModuleFiles.resolve(directory, "/outside"));
+        Path snapshot = ModuleFiles.snapshot(jar, temporary.resolve("module-jars"));
+        byte[] originalSnapshot = Files.readAllBytes(snapshot);
+        try (var loader = new java.net.URLClassLoader(new java.net.URL[]{snapshot.toUri().toURL()}, null)) {
+            check(loader.getResource("config.yml") != null, "Snapshot loader opens its own jar index");
+            Files.writeString(jar, "An upload overwrote the deployment jar while the server was running");
+            try (var resource = loader.getResourceAsStream("config.yml")) {
+                check(resource != null && resource.readAllBytes().length > 0, "Lazy reads still use the immutable snapshot after deployment overwrite");
+            }
+            check(java.util.Arrays.equals(originalSnapshot, Files.readAllBytes(snapshot)), "Deployment changes cannot mutate the loaded module");
+        }
+        try { ModuleFiles.snapshot(jar, temporary.resolve("module-jars")); throw new AssertionError("Invalid jar accepted"); }
+        catch (java.io.IOException expected) { }
         Path unsafe = temporary.resolve("unsafe.jar");
         try (var output = new JarOutputStream(Files.newOutputStream(unsafe))) { entry(output, "../escaped.yml", "bad"); }
         rejects(() -> ModuleFiles.seed(unsafe, directory));

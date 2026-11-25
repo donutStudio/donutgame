@@ -23,8 +23,6 @@ final class SpectatorProjection {
 
         player.setAllowFlight(effectiveAllowFlight);
         player.setFlying(effectiveAllowFlight && playingState.flying);
-        player.setFlySpeed(playingState.flySpeed);
-        player.setWalkSpeed(playingState.walkSpeed);
         player.setNoDamageTicks(0);
         player.setFallDistance(0.0f);
     }

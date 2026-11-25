@@ -18,7 +18,6 @@ import com.donutsforlife11.donutgame.api.team.GameTeam;
 import com.donutsforlife11.donutgame.api.time.GameTimer;
 import com.donutsforlife11.donutgame.api.ui.*;
 import com.donutsforlife11.donutgame.internal.game.GameModule;
-import com.donutsforlife11.zonewars.InventoryLayouts;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.bossbar.BossBar;
@@ -231,9 +230,8 @@ public final class ZoneWars extends GameModule {
         disableRespawns();
         if (!running) return;
         new ArrayList<>(activePoints.values()).forEach(this::removePoint);
-        // TODO: Review text and string identifiers below before release.
+    
         uiManager().title(playerManager().getPlayers(), Component.text("OVERTIME", NamedTextColor.RED));
-        // TODO: Review text and string identifiers below before release.
         uiManager().subtitle(playerManager().getPlayers(), Component.text("Last team standing wins!"));
     }
 
@@ -261,8 +259,7 @@ public final class ZoneWars extends GameModule {
             player.getTeam() == winner && winner != null ? "VICTORY" : "DEFEAT",
             player.getTeam() == winner ? NamedTextColor.GOLD : NamedTextColor.RED, net.kyori.adventure.text.format.TextDecoration.BOLD));
         }
-        // TODO: Review text and string identifiers below before release.
-        uiManager().subtitle(playerManager().getPlayers(), winner == null ? Component.text("No teams remain.") : winner.displayName().append(Component.text(" wins!")));
+        uiManager().subtitle(playerManager().getPlayers(), winner == null ? Component.text("Nobody wins!") : winner.displayName().append(Component.text(" wins!")));
         timeManager().newTimer(240).onFinish(ignored -> unload()).start();
     }
 
@@ -398,7 +395,6 @@ public final class ZoneWars extends GameModule {
     // RODO: Review text and string identifiers below before release.
     public GameRegion borderRegion() { return world().getRegion("border"); }
     private void message(String text) { uiManager().gameMessage(playerManager().getPlayers(), Component.text(text)); }
-    // TODO: Review text and string identifiers below before release.
     private void require(boolean valid, String object) { if (!valid) throw new IllegalStateException("Zone Wars map needs " + object + "."); }
     static GameLocation center(GameLocation p) { return new GameLocation(p.world(), p.blockX() + 0.5, p.y(), p.blockZ() + 0.5, p.yaw(), p.pitch()); }
     static boolean sameBlock(GameLocation a, GameLocation b) { return a.blockX() == b.blockX() && a.blockY() == b.blockY() && a.blockZ() == b.blockZ(); }

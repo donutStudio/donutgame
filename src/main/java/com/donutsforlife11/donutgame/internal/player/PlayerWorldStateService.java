@@ -162,8 +162,6 @@ public class PlayerWorldStateService implements Listener {
         player.setCanPickupItems(true);
         player.setAllowFlight(false);
         player.setFlying(false);
-        player.setFlySpeed(0.1f);
-        player.setWalkSpeed(0.2f);
         player.setSneaking(false);
         player.setSprinting(false);
 
@@ -253,8 +251,6 @@ public class PlayerWorldStateService implements Listener {
         boolean canPickupItems,
         boolean allowFlight,
         boolean flying,
-        float flySpeed,
-        float walkSpeed,
         boolean sneaking,
         boolean sprinting,
         int fireTicks,
@@ -299,8 +295,6 @@ public class PlayerWorldStateService implements Listener {
                 player.getCanPickupItems(),
                 player.getAllowFlight(),
                 player.isFlying(),
-                player.getFlySpeed(),
-                player.getWalkSpeed(),
                 player.isSneaking(),
                 player.isSprinting(),
                 player.getFireTicks(),
@@ -334,8 +328,6 @@ public class PlayerWorldStateService implements Listener {
             player.setCanPickupItems(canPickupItems);
             player.setAllowFlight(allowFlight);
             player.setFlying(allowFlight && flying);
-            player.setFlySpeed(flySpeed);
-            player.setWalkSpeed(walkSpeed);
             player.setSneaking(sneaking);
             player.setSprinting(sprinting);
 

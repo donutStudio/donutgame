@@ -192,14 +192,14 @@ public final class GamePlayer implements GameEntityBase {
                 }
                 pendingVanillaRespawnLocation = pendingDeathSpectatorLocation;
             } else {
-                pendingVanillaRespawnLocation = checkedRespawnLocation(location.get());
+                pendingVanillaRespawnLocation = locationOrSpawn();
             }
             pendingPostRespawnTimerTicks = ticks;
             pendingPostRespawnTimerLocation = location;
             return;
         }
         if (ticks == 0) {
-            respawnNow(location.get());
+            respawnNow(location);
             return;
         }
         startRespawnTimer(ticks, location);
@@ -213,7 +213,7 @@ public final class GamePlayer implements GameEntityBase {
                 respawnTimer = null;
                 module().uiManager().actionbar(this, Component.empty());
 
-                respawnNow(location.get());
+                respawnNow(location);
             })
             .start();
     }
@@ -837,7 +837,7 @@ public final class GamePlayer implements GameEntityBase {
             pendingPostRespawnTimerLocation = null;
             pendingVanillaRespawnLocation = null;
             if (ticks == 0) {
-                respawnNow(respawnLocation.get());
+                respawnNow(respawnLocation);
             } else {
                 startRespawnTimer(ticks, respawnLocation);
             }
@@ -891,7 +891,11 @@ public final class GamePlayer implements GameEntityBase {
         return location;
     }
 
-    private void respawnNow(GameLocation location) {
+    private void respawnNow(GameLocation location) { respawnNow(() -> location); }
+
+    private void respawnNow(Supplier<GameLocation> prepare) {
+        // RODO: Reset before the game callback so its fresh effects and kit survive restoration.
+        GameLocation location = playingState.prepareRespawn(maxHealth(), prepare);
         checkedRespawnLocation(location);
         Player player = attachedPlayer();
         if (player != null && player.isDead()) {
@@ -903,7 +907,6 @@ public final class GamePlayer implements GameEntityBase {
         if (target != null) {
             setSpawnPoint(target);
         }
-        playingState.restoreAliveDefaults(maxHealth());
         exitSpectator(target);
         player = attachedPlayer();
         if (player != null) {

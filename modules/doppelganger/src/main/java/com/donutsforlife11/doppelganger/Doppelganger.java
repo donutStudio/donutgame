@@ -30,7 +30,6 @@ public final class Doppelganger extends GameModule {
     private int kills, goal, remaining;
 
     @Override public void onLoad() {
-        // TODO: Review text and string identifiers below before release.
         if (spawns().isEmpty()) throw new IllegalStateException("Doppelganger needs spawn points.");
         world().setSpawnLocation(spawns().getFirst());
         world().setHungerEnabled(false);
@@ -102,10 +101,8 @@ public final class Doppelganger extends GameModule {
         }
         npcs.startWandering();
         for (GamePlayer player : playerManager().getNonSpectators()) {
-            // TODO: Review text and string identifiers below before release.
             uiManager().title(player, Component.text(isSheriff(player) ? "SHERIFF" : "DOPPELGANGER", isSheriff(player) ? NamedTextColor.BLUE : NamedTextColor.RED));
-            // TODO: Review text and string identifiers below before release.
-            uiManager().subtitle(player, Component.text(isSheriff(player) ? "Catch and kill all secret Doppelgangers!" : "Blend in and kill townspeople without getting caught!"));
+            uiManager().subtitle(player, Component.text(isSheriff(player) ? "Catch and kill all monstrous Doppelgangers!" : "Blend in and kill townspeople without getting caught!"));
         }
         clock = timeManager().newTimer().onTick(20, timer -> {
             if (timer.elapsedTicks() > 0 && --remaining <= 0) finish(true);
@@ -154,8 +151,7 @@ public final class Doppelganger extends GameModule {
         if (!alive.remove(player.uuid())) return;
         player.removePotionEffect(PotionEffectType.GLOWING);
         player.setSpectator(true, player.getLocation());
-        // TODO: Review text and string identifiers below before release.
-        uiManager().title(player, Component.text("Eliminated!", NamedTextColor.RED));
+        uiManager().title(player, Component.text("Eliminated!", NamedTextColor.RED, TextDecoration.BOLD));
     }
 
     private void checkWin() {
@@ -177,11 +173,9 @@ public final class Doppelganger extends GameModule {
         npcs.stop();
         for (GamePlayer player : playerManager().getPlayers()) {
             player.removePotionEffect(PotionEffectType.GLOWING);
-            // TODO: Review text and string identifiers below before release.
             uiManager().title(player, Component.text(isSheriff(player) == sheriffsWon ? "VICTORY" : "DEFEAT",
                 isSheriff(player) == sheriffsWon ? NamedTextColor.GOLD : NamedTextColor.DARK_RED, TextDecoration.BOLD));
-            // TODO: Review text and string identifiers below before release.
-            uiManager().subtitle(player, Component.text(sheriffsWon ? "Sheriffs caught the Doppelgangers!" : "Doppelgangers overran the town!"));
+            uiManager().subtitle(player, Component.text(sheriffsWon ? "All Doppelgangers have been caught!" : "Doppelgangers win!"));
         }
         timeManager().newTimer(240).onFinish(ignored -> unload()).start();
     }

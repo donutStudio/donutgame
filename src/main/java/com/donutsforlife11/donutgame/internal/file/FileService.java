@@ -38,6 +38,7 @@ public class FileService {
     private final Map<String, GameModuleDescriptor> gameModules = new HashMap<>();
     private final Map<String, GameMapDescriptor> gameMaps = new HashMap<>();
     private final List<URLClassLoader> moduleLoaders = new ArrayList<>();
+    private final List<Path> moduleSnapshots = new ArrayList<>();
     private final Plugin plugin;
     private final File modulesFolder;
     private final File mapsFolder;
@@ -114,16 +115,24 @@ public class FileService {
                 plugin.getLogger().warning("Failed to close module classloader: " + e.getMessage());
             }
         }
+        moduleLoaders.clear();
+        for (Path snapshot : moduleSnapshots) {
+            try { Files.deleteIfExists(snapshot); }
+            catch (IOException e) { plugin.getLogger().warning("Could not remove module snapshot: " + e.getMessage()); }
+        }
+        moduleSnapshots.clear();
     }
 
     private GameModuleDescriptor extractGameData(File gameModule) throws Exception {
-        URL[] urls = { gameModule.toURI().toURL() };
+        Path snapshot = ModuleFiles.snapshot(gameModule.toPath(), runtimeFolder.toPath().resolve("module-jars"));
+        moduleSnapshots.add(snapshot);
+        URL[] urls = { snapshot.toUri().toURL() };
 
         URLClassLoader loader = new URLClassLoader(urls, Donutgame.class.getClassLoader());
         moduleLoaders.add(loader);
 
         String configText;
-        try (JarFile jar = new JarFile(gameModule)) {
+        try (JarFile jar = new JarFile(snapshot.toFile())) {
             JarEntry configEntry = jar.getJarEntry("config.yml");
             if (configEntry == null) {
                 throw new IllegalArgumentException("Module jar is missing config.yml: " + gameModule.getName());
@@ -147,7 +156,7 @@ public class FileService {
         }
 
         Path directory = ModuleFiles.directory(modulesFolder.toPath(), gameId);
-        ModuleFiles.seed(gameModule.toPath(), directory);
+        ModuleFiles.seed(snapshot, directory);
 
         if (mainClass == null || mainClass.isBlank()) {
             throw new IllegalArgumentException("Module config is missing main_class");

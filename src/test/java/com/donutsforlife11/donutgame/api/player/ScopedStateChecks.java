@@ -29,7 +29,28 @@ public final class ScopedStateChecks {
             "Virtual attributes apply addition, scalar and multiplier in vanilla order");
         check(PlayerSnapshot.attributeValue(10, List.of(add, multiply, scalar)) == 22.5,
             "Modifier insertion order does not change the value");
-        System.out.println("Passed 6 scoped state checks.");
+        var player = (org.bukkit.entity.Player) java.lang.reflect.Proxy.newProxyInstance(ScopedStateChecks.class.getClassLoader(),
+            new Class<?>[]{org.bukkit.entity.Player.class}, (proxy, method, values) -> {
+                if (method.getName().equals("setWalkSpeed") || method.getName().equals("setFlySpeed"))
+                    throw new AssertionError("Respawn/spectator restoration must not overwrite movement speeds");
+                return null;
+            });
+        PlayerSnapshot state = PlayerSnapshot.empty();
+        for (int respawn = 0; respawn < 8; respawn++) {
+            state.restoreAliveDefaults(20);
+            SpectatorProjection.applyNonSpectatorOverlay(player, state);
+        }
+        int[] callbacks = {0};
+        state.health = 0;
+        GameLocation prepared = state.prepareRespawn(20, () -> {
+            callbacks[0]++;
+            check(state.health == 20, "Alive defaults must precede the game respawn callback");
+            state.foodLevel = 12;
+            return coordinate;
+        });
+        check(prepared == coordinate && callbacks[0] == 1 && state.foodLevel == 12,
+            "Respawn callbacks run once and their newly prepared state is preserved");
+        System.out.println("Passed scoped state, repeated respawn speed, and callback ordering checks.");
     }
 
     private static AttributeModifier modifier(String key, double amount, Operation op) {
